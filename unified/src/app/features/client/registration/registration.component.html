@@ -1,0 +1,257 @@
+<div class="app-container">
+  <!-- Event Logo -->
+  <div class="event-logo" *ngIf="eventData?.logoPath">
+    <img [src]="getLogoUrl(eventData!.logoPath!)" alt="Event Logo">
+  </div>
+
+  <!-- Hamburger Button -->
+  <button class="hamburger-btn" (click)="toggleMenu()" [class.active]="menuOpen">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
+
+  <!-- Menu Overlay -->
+  <div class="menu-overlay" *ngIf="menuOpen" (click)="closeMenu()"></div>
+
+  <!-- Slide Menu -->
+  <div class="slide-menu" [class.open]="menuOpen">
+    <div class="slide-menu-items">
+      <button class="slide-menu-item" [class.active]="activeView === 'menu'" (click)="navigateTo('menu')">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+        </svg>
+        <span>Menu</span>
+      </button>
+      <button class="slide-menu-item" [class.active]="activeView === 'orders'" (click)="navigateTo('orders')">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+        <span>Orders</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading || (activeView === 'menu' && loadingMenu) || (activeView === 'orders' && loadingOrders)" class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error" class="error-state">
+    <p>{{ error }}</p>
+  </div>
+
+  <!-- MENU VIEW -->
+  <div *ngIf="activeView === 'menu' && !loading && !loadingMenu" class="view-container">
+    <div class="menu-nav-container" *ngIf="menuItems.length > 0" [class.expanded]="categoryNavExpanded">
+      <button class="menu-nav-toggle" (click)="toggleCategoryNav()" [class.expanded]="categoryNavExpanded">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+      <div class="menu-nav" [class.expanded]="categoryNavExpanded">
+        <ng-container *ngFor="let category of menuItems">
+          <button class="menu-nav-item" (click)="scrollToSection('category-' + category.id)">
+            {{ category.name }}
+          </button>
+          <ng-container *ngFor="let child of category.children">
+            <button *ngIf="!child.orderable" class="menu-nav-item menu-nav-sub" (click)="scrollToSection('subcategory-' + child.id)">
+              {{ child.name }}
+            </button>
+          </ng-container>
+        </ng-container>
+      </div>
+    </div>
+
+    <div class="menu-tree" *ngIf="menuItems.length > 0">
+      <ng-container *ngFor="let category of menuItems">
+        <div class="menu-category" [id]="'category-' + category.id">
+          <div class="category-header">
+            <span class="category-name">{{ category.name }}</span>
+          </div>
+
+          <div class="category-children">
+            <ng-container *ngFor="let child of category.children">
+              <!-- Subcategory -->
+              <div *ngIf="!child.orderable" class="menu-subcategory" [id]="'subcategory-' + child.id">
+                <div class="subcategory-header">
+                  <span class="subcategory-name">{{ child.name }}</span>
+                </div>
+
+                <div class="subcategory-items">
+                  <div *ngFor="let item of child.children" class="menu-item-card">
+                    <div class="item-image-container">
+                      <img *ngIf="item.imagePath" [src]="getItemImageUrl(item.imagePath)" alt="" class="item-image">
+                      <div *ngIf="!item.imagePath" class="item-image-placeholder"></div>
+                    </div>
+                    <div class="item-content">
+                      <div class="item-details">
+                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-price" *ngIf="item.price">{{ item.price | number:'1.0-2' }} RON</span>
+                      </div>
+                      <div class="item-actions">
+                        <span class="item-description" *ngIf="item.description">{{ item.description }}</span>
+                        <div class="quantity-controls">
+                          <button class="qty-btn qty-minus" (click)="decreaseQuantity(item)" *ngIf="getQuantity(item.id) > 0">-</button>
+                          <span class="qty-value" *ngIf="getQuantity(item.id) > 0">{{ getQuantity(item.id) }}</span>
+                          <button class="qty-btn" (click)="increaseQuantity(item)">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Direct Item -->
+              <div *ngIf="child.orderable" class="menu-item-card">
+                <div class="item-image-container">
+                  <img *ngIf="child.imagePath" [src]="getItemImageUrl(child.imagePath)" alt="" class="item-image">
+                  <div *ngIf="!child.imagePath" class="item-image-placeholder"></div>
+                </div>
+                <div class="item-content">
+                  <div class="item-details">
+                    <span class="item-name">{{ child.name }}</span>
+                    <span class="item-price" *ngIf="child.price">{{ child.price | number:'1.0-2' }} RON</span>
+                  </div>
+                  <div class="item-actions">
+                    <span class="item-description" *ngIf="child.description">{{ child.description }}</span>
+                    <div class="quantity-controls">
+                      <button class="qty-btn qty-minus" (click)="decreaseQuantity(child)" *ngIf="getQuantity(child.id) > 0">-</button>
+                      <span class="qty-value" *ngIf="getQuantity(child.id) > 0">{{ getQuantity(child.id) }}</span>
+                      <button class="qty-btn" (click)="increaseQuantity(child)">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+
+    <div *ngIf="menuItems.length === 0" class="empty-state">
+      <p>No menu items available</p>
+    </div>
+
+    <!-- Order Summary -->
+    <div class="order-summary" *ngIf="getTotalItems() > 0 || orderStatus">
+      <div class="summary-content" *ngIf="getTotalItems() > 0">
+        <div class="summary-info">
+          <span class="summary-items">{{ getTotalItems() }} item(s)</span>
+          <span class="summary-total">{{ getTotalPrice() | number:'1.2-2' }} RON</span>
+        </div>
+        <button class="place-order-btn" (click)="goToCheckout()">
+          Place Order
+        </button>
+      </div>
+      <div class="order-status" *ngIf="orderStatus">
+        {{ orderStatus }}
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECKOUT VIEW -->
+  <div *ngIf="activeView === 'checkout'" class="view-container checkout-view">
+    <div class="checkout-header">
+      <button class="back-btn" (click)="backToMenu()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        Back to Menu
+      </button>
+      <h1 class="checkout-title">Checkout</h1>
+    </div>
+
+    <div class="checkout-items">
+      <div *ngFor="let item of getSelectedItems()" class="checkout-item">
+        <div class="checkout-item-info">
+          <span class="checkout-item-qty">{{ item.quantity }}x</span>
+          <span class="checkout-item-name">{{ item.menuItem.name }}</span>
+        </div>
+        <span class="checkout-item-price">{{ (item.menuItem.price || 0) * item.quantity | number:'1.2-2' }} RON</span>
+      </div>
+    </div>
+
+    <div class="checkout-total">
+      <span class="checkout-total-label">Total</span>
+      <span class="checkout-total-value">{{ getTotalPrice() | number:'1.2-2' }} RON</span>
+    </div>
+
+    <div class="checkout-payment-section">
+      <p class="payment-note">Payment will be processed at the counter</p>
+    </div>
+
+    <div class="checkout-actions">
+      <button class="checkout-place-order-btn" (click)="placeOrder()" [disabled]="placingOrder">
+        {{ placingOrder ? 'Placing Order...' : 'Place Order' }}
+      </button>
+    </div>
+
+    <div class="checkout-status" *ngIf="orderStatus">
+      {{ orderStatus }}
+    </div>
+  </div>
+
+  <!-- ORDERS VIEW -->
+  <div *ngIf="activeView === 'orders' && !loading && !loadingOrders" class="view-container orders-view">
+    <h1 class="orders-title">MY ORDERS</h1>
+
+    <div class="orders-list" *ngIf="orders.length > 0">
+      <div *ngFor="let order of orders" class="order-card" [style.border-left-color]="getStatusColor(order.status)">
+        <div class="order-header">
+          <span class="order-number">Order #{{ order.orderNo }}</span>
+          <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
+        </div>
+        <div class="order-items">
+          <div *ngFor="let item of order.items" class="order-item">
+            <div class="order-item-info">
+              <span class="order-item-qty">{{ item.quantity }}x</span>
+              <span class="order-item-name">{{ item.name }}</span>
+            </div>
+            <span class="order-item-bullet" [class]="'bullet-' + item.status.toLowerCase()"></span>
+          </div>
+        </div>
+        <div class="order-note" *ngIf="order.note">
+          <strong>Note:</strong> {{ order.note }}
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="orders.length === 0" class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      <p>No orders yet</p>
+      <button class="btn-primary" (click)="navigateTo('menu')">Browse Menu</button>
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="notifications-container" *ngIf="notifications.length > 0">
+    <div *ngFor="let notification of notifications; let i = index"
+         class="notification"
+         [style.background-color]="getNotificationColor(notification.type)">
+      <div class="notification-content" (click)="onNotificationClick(notification, i)">
+        <strong>Order #{{ notification.orderNo }}</strong>
+        <span>{{ notification.message }}</span>
+      </div>
+      <button class="dismiss-btn" (click)="dismissNotification(i)">×</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" *ngIf="showingToast" [class.success]="toastType === 'success'" [class.error]="toastType === 'error'">
+    <svg *ngIf="toastType === 'success'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+    </svg>
+    <svg *ngIf="toastType === 'error'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="15" y1="9" x2="9" y2="15"></line>
+      <line x1="9" y1="9" x2="15" y2="15"></line>
+    </svg>
+    <span>{{ toastMessage }}</span>
+  </div>
+</div>

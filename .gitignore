@@ -1,0 +1,23 @@
+# Maven
+api/target/
+**/target/
+
+# Angular
+web/node_modules/
+web/dist/
+web/.angular/
+unified/node_modules/
+unified/dist/
+unified/.angular/
+
+# IDE
+.idea/
+**/.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Other
+duralux/

@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: event
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  datasource:
+    url: jdbc:postgresql://localhost:5432/eventdb
+    username: eventuser
+    password: eventpass
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+  address: 0.0.0.0
+
+logging:
+  level:
+    org.apache.kafka.clients.producer.ProducerConfig: WARN
+
+application:
+  base-url: http://192.168.1.151:4200
+
+kafka:
+  order:
+    item:
+      cancel:
+        topic: cancel.order.item
+        group: cancel.order.item
+
+elasticsearch:
+  host: ${ELASTICSEARCH_HOST:localhost}
+
+minio:
+  url: ${MINIO_URL:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:images}
+
+revolut:
+  api:
+    secret-key: sk_eC6h3MjJQl8BbQHm5LBHdKSGvg3MdahqcDCBwL5b4-q26_W2CRZDuWSRfN1wW7u6
+    public-key: pk_fy8RXwsu7HgqX88GDbjGlA4JMp9fhLzXxu8MOQOIVdNxmNfU
+    base-url: https://sandbox-merchant.revolut.com
+
+netopia:
+  api-key: ${NETOPIA_API_KEY:GMaWOObfdYQBlUWcuZFVnEqw-5DOTm6s7iOz5FFbdh0TYH23CJPEeKFx284g}
+  pos-signature: ${NETOPIA_POS_SIGNATURE:37ZT-B3X1-VZOC-GOIK-2RXP}
+  base-url: ${NETOPIA_BASE_URL:https://secure.sandbox.netopia-payments.com}
+  notify-url: ${NETOPIA_NOTIFY_URL:https://preliberally-nonesoteric-denny.ngrok-free.dev/notify}
+  redirect-url: ${NETOPIA_REDIRECT_URL:http://192.168.1.151:4200/payment/confirmed}
+  language: ${NETOPIA_LANGUAGE:ro}
+  currency: ${NETOPIA_CURRENCY:RON}
+  email-template: ${NETOPIA_EMAIL_TEMPLATE:confirm}
