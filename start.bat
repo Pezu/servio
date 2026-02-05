@@ -2,7 +2,7 @@
 setlocal
 
 :: Configuration
-set REPO_URL=git@github.com:Pezu/servio.git
+set REPO_URL=https://github.com/Pezu/servio.git
 set REPO_DIR=servio
 set COMPOSE_FILE=api\src\main\resources\docker-compose-all.yaml
 
