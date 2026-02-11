@@ -166,7 +166,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       </div>
 
       <!-- Events Table -->
-      @if (selectedLocation) {
+      @if (selectedClient) {
         <div class="events-panel">
           <div class="card stretch">
             <div class="card-body p-0">
@@ -188,11 +188,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <th>{{ 'EVENTS.START_DATE' | translate }}</th>
                       <th>{{ 'EVENTS.END_DATE' | translate }}</th>
                       <th class="text-end">
-                        <button class="btn-icon-action btn-icon-add" (click)="openEventModal(); $event.stopPropagation()" [title]="'EVENTS.ADD_EVENT' | translate">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
+                        @if (selectedLocation) {
+                          <button class="btn-icon-action btn-icon-add" (click)="openEventModal(); $event.stopPropagation()" [title]="'EVENTS.ADD_EVENT' | translate">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                        }
                       </th>
                     </tr>
                   </thead>
@@ -259,8 +261,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     <!-- Event Modal -->
     @if (showEventModal) {
-      <div class="modal-overlay" (click)="closeEventModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeEventModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingEvent ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ 'EVENTS.EVENT' | translate }}</h3>
             <button class="close-btn" (click)="closeEventModal()">&times;</button>
@@ -307,7 +309,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <div *ngIf="!loadingUsers && getBarUsers().length === 0" class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
                   <label *ngFor="let user of getBarUsers()" class="checkbox-option">
                     <input type="checkbox" [checked]="eventFormData.userIds.includes(user.id!)" (change)="toggleEventUser(user.id!, $event)">
-                    <span>{{ user.name }}</span>
+                    <span class="checkbox-label-text">{{ user.name }}</span>
                   </label>
                 </div>
               </div>
@@ -331,18 +333,23 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
                   <label *ngFor="let pt of paymentTypes" class="checkbox-option">
                     <input type="checkbox" [checked]="eventFormData.paymentTypeIds.includes(pt.id!)" (change)="togglePaymentType(pt.id!, $event)">
-                    <span>{{ pt.name }}</span>
+                    <span class="checkbox-label-text">{{ pt.name }}</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            <!-- Include Menu Checkbox -->
+            <!-- Menu Source Switch -->
             <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" [(ngModel)]="eventFormData.includeMenu">
-                <span>{{ 'EVENTS.INCLUDE_MENU' | translate }}</span>
-              </label>
+              <label>{{ 'EVENTS.MENU_SOURCE' | translate }}</label>
+              <div class="menu-source-switch">
+                <button type="button" class="switch-option" [class.active]="eventFormData.menuSource === 'client'" (click)="eventFormData.menuSource = 'client'">
+                  {{ 'EVENTS.MENU_CLIENT' | translate }}
+                </button>
+                <button type="button" class="switch-option" [class.active]="eventFormData.menuSource === 'location'" (click)="eventFormData.menuSource = 'location'">
+                  {{ 'EVENTS.MENU_LOCATION' | translate }}
+                </button>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -501,10 +508,18 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 200px; overflow-y: auto; }
     .checkbox-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.15s ease; }
     .checkbox-option:hover { background: var(--bg-light); }
-    .checkbox-option input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+    .checkbox-option input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
     .checkbox-option span { font-size: 14px; color: var(--text-dark); }
+    .checkbox-label-text { margin-left: 8px; }
     .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: normal !important; }
     .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+    /* Menu Source Switch */
+    .menu-source-switch { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+    .switch-option { flex: 1; padding: 10px 16px; border: none; background: white; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.15s ease; }
+    .switch-option:first-child { border-right: 1px solid var(--border-color); }
+    .switch-option:hover:not(.active) { background: var(--bg-light); }
+    .switch-option.active { background: var(--primary); color: white; }
 
     /* Custom DateTime Picker */
     .datetime-picker-wrapper { position: relative; }
@@ -788,8 +803,8 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; paymentTypeIds: string[]; includeMenu: boolean } = {
-    name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], includeMenu: false
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; paymentTypeIds: string[]; menuSource: 'client' | 'location' } = {
+    name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], menuSource: 'client'
   };
 
   // Users
@@ -913,6 +928,7 @@ export class EventsComponent implements OnInit {
     this.events = [];
     this.eventCurrentPage = 0;
     this.loadLocations();
+    this.loadEvents();
   }
 
   // Location Methods
@@ -960,18 +976,31 @@ export class EventsComponent implements OnInit {
 
   // Event Methods
   loadEvents(): void {
-    if (!this.selectedLocation) return;
+    if (!this.selectedClient) return;
     this.loadingEvents = true;
-    // If sublocation is selected, load events from parent location
-    const locationIdForEvents = this.selectedLocation.parentId || this.selectedLocation.id!;
-    this.eventService.getEventsByLocationId(locationIdForEvents, this.eventCurrentPage, this.eventPageSize).subscribe({
-      next: (response) => {
-        this.events = response.content;
-        this.eventTotalPages = response.totalPages;
-        this.loadingEvents = false;
-      },
-      error: (err) => { console.error('Error loading events:', err); this.loadingEvents = false; }
-    });
+
+    if (this.selectedLocation) {
+      // If location is selected, load events for that location only
+      const locationIdForEvents = this.selectedLocation.parentId || this.selectedLocation.id!;
+      this.eventService.getEventsByLocationId(locationIdForEvents, this.eventCurrentPage, this.eventPageSize).subscribe({
+        next: (response) => {
+          this.events = response.content;
+          this.eventTotalPages = response.totalPages;
+          this.loadingEvents = false;
+        },
+        error: (err) => { console.error('Error loading events:', err); this.loadingEvents = false; }
+      });
+    } else {
+      // If only client is selected, load all events for that client
+      this.eventService.getEventsByClientId(this.selectedClient.id!, this.eventCurrentPage, this.eventPageSize).subscribe({
+        next: (response) => {
+          this.events = response.content;
+          this.eventTotalPages = response.totalPages;
+          this.loadingEvents = false;
+        },
+        error: (err) => { console.error('Error loading events:', err); this.loadingEvents = false; }
+      });
+    }
   }
 
   onEventSearch(): void {
@@ -1018,7 +1047,7 @@ export class EventsComponent implements OnInit {
   // Modal Methods
   openEventModal(): void {
     this.editingEvent = null;
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], includeMenu: false };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], menuSource: 'client' };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1039,7 +1068,7 @@ export class EventsComponent implements OnInit {
       endDate: '',
       userIds: event.userIds || [],
       paymentTypeIds: event.paymentTypeIds || [],
-      includeMenu: !!(event.menuItemIds && event.menuItemIds.length > 0)
+      menuSource: (event.menuItemIds && event.menuItemIds.length > 0) ? 'location' : 'client'
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
@@ -1062,9 +1091,14 @@ export class EventsComponent implements OnInit {
   }
 
   saveEvent(): void {
-    if (!this.selectedLocation) return;
+    // For new events, we need a selected location
+    // For editing, we use the event's existing locationId
+    const locationId = this.selectedLocation?.id || this.editingEvent?.locationId;
+    if (!locationId) return;
+
     this.savingEvent = true;
-    const menuItemIds = this.eventFormData.includeMenu
+    // If location menu is selected, include all menu items from the location
+    const menuItemIds = this.eventFormData.menuSource === 'location'
       ? this.eventMenuItems.map(item => item.id!).filter(id => id)
       : [];
     const eventData = {
@@ -1076,8 +1110,8 @@ export class EventsComponent implements OnInit {
       menuItemIds
     };
     const operation = this.editingEvent
-      ? this.eventService.updateEvent(this.editingEvent.id!, { ...eventData, locationId: this.selectedLocation.id! })
-      : this.eventService.createEvent(this.selectedLocation.id!, eventData);
+      ? this.eventService.updateEvent(this.editingEvent.id!, { ...eventData, locationId })
+      : this.eventService.createEvent(locationId, eventData);
     operation.subscribe({
       next: () => { this.closeEventModal(); this.loadEvents(); this.savingEvent = false; },
       error: (err) => { console.error('Error saving event:', err); this.savingEvent = false; }
@@ -1167,9 +1201,10 @@ export class EventsComponent implements OnInit {
   }
 
   // Menu Items
-  loadEventMenuItems(): void {
-    if (!this.selectedLocation) return;
-    this.menuService.getMenuTree(this.selectedLocation.id!).subscribe({
+  loadEventMenuItems(locationId?: string): void {
+    const locId = locationId || this.selectedLocation?.id || this.editingEvent?.locationId;
+    if (!locId) return;
+    this.menuService.getMenuTree(locId).subscribe({
       next: (items) => { this.eventMenuItems = this.flattenMenuItems(items); },
       error: (err) => console.error('Error loading menu items:', err)
     });

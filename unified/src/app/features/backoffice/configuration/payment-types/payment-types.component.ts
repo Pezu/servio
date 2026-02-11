@@ -77,8 +77,8 @@ import { PaymentTypeService, PaymentType, PageResponse } from './payment-type.se
 
     <!-- Payment Type Modal -->
     @if (showModal) {
-      <div class="modal-overlay" (click)="closeModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingPaymentType ? 'Edit Payment Type' : 'Add New Payment Type' }}</h3>
             <button class="close-btn" (click)="closeModal()" title="Close">&times;</button>
@@ -105,8 +105,8 @@ import { PaymentTypeService, PaymentType, PageResponse } from './payment-type.se
 
     <!-- Delete Confirmation Modal -->
     @if (showDeleteModal) {
-      <div class="modal-overlay" (click)="closeDeleteModal()">
-        <div class="modal modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeDeleteModal()">
+        <div class="modal modal-sm" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>Delete Payment Type</h3>
             <button class="close-btn" (click)="closeDeleteModal()" title="Close">&times;</button>

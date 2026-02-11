@@ -155,8 +155,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     <!-- User Modal -->
     @if (showUserModal) {
-      <div class="modal-overlay" (click)="closeUserModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeUserModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingUser ? ('USERS.EDIT_USER' | translate) : ('USERS.ADD_USER' | translate) }}</h3>
             <button class="close-btn" (click)="closeUserModal()" title="Close">&times;</button>

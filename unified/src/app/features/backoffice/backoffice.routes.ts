@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard } from '../../core/auth.guard';
 
 export const BACKOFFICE_ROUTES: Routes = [
   {
@@ -10,6 +11,7 @@ export const BACKOFFICE_ROUTES: Routes = [
     path: '',
     loadComponent: () => import('./backoffice-shell.component')
       .then(m => m.BackofficeShellComponent),
+    canActivate: [authGuard],
     children: [
       {
         path: 'clients',

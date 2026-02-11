@@ -113,10 +113,13 @@
     "START_DATE": "Data de Început",
     "END_DATE": "Data de Sfârșit",
     "ASSIGNED_USERS": "Utilizatori Atribuiți",
+    "BAR_USERS": "Utilizatori Bar",
     "SELECT_USERS": "Selectează utilizatori",
     "PAYMENT_TYPES": "Tipuri de Plată",
     "SELECT_PAYMENT_TYPES": "Selectează tipuri de plată",
-    "INCLUDE_MENU": "Include Meniu",
+    "MENU_SOURCE": "Sursă Meniu",
+    "MENU_CLIENT": "Meniu Client",
+    "MENU_LOCATION": "Meniu Locație",
     "DOWNLOAD_QR": "Descarcă PDF QR"
   },
   "MY_EVENTS": {

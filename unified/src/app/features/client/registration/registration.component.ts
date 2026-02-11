@@ -123,6 +123,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         this.registrationResponse = JSON.parse(existingRegistration);
         console.log('[Init] Using existing registration:', this.registrationResponse?.id);
         this.loadActiveOrders();
+        this.loadOrders(); // Load orders on init for the badge
       } else {
         // Different event, missing eventId cookie, or no registration - clear and start fresh
         console.log('[Init] Creating new registration (no match or missing data)');
@@ -151,7 +152,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
     if (paymentSuccess) {
       localStorage.removeItem('paymentSuccess');
-      this.showToast('Order placed successfully!', 'success');
 
       // Add the confirmed order to active orders and connect WebSocket
       if (confirmedOrderId) {
@@ -164,7 +164,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     } else if (paymentError) {
       localStorage.removeItem('paymentError');
       localStorage.removeItem('confirmedOrderId');
-      this.showToast('Payment failed. Please try again.', 'error');
     }
   }
 
@@ -431,6 +430,25 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     }
   }
 
+  getInProgressOrdersCount(): number {
+    return this.orders.filter(order =>
+      order.status === 'ACTIVE' || order.status === 'IN_PROGRESS' || order.status === 'READY'
+    ).length;
+  }
+
+  getFirstInProgressOrderColor(): string {
+    const inProgressOrders = this.orders.filter(order =>
+      order.status === 'ACTIVE' || order.status === 'IN_PROGRESS' || order.status === 'READY'
+    );
+    if (inProgressOrders.length === 0) return '#757575';
+
+    // Find the oldest order (lowest orderNo = first created)
+    const oldestOrder = inProgressOrders.reduce((oldest, current) =>
+      current.orderNo < oldest.orderNo ? current : oldest
+    );
+    return this.getStatusColor(oldestOrder.status);
+  }
+
   getStatusLabel(status: string): string {
     switch (status) {
       case 'ACTIVE': return 'Pending';
@@ -560,10 +578,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       }
     }, dismissTime);
 
-    // Refresh orders if on orders view
-    if (this.activeView === 'orders') {
-      this.loadOrders();
-    }
+    // Always refresh orders to update badge color
+    this.loadOrders();
 
     if (notification.orderClosed) {
       this.activeOrderIds.delete(notification.orderId);

@@ -167,16 +167,24 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <div class="text-center py-4 text-muted">{{ 'MENU.NO_MENU_ITEMS' | translate }}</div>
                 } @else {
                   <div class="menu-tree">
-                    @for (item of menuItems; track item.id || item.tempId) {
-                      <!-- Category Row -->
-                      <div class="menu-row category-row">
+                    <ng-container *ngTemplateOutlet="menuItemsTemplate; context: { items: menuItems, depth: 0, parent: null }"></ng-container>
+                  </div>
+                }
+
+                <!-- Recursive Menu Items Template -->
+                <ng-template #menuItemsTemplate let-items="items" let-depth="depth" let-parent="parent">
+                  @for (item of items; track item.id || item.tempId) {
+                    @if (!item.orderable) {
+                      <!-- Category/Subcategory Row -->
+                      <div class="menu-row category-row" [class.subcategory-row]="depth > 0">
                         <div class="menu-row-left">
+                          <span class="indent-dynamic" [style.width.px]="depth * 24"></span>
                           <button class="expand-btn" (click)="toggleExpand(item)" [class.expanded]="isExpanded(item)">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                             </svg>
                           </button>
-                          <span class="category-icon">
+                          <span class="category-icon" [class.subcategory-icon]="depth > 0">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
@@ -185,176 +193,87 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           <span class="item-count">({{ item.children?.length || 0 }})</span>
                         </div>
                         <div class="menu-row-actions">
+                          <button class="action-btn" (click)="addSubcategory(item)" [title]="'MENU.ADD_SUBCATEGORY' | translate">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                            </svg>
+                          </button>
                           <button class="action-btn" (click)="addItem(item)" [title]="'MENU.ADD_ITEM' | translate">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
-                          <button class="action-btn" (click)="editItem(item)" [title]="'COMMON.EDIT' | translate">
+                          <button class="action-btn" (click)="editItem(item, parent)" [title]="'COMMON.EDIT' | translate">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          <button class="action-btn action-btn-delete" (click)="deleteItem(item)" [title]="'COMMON.DELETE' | translate">
+                          <button class="action-btn action-btn-delete" (click)="deleteItem(item, parent)" [title]="'COMMON.DELETE' | translate">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
                         </div>
                       </div>
-
-                      <!-- Children (Subcategories or Items) -->
+                      <!-- Recursively render children -->
                       @if (isExpanded(item) && item.children?.length) {
-                        @for (child of item.children; track child.id || child.tempId) {
-                          @if (!child.orderable) {
-                            <!-- Subcategory Row -->
-                            <div class="menu-row subcategory-row">
-                              <div class="menu-row-left">
-                                <span class="indent-1"></span>
-                                <button class="expand-btn" (click)="toggleExpand(child)" [class.expanded]="isExpanded(child)">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                  </svg>
-                                </button>
-                                <span class="category-icon subcategory-icon">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                  </svg>
-                                </span>
-                                <span class="menu-name category-name">{{ child.name }}</span>
-                                <span class="item-count">({{ child.children?.length || 0 }})</span>
-                              </div>
-                              <div class="menu-row-actions">
-                                <button class="action-btn" (click)="addItem(child)" [title]="'MENU.ADD_ITEM' | translate">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                  </svg>
-                                </button>
-                                <button class="action-btn" (click)="editItem(child, item)" [title]="'COMMON.EDIT' | translate">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button class="action-btn action-btn-delete" (click)="deleteItem(child, item)" [title]="'COMMON.DELETE' | translate">
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                            <!-- Subcategory Items -->
-                            @if (isExpanded(child) && child.children?.length) {
-                              @for (subItem of child.children; track subItem.id || subItem.tempId) {
-                                <div class="menu-row item-row item-row-deep">
-                                  <div class="menu-row-left">
-                                    <span class="indent-2"></span>
-                                    @if (subItem.imagePath) {
-                                      <img [src]="getImageUrl(subItem.imagePath)" class="item-image" alt="">
-                                    } @else {
-                                      <div class="item-image-placeholder">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                      </div>
-                                    }
-                                    <div class="item-info">
-                                      <span class="menu-name">{{ subItem.name }}</span>
-                                      @if (subItem.description) {
-                                        <span class="item-description">{{ subItem.description }}</span>
-                                      }
-                                    </div>
-                                  </div>
-                                  <div class="menu-row-right">
-                                    @if (subItem.price) {
-                                      <span class="item-price">{{ subItem.price | number:'1.2-2' }} RON</span>
-                                    }
-                                    <div class="menu-row-actions">
-                                      <label class="image-upload-btn" [title]="'MENU.UPLOAD_IMAGE' | translate">
-                                        <input type="file" accept="image/*" (change)="uploadImage($event, subItem)" hidden [disabled]="!subItem.id">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                      </label>
-                                      @if (subItem.imagePath) {
-                                        <button class="action-btn action-btn-delete" (click)="deleteImage(subItem)" [title]="'MENU.DELETE_IMAGE' | translate">
-                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                          </svg>
-                                        </button>
-                                      }
-                                      <button class="action-btn" (click)="editItem(subItem, child)" [title]="'COMMON.EDIT' | translate">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                      </button>
-                                      <button class="action-btn action-btn-delete" (click)="deleteItem(subItem, child)" [title]="'COMMON.DELETE' | translate">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              }
-                            }
+                        <ng-container *ngTemplateOutlet="menuItemsTemplate; context: { items: item.children, depth: depth + 1, parent: item }"></ng-container>
+                      }
+                    } @else {
+                      <!-- Product/Item Row -->
+                      <div class="menu-row item-row">
+                        <div class="menu-row-left">
+                          <span class="indent-dynamic" [style.width.px]="depth * 24"></span>
+                          @if (item.imagePath) {
+                            <img [src]="getImageUrl(item.imagePath)" class="item-image" alt="">
                           } @else {
-                            <!-- Item Row (direct child of category) -->
-                            <div class="menu-row item-row">
-                              <div class="menu-row-left">
-                                <span class="indent-1"></span>
-                                @if (child.imagePath) {
-                                  <img [src]="getImageUrl(child.imagePath)" class="item-image" alt="">
-                                } @else {
-                                  <div class="item-image-placeholder">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                }
-                                <div class="item-info">
-                                  <span class="menu-name">{{ child.name }}</span>
-                                  @if (child.description) {
-                                    <span class="item-description">{{ child.description }}</span>
-                                  }
-                                </div>
-                              </div>
-                              <div class="menu-row-right">
-                                @if (child.price) {
-                                  <span class="item-price">{{ child.price | number:'1.2-2' }} RON</span>
-                                }
-                                <div class="menu-row-actions">
-                                  <label class="image-upload-btn" [title]="'MENU.UPLOAD_IMAGE' | translate">
-                                    <input type="file" accept="image/*" (change)="uploadImage($event, child)" hidden [disabled]="!child.id">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </label>
-                                  @if (child.imagePath) {
-                                    <button class="action-btn action-btn-delete" (click)="deleteImage(child)" [title]="'MENU.DELETE_IMAGE' | translate">
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                      </svg>
-                                    </button>
-                                  }
-                                  <button class="action-btn" (click)="editItem(child, item)" [title]="'COMMON.EDIT' | translate">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
-                                  <button class="action-btn action-btn-delete" (click)="deleteItem(child, item)" [title]="'COMMON.DELETE' | translate">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
+                            <div class="item-image-placeholder">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
                             </div>
                           }
-                        }
-                      }
+                          <div class="item-info">
+                            <span class="menu-name">{{ item.name }}</span>
+                            @if (item.description) {
+                              <span class="item-description">{{ item.description }}</span>
+                            }
+                          </div>
+                        </div>
+                        <div class="menu-row-right">
+                          @if (item.price) {
+                            <span class="item-price">{{ item.price | number:'1.2-2' }} RON</span>
+                          }
+                          <div class="menu-row-actions">
+                            <label class="image-upload-btn" [title]="'MENU.UPLOAD_IMAGE' | translate">
+                              <input type="file" accept="image/*" (change)="uploadImage($event, item)" hidden [disabled]="!item.id">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </label>
+                            @if (item.imagePath) {
+                              <button class="action-btn action-btn-delete" (click)="deleteImage(item)" [title]="'MENU.DELETE_IMAGE' | translate">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            }
+                            <button class="action-btn" (click)="editItem(item, parent)" [title]="'COMMON.EDIT' | translate">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button class="action-btn action-btn-delete" (click)="deleteItem(item, parent)" [title]="'COMMON.DELETE' | translate">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     }
-                  </div>
-                }
+                  }
+                </ng-template>
               </div>
             </div>
             @if (hasChanges) {
@@ -371,8 +290,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     <!-- Menu Item Modal -->
     @if (showModal) {
-      <div class="modal-overlay" (click)="closeModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingItem ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ formData.orderable ? ('MENU.NEW_ITEM' | translate) : ('MENU.NEW_CATEGORY' | translate) }}</h3>
             <button class="close-btn" (click)="closeModal()">&times;</button>
@@ -528,6 +447,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .indent { width: 36px; flex-shrink: 0; }
     .indent-1 { width: 24px; flex-shrink: 0; }
     .indent-2 { width: 48px; flex-shrink: 0; }
+    .indent-dynamic { flex-shrink: 0; }
 
     .category-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #f59e0b; flex-shrink: 0; }
     .subcategory-icon { color: #94a3b8; }
@@ -796,15 +716,17 @@ export class ClientMenuComponent implements OnInit {
   }
 
   expandAll(): void {
-    this.menuItems.forEach(item => {
+    this.expandItemsRecursively(this.menuItems);
+  }
+
+  private expandItemsRecursively(items: MenuItem[]): void {
+    items.forEach(item => {
       const id = item.id || item.tempId;
       if (id && !item.orderable) {
         this.expandedNodes.add(id);
-        // Also expand subcategories
-        item.children?.forEach(child => {
-          const childId = child.id || child.tempId;
-          if (childId && !child.orderable) this.expandedNodes.add(childId);
-        });
+        if (item.children?.length) {
+          this.expandItemsRecursively(item.children);
+        }
       }
     });
   }
@@ -816,6 +738,13 @@ export class ClientMenuComponent implements OnInit {
   addCategory(): void {
     this.editingItem = null;
     this.editingParent = null;
+    this.formData = { name: '', orderable: false, price: 0, description: '' };
+    this.showModal = true;
+  }
+
+  addSubcategory(parent: MenuItem): void {
+    this.editingItem = null;
+    this.editingParent = parent;
     this.formData = { name: '', orderable: false, price: 0, description: '' };
     this.showModal = true;
   }

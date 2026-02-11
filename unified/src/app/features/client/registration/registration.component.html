@@ -9,6 +9,9 @@
     <span class="hamburger-line"></span>
     <span class="hamburger-line"></span>
     <span class="hamburger-line"></span>
+    <span class="order-badge" *ngIf="getInProgressOrdersCount() > 0" [style.background-color]="getFirstInProgressOrderColor()">
+      {{ getInProgressOrdersCount() }}
+    </span>
   </button>
 
   <!-- Menu Overlay -->

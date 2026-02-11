@@ -54,8 +54,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Skip authentication for customer-facing event endpoints (event details and menu)
-        if (path.matches("/api/events/[^/]+$") || path.matches("/api/events/[^/]+/menu")) {
+        // Skip authentication for customer-facing event endpoints (event details and menu) - GET only
+        if ("GET".equalsIgnoreCase(request.getMethod()) &&
+                (path.matches("/api/events/[^/]+$") || path.matches("/api/events/[^/]+/menu"))) {
             filterChain.doFilter(request, response);
             return;
         }

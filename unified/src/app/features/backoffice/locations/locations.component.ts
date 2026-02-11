@@ -223,8 +223,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     <!-- Location Modal -->
     @if (showLocationModal) {
-      <div class="modal-overlay" (click)="closeLocationModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeLocationModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingLocation ? ('LOCATIONS.EDIT_LOCATION' | translate) : (parentLocationForModal ? ('LOCATIONS.ADD_SUBLOCATION' | translate) : ('LOCATIONS.ADD_LOCATION' | translate)) }}</h3>
             <button class="close-btn" (click)="closeLocationModal()" title="Close">&times;</button>
@@ -253,8 +253,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     <!-- Order Point Modal -->
     @if (showOrderPointModal) {
-      <div class="modal-overlay" (click)="closeOrderPointModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeOrderPointModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingOrderPoint ? ('ORDER_POINTS.EDIT_ORDER_POINT' | translate) : ('ORDER_POINTS.ADD_ORDER_POINT' | translate) }}</h3>
             <button class="close-btn" (click)="closeOrderPointModal()" title="Close">&times;</button>

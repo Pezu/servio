@@ -113,10 +113,13 @@
     "START_DATE": "Start Date",
     "END_DATE": "End Date",
     "ASSIGNED_USERS": "Assigned Users",
+    "BAR_USERS": "Bar Users",
     "SELECT_USERS": "Select users",
     "PAYMENT_TYPES": "Payment Types",
     "SELECT_PAYMENT_TYPES": "Select payment types",
-    "INCLUDE_MENU": "Include Menu",
+    "MENU_SOURCE": "Menu Source",
+    "MENU_CLIENT": "Client Menu",
+    "MENU_LOCATION": "Location Menu",
     "DOWNLOAD_QR": "Download QR PDF"
   },
   "MY_EVENTS": {

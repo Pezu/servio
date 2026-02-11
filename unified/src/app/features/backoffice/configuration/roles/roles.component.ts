@@ -77,8 +77,8 @@ import { RoleService, Role, PageResponse } from './role.service';
 
     <!-- Role Modal -->
     @if (showModal) {
-      <div class="modal-overlay" (click)="closeModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingRole ? 'Edit Role' : 'Add New Role' }}</h3>
             <button class="close-btn" (click)="closeModal()" title="Close">&times;</button>
@@ -105,8 +105,8 @@ import { RoleService, Role, PageResponse } from './role.service';
 
     <!-- Delete Confirmation Modal -->
     @if (showDeleteModal) {
-      <div class="modal-overlay" (click)="closeDeleteModal()">
-        <div class="modal modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeDeleteModal()">
+        <div class="modal modal-sm" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>Delete Role</h3>
             <button class="close-btn" (click)="closeDeleteModal()" title="Close">&times;</button>

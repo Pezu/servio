@@ -108,8 +108,8 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
 
     <!-- Client Modal -->
     @if (showClientModal) {
-      <div class="modal-overlay" (click)="closeClientModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeClientModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingClient ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ 'CLIENTS.CLIENT' | translate }}</h3>
             <button class="close-btn" (click)="closeClientModal()" title="Close">&times;</button>

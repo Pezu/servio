@@ -82,6 +82,11 @@ public class EventService {
                 .map(eventMapper::toDto);
     }
 
+    public Page<Event> getEventsByClientId(UUID clientId, Pageable pageable) {
+        return eventRepository.findByClientId(clientId, pageable)
+                .map(eventMapper::toDto);
+    }
+
     public Page<Event> getEventsByUsername(String username, Pageable pageable) {
         return eventRepository.findByUsersUsername(username, pageable)
                 .map(eventMapper::toDto);

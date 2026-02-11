@@ -31,4 +31,8 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     @EntityGraph(attributePaths = {"users"})
     Page<EventEntity> findByUsersUsernameAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
             String username, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"users"})
+    @Query("SELECT e FROM EventEntity e WHERE e.location.client.id = :clientId")
+    Page<EventEntity> findByClientId(@Param("clientId") UUID clientId, Pageable pageable);
 }

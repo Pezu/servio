@@ -78,6 +78,14 @@ public class EventController {
         return ResponseEntity.ok(events);
     }
 
+    @GetMapping("/client/{clientId}")
+    public ResponseEntity<Page<Event>> getEventsByClientId(
+            @PathVariable UUID clientId,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        Page<Event> events = eventService.getEventsByClientId(clientId, pageable);
+        return ResponseEntity.ok(events);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Event> getEventById(@PathVariable UUID id) {
         Event response = eventService.getEventById(id);
@@ -117,7 +125,18 @@ public class EventController {
     @GetMapping("/{eventId}/menu")
     public ResponseEntity<List<MenuItem>> getEventMenu(@PathVariable UUID eventId) {
         Event event = eventService.getEventById(eventId);
-        List<MenuItem> menuTree = menuService.getMenuTree(event.getLocationId());
+        List<MenuItem> menuTree;
+
+        // Check if event uses location menu (has menuItemIds) or client menu
+        if (event.getMenuItemIds() != null && !event.getMenuItemIds().isEmpty()) {
+            // Use location menu
+            menuTree = menuService.getMenuTree(event.getLocationId());
+        } else {
+            // Use client menu - get client ID from location
+            Location location = locationService.getLocationById(event.getLocationId());
+            menuTree = menuService.getClientMenuTree(location.getClientId());
+        }
+
         return ResponseEntity.ok(menuTree);
     }
 

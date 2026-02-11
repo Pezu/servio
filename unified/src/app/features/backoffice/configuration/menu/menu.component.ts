@@ -136,8 +136,8 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
 
     <!-- Menu Item Modal -->
     @if (showModal) {
-      <div class="modal-overlay" (click)="closeModal()">
-        <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingItem ? 'Edit' : 'Add' }} {{ formData.orderable ? 'Item' : 'Category' }}</h3>
             <button class="close-btn" (click)="closeModal()">&times;</button>

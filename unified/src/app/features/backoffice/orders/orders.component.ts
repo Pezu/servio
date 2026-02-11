@@ -168,8 +168,8 @@ const CUSTOM_DATE_FORMATS = {
 
     <!-- Order Details Modal -->
     @if (showModal && selectedOrder) {
-      <div class="modal-overlay" (click)="closeModal()">
-        <div class="modal modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-overlay" (mousedown)="closeModal()">
+        <div class="modal modal-lg" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ 'ORDERS.ORDER' | translate }} #{{ selectedOrder.orderNo }}</h3>
             <button class="close-btn" (click)="closeModal()">&times;</button>
