@@ -32,6 +32,12 @@
         </svg>
         <span>Orders</span>
       </button>
+      <button class="slide-menu-item" [class.active]="activeView === 'team'" (click)="navigateTo('team')">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <span>Team</span>
+      </button>
     </div>
   </div>
 
@@ -44,6 +50,23 @@
   <!-- Error State -->
   <div *ngIf="error" class="error-state">
     <p>{{ error }}</p>
+  </div>
+
+  <!-- WAITING FOR VALIDATION VIEW -->
+  <div *ngIf="activeView === 'waiting'" class="waiting-view">
+    <div class="waiting-content">
+      <div class="waiting-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h2>Waiting for Validation</h2>
+      <p>Your session is pending approval. Please wait for a staff member to validate your access.</p>
+      <div class="waiting-spinner">
+        <div class="spinner"></div>
+      </div>
+      <p class="waiting-hint">This page will update automatically once approved.</p>
+    </div>
   </div>
 
   <!-- MENU VIEW -->
@@ -146,6 +169,9 @@
           <span class="summary-total">{{ getTotalPrice() | number:'1.2-2' }} RON</span>
         </div>
         <button class="place-order-btn" (click)="goToCheckout()">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
           Place Order
         </button>
       </div>
@@ -188,6 +214,9 @@
 
     <div class="checkout-actions">
       <button class="checkout-place-order-btn" (click)="placeOrder()" [disabled]="placingOrder">
+        <svg *ngIf="!placingOrder" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
         {{ placingOrder ? 'Placing Order...' : 'Place Order' }}
       </button>
     </div>
@@ -228,6 +257,18 @@
       </svg>
       <p>No orders yet</p>
       <button class="btn-primary" (click)="navigateTo('menu')">Browse Menu</button>
+    </div>
+  </div>
+
+  <!-- TEAM VIEW -->
+  <div *ngIf="activeView === 'team' && !loading" class="view-container team-view">
+    <h1 class="team-title">TEAM</h1>
+
+    <div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+      <p>Coming soon</p>
     </div>
   </div>
 

@@ -23,6 +23,9 @@ public class OrderPointEntity {
     @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false)
+    private boolean payLater = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "location_id", nullable = false)
     private LocationEntity location;

@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
@@ -12,4 +13,10 @@ import java.util.UUID;
 public class Registration {
     private UUID id;
     private Event event;
+    private UUID orderPointId;
+    private String orderPointName;
+    private String validationStatus;
+    private String approvedBy;
+    private LocalDateTime approvedAt;
+    private LocalDateTime createdAt;
 }

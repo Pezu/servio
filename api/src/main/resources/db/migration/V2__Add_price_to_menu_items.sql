@@ -1,1 +1,0 @@
-ALTER TABLE menu_items ADD COLUMN price DECIMAL(10, 2);

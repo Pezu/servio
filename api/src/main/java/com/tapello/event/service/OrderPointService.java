@@ -29,6 +29,7 @@ public class OrderPointService {
 
         OrderPointEntity orderPointEntity = new OrderPointEntity();
         orderPointEntity.setName(request.getName());
+        orderPointEntity.setPayLater(request.isPayLater());
         orderPointEntity.setLocation(location);
 
         OrderPointEntity savedOrderPoint = orderPointRepository.save(orderPointEntity);
@@ -59,6 +60,7 @@ public class OrderPointService {
                 .orElseThrow(() -> new RuntimeException("Location not found with id: " + request.getLocationId()));
 
         orderPointEntity.setName(request.getName());
+        orderPointEntity.setPayLater(request.isPayLater());
         orderPointEntity.setLocation(location);
 
         OrderPointEntity updatedOrderPoint = orderPointRepository.save(orderPointEntity);

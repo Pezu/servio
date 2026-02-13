@@ -44,6 +44,7 @@
   },
   "CLIENTS": {
     "TITLE": "Client",
+    "CLIENT": "Client",
     "ADD_CLIENT": "Add Client",
     "EDIT_CLIENT": "Edit Client",
     "ADD_NEW_CLIENT": "Add New Client",
@@ -98,7 +99,8 @@
     "ADD_NEW_ORDER_POINT": "Add New Order Point",
     "NO_ORDER_POINTS": "No order points found",
     "SELECT_LOCATION": "Select a location to view order points",
-    "ENTER_NAME": "Enter order point name"
+    "ENTER_NAME": "Enter order point name",
+    "PAY_LATER": "Pay Later"
   },
   "EVENTS": {
     "TITLE": "Events",
@@ -120,17 +122,22 @@
     "MENU_SOURCE": "Menu Source",
     "MENU_CLIENT": "Client Menu",
     "MENU_LOCATION": "Location Menu",
-    "DOWNLOAD_QR": "Download QR PDF"
+    "DOWNLOAD_QR": "Download QR PDF",
+    "UPLOAD_LOGO": "Upload Logo",
+    "DELETE_LOGO": "Delete Logo"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",
-    "ACTIVE_EVENTS": "Active Events",
+    "ACTIVE_EVENTS": "My Active Events",
     "CURRENTLY_RUNNING": "Currently Running",
     "LOADING_ACTIVE": "Loading active events...",
     "NO_ACTIVE_EVENTS": "No active events",
     "NO_ACTIVE_EVENTS_DESC": "You don't have any events running right now.",
     "STATUS_ACTIVE": "Active",
-    "VIEW_ORDERS": "View Orders"
+    "VIEW_ORDERS": "View Orders",
+    "ALL_ACTIVE_EVENTS": "All Active Events",
+    "ALL_IN_PROGRESS": "All In Progress",
+    "NO_ALL_ACTIVE_EVENTS_DESC": "There are no events currently in progress."
   },
   "MENU": {
     "TITLE": "Menu",

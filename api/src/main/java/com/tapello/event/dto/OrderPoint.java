@@ -13,4 +13,5 @@ public class OrderPoint {
     private UUID id;
     private String name;
     private UUID locationId;
+    private boolean payLater;
 }

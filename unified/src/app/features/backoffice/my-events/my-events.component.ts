@@ -186,11 +186,11 @@ interface PageResponse<T> {
         <span class="active-badge">{{ 'MY_EVENTS.CURRENTLY_RUNNING' | translate }}</span>
       </div>
 
-      <div *ngIf="loadingActive" class="loading">
+      <div *ngIf="loading" class="loading">
         {{ 'MY_EVENTS.LOADING_ACTIVE' | translate }}
       </div>
 
-      <div *ngIf="!loadingActive && activeEvents.length === 0" class="empty-state">
+      <div *ngIf="!loading && activeEvents.length === 0" class="empty-state">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
@@ -198,7 +198,7 @@ interface PageResponse<T> {
         <p>{{ 'MY_EVENTS.NO_ACTIVE_EVENTS_DESC' | translate }}</p>
       </div>
 
-      <div *ngIf="!loadingActive && activeEvents.length > 0" class="table-container">
+      <div *ngIf="!loading && activeEvents.length > 0" class="table-container">
         <table>
           <thead>
             <tr>
@@ -242,32 +242,52 @@ interface PageResponse<T> {
 })
 export class MyEventsComponent implements OnInit {
   activeEvents: Event[] = [];
-  loadingActive = true;
+  loading = true;
+  hasRoleSuper = false;
 
   private apiUrl = `${environment.apiUrl}/api/events`;
 
   constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
+    this.hasRoleSuper = this.checkHasRole('SUPER');
     this.loadActiveEvents();
   }
 
+  private checkHasRole(role: string): boolean {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+    try {
+      const payload = token.split('.')[1];
+      const decoded = JSON.parse(atob(payload));
+      const roles: string[] = decoded.roles || [];
+      return roles.includes(role);
+    } catch {
+      return false;
+    }
+  }
+
   loadActiveEvents(): void {
-    this.loadingActive = true;
+    this.loading = true;
     const params = new HttpParams()
       .set('page', '0')
       .set('size', '100');
 
-    this.http.get<PageResponse<Event>>(`${this.apiUrl}/my-events/active`, { params })
+    // SUPER users see all active events, others see only their assigned events
+    const endpoint = this.hasRoleSuper
+      ? `${this.apiUrl}/active`
+      : `${this.apiUrl}/my-events/active`;
+
+    this.http.get<PageResponse<Event>>(endpoint, { params })
       .subscribe({
         next: (response) => {
           this.activeEvents = response.content;
-          this.loadingActive = false;
+          this.loading = false;
         },
         error: (err) => {
           console.error('Error loading active events:', err);
           this.activeEvents = [];
-          this.loadingActive = false;
+          this.loading = false;
         }
       });
   }

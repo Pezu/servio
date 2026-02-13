@@ -99,6 +99,12 @@ public class EventService {
                 .map(eventMapper::toDto);
     }
 
+    public Page<Event> getAllActiveEvents(Pageable pageable) {
+        LocalDate now = LocalDate.now();
+        return eventRepository.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(now, now, pageable)
+                .map(eventMapper::toDto);
+    }
+
     public Event updateEvent(UUID id, UpdateEventRequest request) {
         EventEntity eventEntity = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found with id: " + id));

@@ -58,6 +58,14 @@ public class EventController {
         return ResponseEntity.ok(events);
     }
 
+    @GetMapping("/active")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER')")
+    public ResponseEntity<Page<Event>> getAllActiveEvents(
+            @PageableDefault(size = 100, sort = "name") Pageable pageable) {
+        Page<Event> events = eventService.getAllActiveEvents(pageable);
+        return ResponseEntity.ok(events);
+    }
+
     @PostMapping("/location/{locationId}")
     public ResponseEntity<Event> createEvent(
             @PathVariable UUID locationId,

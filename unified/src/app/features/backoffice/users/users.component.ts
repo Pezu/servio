@@ -176,15 +176,29 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             </div>
             <div class="form-group">
               <label>{{ 'USERS.ROLES' | translate }}</label>
-              <div class="roles-select">
-                @for (role of availableRoles; track role.id) {
-                  <label class="role-checkbox">
-                    <input type="checkbox" [checked]="userForm.roles.includes(role.name)" (change)="toggleRole(role.name)">
-                    <span>{{ role.name }}</span>
-                  </label>
-                }
-                @if (availableRoles.length === 0) {
-                  <div class="text-muted">{{ 'COMMON.LOADING' | translate }}</div>
+              <div class="custom-select" [class.open]="rolesDropdownOpen" (click)="toggleRolesDropdown(); $event.stopPropagation()">
+                <div class="custom-select-trigger">
+                  <span class="selected-value" [class.placeholder]="userForm.roles.length === 0">
+                    {{ userForm.roles.length > 0 ? userForm.roles.join(', ') : ('USERS.SELECT_ROLES' | translate) }}
+                  </span>
+                  <svg class="dropdown-arrow-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                @if (rolesDropdownOpen) {
+                  <div class="custom-select-options open-upward" (click)="$event.stopPropagation()">
+                    @for (role of getFilteredRoles(); track role.id) {
+                      <div class="custom-select-option" (click)="toggleRole(role.name); $event.stopPropagation()">
+                        <input type="checkbox" class="role-checkbox-input" [checked]="userForm.roles.includes(role.name)" (click)="$event.stopPropagation()">
+                        <span class="option-text">{{ role.name }}</span>
+                      </div>
+                    }
+                    @if (getFilteredRoles().length === 0) {
+                      <div class="custom-select-option disabled">
+                        <span class="option-text text-muted">{{ 'COMMON.LOADING' | translate }}</span>
+                      </div>
+                    }
+                  </div>
                 }
               </div>
             </div>
@@ -591,7 +605,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       width: 100%;
       max-width: 480px;
       max-height: 90vh;
-      overflow: hidden;
+      overflow: visible;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
     }
     .modal-header {
@@ -628,7 +642,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .modal-body {
       padding: 20px;
       max-height: 60vh;
-      overflow-y: auto;
+      overflow: visible;
     }
     .modal-footer {
       display: flex;
@@ -664,27 +678,99 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       border-color: #3b82f6;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
-    .roles-select {
+    /* Custom Select Dropdown */
+    .custom-select {
+      position: relative;
+      width: 100%;
+      cursor: pointer;
+    }
+    .custom-select-trigger {
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
       padding: 10px 14px;
+      background: white;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
-      background: #f8fafc;
+      font-size: 14px;
+      color: #374151;
+      transition: all 0.2s ease;
     }
-    .role-checkbox {
+    .custom-select:hover .custom-select-trigger {
+      border-color: #cbd5e1;
+    }
+    .custom-select.open .custom-select-trigger {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .selected-value {
       display: flex;
       align-items: center;
       gap: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      color: #374151;
+      font-weight: 500;
     }
-    .role-checkbox input[type="checkbox"] {
+    .selected-value.placeholder {
+      color: #94a3b8;
+      font-weight: 400;
+    }
+    .dropdown-arrow-icon {
       width: 16px;
       height: 16px;
-      accent-color: var(--primary);
+      color: #94a3b8;
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+    .custom-select.open .dropdown-arrow-icon {
+      transform: rotate(180deg);
+    }
+    .custom-select-options {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+      z-index: 1100;
+      overflow: hidden;
+      animation: dropdownFadeIn 0.15s ease;
+    }
+    .custom-select-options.open-upward {
+      top: auto;
+      bottom: calc(100% + 4px);
+    }
+    @keyframes dropdownFadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .custom-select-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #374151;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .custom-select-option:hover {
+      background: #f8fafc;
+    }
+    .custom-select-option.disabled {
+      cursor: default;
+    }
+    .custom-select-option.disabled:hover {
+      background: transparent;
+    }
+    .option-text {
+      flex: 1;
+    }
+    .role-checkbox-input {
+      width: 16px;
+      height: 16px;
+      accent-color: #3b82f6;
+      cursor: pointer;
     }
     .btn {
       padding: 10px 20px;
@@ -745,6 +831,7 @@ export class UsersComponent implements OnInit {
   editingUser: User | null = null;
   userForm = { name: '', username: '', password: '', roles: [] as string[] };
   savingUser = false;
+  rolesDropdownOpen = false;
 
   private searchSubject = new Subject<string>();
 
@@ -925,6 +1012,7 @@ export class UsersComponent implements OnInit {
     this.showUserModal = false;
     this.editingUser = null;
     this.userForm = { name: '', username: '', password: '', roles: [] };
+    this.rolesDropdownOpen = false;
   }
 
   toggleRole(roleName: string): void {
@@ -934,6 +1022,18 @@ export class UsersComponent implements OnInit {
     } else {
       this.userForm.roles.splice(index, 1);
     }
+  }
+
+  toggleRolesDropdown(): void {
+    this.rolesDropdownOpen = !this.rolesDropdownOpen;
+  }
+
+  getFilteredRoles(): Role[] {
+    if (this.hasRoleSuper) {
+      return this.availableRoles;
+    }
+    // Non-SUPER users cannot see/assign the SUPER role
+    return this.availableRoles.filter(role => role.name !== 'SUPER');
   }
 
   saveUser(): void {

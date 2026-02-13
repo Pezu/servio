@@ -44,6 +44,7 @@
   },
   "CLIENTS": {
     "TITLE": "Client",
+    "CLIENT": "Client",
     "ADD_CLIENT": "Adaugă Client",
     "EDIT_CLIENT": "Editează Client",
     "ADD_NEW_CLIENT": "Adaugă Client Nou",
@@ -98,7 +99,8 @@
     "ADD_NEW_ORDER_POINT": "Adaugă Punct de Comandă Nou",
     "NO_ORDER_POINTS": "Nu s-au găsit puncte de comandă",
     "SELECT_LOCATION": "Selectează o locație pentru a vedea punctele de comandă",
-    "ENTER_NAME": "Introduceți numele punctului de comandă"
+    "ENTER_NAME": "Introduceți numele punctului de comandă",
+    "PAY_LATER": "Plătește Mai Târziu"
   },
   "EVENTS": {
     "TITLE": "Evenimente",
@@ -120,17 +122,22 @@
     "MENU_SOURCE": "Sursă Meniu",
     "MENU_CLIENT": "Meniu Client",
     "MENU_LOCATION": "Meniu Locație",
-    "DOWNLOAD_QR": "Descarcă PDF QR"
+    "DOWNLOAD_QR": "Descarcă PDF QR",
+    "UPLOAD_LOGO": "Încarcă Logo",
+    "DELETE_LOGO": "Șterge Logo"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",
-    "ACTIVE_EVENTS": "Evenimente Active",
+    "ACTIVE_EVENTS": "Evenimentele Mele Active",
     "CURRENTLY_RUNNING": "În Desfășurare",
     "LOADING_ACTIVE": "Se încarcă evenimentele active...",
     "NO_ACTIVE_EVENTS": "Nu există evenimente active",
     "NO_ACTIVE_EVENTS_DESC": "Nu aveți niciun eveniment în desfășurare.",
     "STATUS_ACTIVE": "Activ",
-    "VIEW_ORDERS": "Vezi Comenzi"
+    "VIEW_ORDERS": "Vezi Comenzi",
+    "ALL_ACTIVE_EVENTS": "Toate Evenimentele Active",
+    "ALL_IN_PROGRESS": "Toate În Desfășurare",
+    "NO_ALL_ACTIVE_EVENTS_DESC": "Nu există evenimente în desfășurare."
   },
   "MENU": {
     "TITLE": "Meniu",

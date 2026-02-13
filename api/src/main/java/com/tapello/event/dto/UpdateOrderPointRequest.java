@@ -8,4 +8,5 @@ import java.util.UUID;
 public class UpdateOrderPointRequest {
     private String name;
     private UUID locationId;
+    private boolean payLater;
 }

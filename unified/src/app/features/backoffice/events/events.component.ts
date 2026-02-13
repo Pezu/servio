@@ -209,17 +209,34 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           <td class="position-relative">
                             <div class="status-indicator" [class.border-success]="isEventInProgress(event)" [class.border-danger]="!isEventInProgress(event)"></div>
                             <div class="d-flex align-items-center gap-3">
-                              <div class="avatar-icon" [class.avatar-icon-success]="isEventInProgress(event)" [class.avatar-icon-danger]="!isEventInProgress(event)">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
+                              @if (event.logoPath) {
+                                <img [src]="eventService.getLogoUrl(event.logoPath)" class="event-logo" alt="">
+                              } @else {
+                                <div class="avatar-icon" [class.avatar-icon-success]="isEventInProgress(event)" [class.avatar-icon-danger]="!isEventInProgress(event)">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              }
                               <div><a href="javascript:void(0);" class="d-block fw-semibold">{{ event.name }}</a></div>
                             </div>
                           </td>
                           <td class="text-muted">{{ formatDate(event.startDate) }}</td>
                           <td class="text-muted">{{ formatDate(event.endDate) }}</td>
                           <td class="text-end">
+                            <label class="btn-icon-action" [title]="'EVENTS.UPLOAD_LOGO' | translate">
+                              <input type="file" accept="image/*" (change)="uploadLogo($event, event)" hidden>
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </label>
+                            @if (event.logoPath) {
+                              <button class="btn-icon-action btn-icon-delete" (click)="deleteLogo(event)" [title]="'EVENTS.DELETE_LOGO' | translate">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            }
                             <button class="btn-icon-action" (click)="downloadQrPdf(event.id!)" [title]="'EVENTS.DOWNLOAD_QR' | translate">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -294,8 +311,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <!-- Users Selection -->
             <div class="form-group">
               <label>{{ 'EVENTS.BAR_USERS' | translate }}</label>
-              <div class="multi-select-wrapper" [class.open]="usersDropdownOpen">
-                <div class="multi-select-input" (click)="usersDropdownOpen = !usersDropdownOpen">
+              <div class="multi-select-wrapper users-dropdown" [class.open]="usersDropdownOpen">
+                <div class="multi-select-input" (click)="toggleUsersDropdown(); $event.stopPropagation()">
                   <span class="selected-text" *ngIf="getSelectedUsersText()">{{ getSelectedUsersText() }}</span>
                   <span class="placeholder" *ngIf="!getSelectedUsersText()">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
                   <span class="dropdown-arrow">
@@ -318,8 +335,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <!-- Payment Types Selection -->
             <div class="form-group">
               <label>{{ 'EVENTS.PAYMENT_TYPES' | translate }}</label>
-              <div class="multi-select-wrapper" [class.open]="paymentTypesDropdownOpen">
-                <div class="multi-select-input" (click)="paymentTypesDropdownOpen = !paymentTypesDropdownOpen">
+              <div class="multi-select-wrapper payment-types-dropdown" [class.open]="paymentTypesDropdownOpen">
+                <div class="multi-select-input" (click)="togglePaymentTypesDropdown(); $event.stopPropagation()">
                   <span class="selected-text" *ngIf="getSelectedPaymentTypesText()">{{ getSelectedPaymentTypesText() }}</span>
                   <span class="placeholder" *ngIf="!getSelectedPaymentTypesText()">{{ 'EVENTS.SELECT_PAYMENT_TYPES' | translate }}</span>
                   <span class="dropdown-arrow">
@@ -328,7 +345,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     </svg>
                   </span>
                 </div>
-                <div class="multi-select-dropdown" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
+                <div class="multi-select-dropdown open-upward" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
                   <div *ngIf="loadingPaymentTypes" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
                   <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
                   <label *ngFor="let pt of paymentTypes" class="checkbox-option">
@@ -457,6 +474,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .avatar-icon svg { width: 18px; height: 18px; }
     .avatar-icon-success { background: rgba(12, 175, 96, 0.1); color: var(--success); }
     .avatar-icon-danger { background: rgba(253, 106, 106, 0.1); color: var(--danger); }
+    .event-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 
     /* Buttons */
     .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
@@ -464,6 +482,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .btn-icon-action svg { width: 16px; height: 16px; }
     .btn-icon-add { background: var(--primary); border-color: var(--primary); color: white; }
     .btn-icon-add:hover { background: #2563eb; border-color: #2563eb; color: white; }
+    .btn-icon-delete:hover { background: rgba(253, 106, 106, 0.1); color: var(--danger); border-color: rgba(253, 106, 106, 0.3); }
+    label.btn-icon-action { cursor: pointer; }
 
     .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
     .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
@@ -505,7 +525,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .multi-select-input:hover { border-color: #cbd5e1; }
     .multi-select-wrapper.open .multi-select-input { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .selected-text { font-size: 14px; color: var(--text-dark); }
-    .multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 200px; overflow-y: auto; }
+    .multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1100; max-height: 200px; overflow-y: auto; }
+    .multi-select-dropdown.open-upward { top: auto; bottom: calc(100% + 4px); }
     .checkbox-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.15s ease; }
     .checkbox-option:hover { background: var(--bg-light); }
     .checkbox-option input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
@@ -829,7 +850,7 @@ export class EventsComponent implements OnInit {
   constructor(
     private clientService: ClientService,
     private locationService: LocationService,
-    private eventService: EventService,
+    public eventService: EventService,
     private userService: UserService,
     private paymentTypeService: PaymentTypeService,
     private menuService: MenuService,
@@ -868,13 +889,27 @@ export class EventsComponent implements OnInit {
       this.locationDropdownOpen = false;
     }
     // Close modal dropdowns when clicking outside
-    const usersDropdown = this.elementRef.nativeElement.querySelector('.multi-select-wrapper:first-of-type');
+    const usersDropdown = this.elementRef.nativeElement.querySelector('.users-dropdown');
     if (usersDropdown && !usersDropdown.contains(event.target)) {
       this.usersDropdownOpen = false;
     }
-    const paymentTypesDropdown = this.elementRef.nativeElement.querySelector('.multi-select-wrapper:last-of-type');
+    const paymentTypesDropdown = this.elementRef.nativeElement.querySelector('.payment-types-dropdown');
     if (paymentTypesDropdown && !paymentTypesDropdown.contains(event.target)) {
       this.paymentTypesDropdownOpen = false;
+    }
+  }
+
+  toggleUsersDropdown(): void {
+    this.usersDropdownOpen = !this.usersDropdownOpen;
+    if (this.usersDropdownOpen) {
+      this.paymentTypesDropdownOpen = false;
+    }
+  }
+
+  togglePaymentTypesDropdown(): void {
+    this.paymentTypesDropdownOpen = !this.paymentTypesDropdownOpen;
+    if (this.paymentTypesDropdownOpen) {
+      this.usersDropdownOpen = false;
     }
   }
 
@@ -1137,6 +1172,26 @@ export class EventsComponent implements OnInit {
         window.URL.revokeObjectURL(url);
       },
       error: (err) => console.error('Error downloading QR PDF:', err)
+    });
+  }
+
+  uploadLogo(fileEvent: globalThis.Event, event: Event): void {
+    const input = fileEvent.target as HTMLInputElement;
+    if (!input.files?.length || !event.id) return;
+
+    const file = input.files[0];
+    this.eventService.uploadLogo(event.id, file).subscribe({
+      next: (updated) => { event.logoPath = updated.logoPath; },
+      error: (err) => console.error('Error uploading logo:', err)
+    });
+    input.value = '';
+  }
+
+  deleteLogo(event: Event): void {
+    if (!event.id) return;
+    this.eventService.deleteLogo(event.id).subscribe({
+      next: () => { event.logoPath = undefined; },
+      error: (err) => console.error('Error deleting logo:', err)
     });
   }
 

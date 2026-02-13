@@ -51,7 +51,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
                     <tr>
                       <td>
                         <div class="client-info-cell">
-                          <div class="client-avatar" [style.background]="getAvatarColor(client.name)">
+                          <div class="client-avatar" [style.background]="client.logoPath ? 'transparent' : getAvatarColor(client.name)">
                             @if (client.logoPath) {
                               <img [src]="clientService.getLogoUrl(client.logoPath)" alt="" class="client-logo-img">
                             } @else {
@@ -180,7 +180,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
                   </svg>
                 </div>
                 @if (clientTypeDropdownOpen) {
-                  <div class="custom-select-options">
+                  <div class="custom-select-options open-upward">
                     <div class="custom-select-option" [class.selected]="!clientFormData.clientTypeId" (click)="selectClientType(''); $event.stopPropagation()">
                       <span class="option-text placeholder-text">{{ 'CLIENT_TYPES.SELECT' | translate }}</span>
                       @if (!clientFormData.clientTypeId) {
@@ -332,12 +332,12 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: white; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; }
+    .modal { background: white; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; overflow: visible; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
     .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
     .close-btn:hover { background: #e2e8f0; color: #374151; }
-    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+    .modal-body { padding: 20px; overflow-y: visible; overflow-x: visible; flex: 1; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 20px; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
@@ -414,9 +414,13 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
       border: 1px solid var(--border-color);
       border-radius: 10px;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-      z-index: 100;
+      z-index: 1100;
       overflow: hidden;
       animation: dropdownFadeIn 0.15s ease;
+    }
+    .custom-select-options.open-upward {
+      top: auto;
+      bottom: calc(100% + 4px);
     }
     @keyframes dropdownFadeIn {
       from { opacity: 0; transform: translateY(-4px); }

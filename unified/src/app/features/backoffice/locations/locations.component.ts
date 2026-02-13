@@ -167,13 +167,20 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <div class="card-body p-0">
               <div class="table-responsive">
                 <table class="table table-hover mb-0">
+                  <thead>
+                    <tr>
+                      <th>{{ 'COMMON.NAME' | translate }}</th>
+                      <th class="text-center col-pay-later">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
                   <tbody>
                     @if (!selectedLocation) {
-                      <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
+                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
                     } @else if (loadingOrderPoints) {
-                      <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (orderPoints.length === 0) {
-                      <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
+                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
                     } @else {
                       @for (orderPoint of orderPoints; track orderPoint.id) {
                         <tr>
@@ -187,6 +194,12 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               </div>
                               <div><a href="javascript:void(0);" class="d-block fw-semibold">{{ orderPoint.name }}</a></div>
                             </div>
+                          </td>
+                          <td class="text-center col-pay-later">
+                            <input type="checkbox"
+                                   class="table-checkbox"
+                                   [checked]="orderPoint.payLater"
+                                   (change)="togglePayLater(orderPoint)">
                           </td>
                           <td class="text-end">
                             <button class="btn-icon-action btn-icon-action-sm" (click)="editOrderPoint(orderPoint)" [title]="'ORDER_POINTS.EDIT_ORDER_POINT' | translate">
@@ -263,6 +276,12 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <div class="form-group">
               <label for="orderPointName">{{ 'COMMON.NAME' | translate }}</label>
               <input type="text" id="orderPointName" class="form-control" [(ngModel)]="orderPointForm.name" [placeholder]="'ORDER_POINTS.ENTER_NAME' | translate">
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" [(ngModel)]="orderPointForm.payLater">
+                <span class="checkbox-text">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</span>
+              </label>
             </div>
           </div>
           <div class="modal-footer">
@@ -463,26 +482,28 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       gap: 24px;
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
     .locations-panel {
-      width: 40%;
-      flex-shrink: 0;
+      flex: 0 0 calc(40% - 12px);
       display: flex;
       flex-direction: column;
       min-height: 0;
+      overflow: hidden;
     }
     .details-panel {
-      width: 60%;
-      flex-shrink: 0;
+      flex: 0 0 calc(60% - 12px);
       display: flex;
       flex-direction: column;
       min-height: 0;
+      overflow: hidden;
     }
     .card.stretch {
       display: flex;
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
     .card-header {
       display: flex;
@@ -837,6 +858,40 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       border-color: #94a3b8;
       cursor: not-allowed;
     }
+
+    /* Checkbox Styles */
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 14px;
+      color: #374151;
+    }
+    .checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #3b82f6;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin: 0;
+      margin-right: 5px;
+    }
+    .checkbox-text {
+      user-select: none;
+      position: relative;
+      top: -2px;
+    }
+
+    /* Table Checkbox */
+    .table-checkbox {
+      width: 18px;
+      height: 18px;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
+    .col-pay-later {
+      width: 100px;
+    }
   `]
 })
 export class LocationsComponent implements OnInit {
@@ -875,7 +930,7 @@ export class LocationsComponent implements OnInit {
   // Order Point Modal
   showOrderPointModal = false;
   editingOrderPoint: OrderPoint | null = null;
-  orderPointForm = { name: '' };
+  orderPointForm = { name: '', payLater: false };
   savingOrderPoint = false;
 
   private searchSubject = new Subject<string>();
@@ -1140,24 +1195,42 @@ export class LocationsComponent implements OnInit {
     }
   }
 
+  togglePayLater(orderPoint: OrderPoint): void {
+    if (!orderPoint.id || !this.selectedLocation?.id) return;
+
+    this.orderPointService.updateOrderPoint(
+      orderPoint.id,
+      orderPoint.name,
+      this.selectedLocation.id,
+      !orderPoint.payLater
+    ).subscribe({
+      next: () => {
+        orderPoint.payLater = !orderPoint.payLater;
+      },
+      error: (err) => {
+        console.error('Error updating pay later:', err);
+      }
+    });
+  }
+
   // Order Point Modal Methods
   openOrderPointModal(): void {
     if (!this.selectedLocation) return;
     this.editingOrderPoint = null;
-    this.orderPointForm = { name: '' };
+    this.orderPointForm = { name: '', payLater: false };
     this.showOrderPointModal = true;
   }
 
   editOrderPoint(orderPoint: OrderPoint): void {
     this.editingOrderPoint = orderPoint;
-    this.orderPointForm = { name: orderPoint.name };
+    this.orderPointForm = { name: orderPoint.name, payLater: orderPoint.payLater };
     this.showOrderPointModal = true;
   }
 
   closeOrderPointModal(): void {
     this.showOrderPointModal = false;
     this.editingOrderPoint = null;
-    this.orderPointForm = { name: '' };
+    this.orderPointForm = { name: '', payLater: false };
   }
 
   saveOrderPoint(): void {
@@ -1169,7 +1242,8 @@ export class LocationsComponent implements OnInit {
       this.orderPointService.updateOrderPoint(
         this.editingOrderPoint.id!,
         this.orderPointForm.name,
-        this.selectedLocation.id
+        this.selectedLocation.id,
+        this.orderPointForm.payLater
       ).subscribe({
         next: () => {
           this.savingOrderPoint = false;
@@ -1184,7 +1258,8 @@ export class LocationsComponent implements OnInit {
     } else {
       this.orderPointService.createOrderPoint(
         this.selectedLocation.id,
-        this.orderPointForm.name
+        this.orderPointForm.name,
+        this.orderPointForm.payLater
       ).subscribe({
         next: () => {
           this.savingOrderPoint = false;

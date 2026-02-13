@@ -3,6 +3,7 @@
 :root {
   --sidebar-bg: #ffffff;
   --sidebar-width: 260px;
+  --sidebar-collapsed-width: 70px;
   --header-height: 70px;
   --primary: #5e5aff;
   --primary-light: rgba(94, 90, 255, 0.1);
@@ -137,6 +138,151 @@ body {
   font-size: 14px;
 }
 
+/* ===== Sidebar Collapsed State ===== */
+.sidebar-collapsed .nxl-navigation {
+  width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-collapsed .nxl-header {
+  left: var(--sidebar-collapsed-width);
+}
+
+.sidebar-collapsed .nxl-container {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.sidebar-collapsed .m-header {
+  padding: 0 12px;
+  justify-content: center;
+}
+
+.sidebar-collapsed .logo-text {
+  display: none;
+}
+
+.sidebar-collapsed .b-brand::before {
+  content: 'B';
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.sidebar-collapsed .nxl-navbar {
+  padding: 0 8px;
+}
+
+.sidebar-collapsed .nxl-caption {
+  display: none;
+}
+
+.sidebar-collapsed .nxl-link {
+  justify-content: center;
+  padding: 12px;
+}
+
+.sidebar-collapsed .nxl-micon {
+  margin-right: 0;
+}
+
+.sidebar-collapsed .nxl-mtext,
+.sidebar-collapsed .nxl-arrow {
+  display: none;
+}
+
+.sidebar-collapsed .nxl-submenu {
+  display: none !important;
+}
+
+/* Tooltip for collapsed sidebar */
+.sidebar-collapsed .nxl-link {
+  position: relative;
+}
+
+.sidebar-collapsed .nxl-link::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 10px;
+  padding: 6px 12px;
+  background: var(--text-dark);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+.sidebar-collapsed .nxl-link:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Sidebar footer and toggle button */
+.sidebar-footer {
+  padding: 16px 12px;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: var(--bg-light);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-light);
+  font-size: 14px;
+  font-weight: 500;
+  gap: 12px;
+}
+
+.sidebar-toggle:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.sidebar-toggle svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-toggle .toggle-text {
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  justify-content: center;
+  padding: 12px;
+}
+
+.sidebar-collapsed .sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+.sidebar-collapsed .sidebar-toggle .toggle-text {
+  display: none;
+}
+
+/* Smooth transitions */
+.nxl-navigation,
+.nxl-header,
+.nxl-container {
+  transition: all 0.3s ease;
+}
+
 /* ===== Header ===== */
 .nxl-header {
   position: fixed;
@@ -243,13 +389,20 @@ body {
 .nxl-container {
   margin-left: var(--sidebar-width);
   margin-top: var(--header-height);
-  min-height: calc(100vh - var(--header-height));
+  height: calc(100vh - var(--header-height));
   padding: 24px;
   background: var(--white);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .nxl-content {
   max-width: 1400px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ===== Page Header ===== */
@@ -448,6 +601,31 @@ tbody tr:hover {
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Actions column - always last column, right aligned */
+th:last-child,
+td:last-child,
+.table th:last-child,
+.table td:last-child,
+table th:last-child,
+table td:last-child {
+  text-align: right !important;
+}
+
+td:last-child,
+.table td:last-child,
+table td:last-child {
+  white-space: nowrap;
+}
+
+/* Action buttons in tables */
+.action-btn,
+td:last-child .btn,
+td:last-child button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ===== Badge ===== */
@@ -676,3 +854,12 @@ select.form-control {
 .fs-11 { font-size: 11px; }
 .fs-12 { font-size: 12px; }
 .fs-20 { font-size: 20px; }
+
+/* ===== Router Outlet Container ===== */
+router-outlet + * {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

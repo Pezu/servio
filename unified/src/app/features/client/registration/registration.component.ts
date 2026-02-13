@@ -69,8 +69,11 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Navigation
   menuOpen: boolean = false;
-  activeView: 'menu' | 'orders' | 'checkout' = 'menu';
+  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' = 'menu';
   categoryNavExpanded: boolean = false;
+
+  // Validation polling
+  private validationPollInterval: any = null;
 
   // Menu
   menuItems: MenuItem[] = [];
@@ -118,14 +121,42 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         eventIdMatch: storedEventId === this.eventId
       });
 
-      // Use existing registration only if we have both the registration AND a matching eventId
-      if (existingRegistration && storedEventId === this.eventId) {
+      // Use existing registration only if we have both the registration AND a matching eventId AND matching orderPointId
+      const storedOrderPointId = this.getCookie('orderPointId');
+      const orderPointMatches = storedOrderPointId === this.orderPointId;
+
+      console.log('[Init] Stored orderPointId:', storedOrderPointId);
+      console.log('[Init] Current orderPointId:', this.orderPointId);
+      console.log('[Init] Order points match:', orderPointMatches);
+
+      if (existingRegistration && storedEventId === this.eventId && orderPointMatches) {
         this.registrationResponse = JSON.parse(existingRegistration);
         console.log('[Init] Using existing registration:', this.registrationResponse?.id);
-        this.loadActiveOrders();
-        this.loadOrders(); // Load orders on init for the badge
+
+        // Re-check validation status from server (in case it was approved)
+        this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}`)
+          .subscribe({
+            next: (registration) => {
+              this.registrationResponse = registration;
+              this.setCookie('registrationResponse', JSON.stringify(registration), 7);
+
+              if (registration.validationStatus === 'PENDING') {
+                this.activeView = 'waiting';
+                this.startValidationPolling();
+              } else {
+                this.loadActiveOrders();
+                this.loadOrders();
+              }
+            },
+            error: (err) => {
+              console.error('Error checking registration status:', err);
+              // Registration might not exist anymore, create new one
+              this.clearAllCookies();
+              this.registerToEvent();
+            }
+          });
       } else {
-        // Different event, missing eventId cookie, or no registration - clear and start fresh
+        // Different event, different order point, or no registration - clear and start fresh
         console.log('[Init] Creating new registration (no match or missing data)');
         this.clearAllCookies();
         this.registerToEvent();
@@ -207,9 +238,44 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.disconnectWebSocket();
+    this.stopValidationPolling();
     if (this.audioContext) {
       this.audioContext.close();
     }
+  }
+
+  private stopValidationPolling(): void {
+    if (this.validationPollInterval) {
+      clearInterval(this.validationPollInterval);
+      this.validationPollInterval = null;
+    }
+  }
+
+  private startValidationPolling(): void {
+    this.stopValidationPolling();
+    this.validationPollInterval = setInterval(() => {
+      this.checkValidationStatus();
+    }, 3000); // Poll every 3 seconds
+  }
+
+  private checkValidationStatus(): void {
+    if (!this.registrationResponse?.id) return;
+
+    this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}`)
+      .subscribe({
+        next: (registration) => {
+          if (registration.validationStatus === 'APPROVED') {
+            this.stopValidationPolling();
+            this.registrationResponse = registration;
+            this.setCookie('registrationResponse', JSON.stringify(registration), 7);
+            this.activeView = 'menu';
+            this.loadOrders();
+          }
+        },
+        error: (err) => {
+          console.error('Error checking validation status:', err);
+        }
+      });
   }
 
   // Navigation
@@ -221,7 +287,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.menuOpen = false;
   }
 
-  navigateTo(view: 'menu' | 'orders'): void {
+  navigateTo(view: 'menu' | 'orders' | 'team'): void {
     this.activeView = view;
     this.closeMenu();
     if (view === 'orders') {
@@ -233,14 +299,30 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.loading = true;
     this.error = '';
 
-    this.http.post(`${environment.apiUrl}/api/register/events/${this.eventId}`, {})
+    const url = this.orderPointId
+      ? `${environment.apiUrl}/api/register/events/${this.eventId}?orderPointId=${this.orderPointId}`
+      : `${environment.apiUrl}/api/register/events/${this.eventId}`;
+
+    console.log('[Register] Creating registration with URL:', url);
+    this.http.post<any>(url, {})
       .subscribe({
         next: (response) => {
+          console.log('[Register] Response:', response);
+          console.log('[Register] validationStatus:', response.validationStatus);
           this.registrationResponse = response;
           this.setCookie('registrationResponse', JSON.stringify(response), 7);
           this.setCookie('orderPointId', this.orderPointId, 7);
           this.setCookie('eventId', this.eventId, 7);
           this.loading = false;
+
+          // Check if validation is pending
+          if (response.validationStatus === 'PENDING') {
+            console.log('[Register] Status is PENDING, showing waiting view');
+            this.activeView = 'waiting';
+            this.startValidationPolling();
+          } else {
+            console.log('[Register] Status is not PENDING, showing menu');
+          }
         },
         error: (err) => {
           this.error = 'Failed to register: ' + (err.message || 'Unknown error');
@@ -370,9 +452,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
           const totalAmount = this.getTotalPrice();
 
-          // Start payment with Netopia
+          // Start payment with Netopia (use UUID for unique order ID)
           this.http.post<any>(`${environment.apiUrl}/api/payments/netopia/start`, {
-            orderId: 'ORDER_' + orderResponse.orderNo,
+            orderId: orderResponse.id,
             amount: totalAmount
           }).subscribe({
             next: (paymentResponse) => {
@@ -474,27 +556,30 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     return order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   }
 
-  // Cookie methods
+  // Storage methods (using localStorage instead of cookies for better iOS support)
   getCookie(name: string): string | null {
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    try {
+      return localStorage.getItem(name);
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+      return null;
     }
-    return null;
   }
 
   setCookie(name: string, value: string, days: number): void {
-    const date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    const expires = "expires=" + date.toUTCString();
-    document.cookie = name + "=" + value + ";" + expires + ";path=/";
+    try {
+      localStorage.setItem(name, value);
+    } catch (e) {
+      console.error('Error writing to localStorage:', e);
+    }
   }
 
   deleteCookie(name: string): void {
-    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    try {
+      localStorage.removeItem(name);
+    } catch (e) {
+      console.error('Error removing from localStorage:', e);
+    }
   }
 
   // WebSocket methods

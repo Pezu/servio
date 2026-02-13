@@ -1,0 +1,1 @@
+ALTER TABLE order_points ADD COLUMN pay_later BOOLEAN NOT NULL DEFAULT false;

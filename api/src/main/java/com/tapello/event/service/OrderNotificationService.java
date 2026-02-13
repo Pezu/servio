@@ -77,10 +77,6 @@ public class OrderNotificationService {
                 notification.setType("ITEM_STARTED");
                 notification.setMessage(item.getName() + " is being prepared");
             }
-            case DONE -> {
-                notification.setType("ITEM_READY");
-                notification.setMessage(item.getName() + " is ready");
-            }
             case CANCELLED -> {
                 notification.setType("ITEM_CANCELLED");
                 notification.setMessage(item.getName() + " has been cancelled");

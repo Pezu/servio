@@ -55,8 +55,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // Skip authentication for customer-facing event endpoints (event details and menu) - GET only
+        // Use UUID pattern to avoid matching other endpoints like /api/events/active
+        String uuidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
         if ("GET".equalsIgnoreCase(request.getMethod()) &&
-                (path.matches("/api/events/[^/]+$") || path.matches("/api/events/[^/]+/menu"))) {
+                (path.matches("/api/events/" + uuidPattern + "$") || path.matches("/api/events/" + uuidPattern + "/menu"))) {
             filterChain.doFilter(request, response);
             return;
         }

@@ -52,10 +52,13 @@ public class ClientService {
 
     public Page<Client> getAllClients(Pageable pageable, String search) {
         if (search != null && !search.trim().isEmpty()) {
-            return clientRepository.searchByNameOrEmailOrPhone(search.trim(), pageable)
-                    .map(clientMapper::toDto);
+            return clientRepository.searchByNameOrEmailOrPhoneExcludingSystem(
+                    search.trim(),
+                    ClientRepository.SYSTEM_CLIENT_ID,
+                    pageable
+            ).map(clientMapper::toDto);
         }
-        return clientRepository.findAll(pageable)
+        return clientRepository.findAllExcludingSystem(ClientRepository.SYSTEM_CLIENT_ID, pageable)
                 .map(clientMapper::toDto);
     }
 
