@@ -49,6 +49,11 @@ export const BACKOFFICE_ROUTES: Routes = [
           .then(m => m.MyEventsComponent)
       },
       {
+        path: 'reports',
+        loadComponent: () => import('./reports/reports.component')
+          .then(m => m.ReportsComponent)
+      },
+      {
         path: 'configuration',
         children: [
           {
@@ -65,6 +70,16 @@ export const BACKOFFICE_ROUTES: Routes = [
             path: 'client-types',
             loadComponent: () => import('./configuration/client-types/client-types.component')
               .then(m => m.ClientTypesComponent)
+          },
+          {
+            path: 'allergens',
+            loadComponent: () => import('./configuration/allergens/allergens.component')
+              .then(m => m.AllergensComponent)
+          },
+          {
+            path: 'vat-types',
+            loadComponent: () => import('./configuration/vat-types/vat-types.component')
+              .then(m => m.VatTypesComponent)
           },
           {
             path: 'menu',

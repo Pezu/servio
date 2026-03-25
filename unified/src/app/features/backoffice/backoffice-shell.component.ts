@@ -1,7 +1,8 @@
-import { Component, OnInit, HostListener, ElementRef } from '@angular/core';
-import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
+import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CommonModule } from '@angular/common';
+import { Subscription, filter } from 'rxjs';
 
 @Component({
   selector: 'app-backoffice-shell',
@@ -180,13 +181,99 @@ import { CommonModule } from '@angular/common';
     .user-menu-item.logout svg {
       color: #dc3545;
     }
+    /* Brand Styles */
+    .b-brand {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    .brand-logo {
+      width: 56px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+    .brand-logo svg {
+      width: 100%;
+      height: 100%;
+    }
+    .brand-text {
+      font-size: 26px;
+      font-weight: 300;
+      color: #0f172a;
+      letter-spacing: 2px;
+      text-transform: lowercase;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .brand-tagline {
+      font-size: 8px;
+      font-weight: 500;
+      color: #9ca3af;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      width: 100%;
+      margin-top: -2px;
+      transform: translateX(8px);
+    }
+    :host(.sidebar-collapsed) .brand-tagline {
+      display: none;
+    }
+    :host(.sidebar-collapsed) .brand-text {
+      display: none;
+    }
+    :host(.sidebar-collapsed) .brand-logo {
+      width: 48px;
+      height: 38px;
+      margin-left: 0;
+    }
   `],
   template: `
     <!-- Sidebar Navigation -->
     <nav class="nxl-navigation">
       <div class="m-header">
         <a href="/backoffice" class="b-brand">
-          <span class="logo-text">Back<span>office</span></span>
+          <div class="brand-logo">
+            <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Speed triangles/arrows (drawn first, behind everything) -->
+              <polygon points="38,19 66,22 38,25" fill="url(#goldGrad)"/>
+              <polygon points="34,25 64,28 34,31" fill="url(#goldGrad)" opacity="0.85"/>
+              <polygon points="29,31 57,34 29,37" fill="url(#goldGrad)" opacity="0.7"/>
+              <!-- White circle to mask triangle overlap inside the circle -->
+              <circle cx="20" cy="20" r="17" fill="white"/>
+              <!-- Outer gold swoosh circle -->
+              <path d="M20 2C10.06 2 2 10.06 2 20s8.06 18 18 18 18-8.06 18-18S29.94 2 20 2z" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="85 28"/>
+              <!-- QR code icon style -->
+              <!-- Top-left finder -->
+              <rect x="8" y="8" width="8" height="8" rx="1" fill="none" stroke="url(#goldGrad)" stroke-width="2"/>
+              <rect x="11" y="11" width="2" height="2" fill="url(#goldGrad)"/>
+              <!-- Top-right finder -->
+              <rect x="24" y="8" width="8" height="8" rx="1" fill="none" stroke="url(#goldGrad)" stroke-width="2"/>
+              <rect x="27" y="11" width="2" height="2" fill="url(#goldGrad)"/>
+              <!-- Bottom-left finder -->
+              <rect x="8" y="24" width="8" height="8" rx="1" fill="none" stroke="url(#goldGrad)" stroke-width="2"/>
+              <rect x="11" y="27" width="2" height="2" fill="url(#goldGrad)"/>
+              <!-- Data dots -->
+              <rect x="19" y="9" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="9" y="19" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="19" y="19" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="29" y="19" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="19" y="29" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="25" y="25" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="29" y="25" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="25" y="29" width="2" height="2" fill="url(#goldGrad)"/>
+              <rect x="29" y="29" width="2" height="2" fill="url(#goldGrad)"/>
+              <defs>
+                <linearGradient id="goldGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#6b7280"/>
+                  <stop offset="0.5" stop-color="#4b5563"/>
+                  <stop offset="1" stop-color="#374151"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="brand-text">servio</span>
+          <span class="brand-tagline">scan • order • enjoy</span>
         </a>
       </div>
       <div class="navbar-content">
@@ -239,6 +326,16 @@ import { CommonModule } from '@angular/common';
               <span class="nxl-mtext">{{ 'NAV.MY_EVENTS' | translate }}</span>
             </a>
           </li>
+          <li class="nxl-item" *ngIf="canAccessClientMenu">
+            <a routerLink="/backoffice/reports" routerLinkActive="active" class="nxl-link" [attr.data-tooltip]="'NAV.REPORTS' | translate">
+              <span class="nxl-micon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </span>
+              <span class="nxl-mtext">{{ 'NAV.REPORTS' | translate }}</span>
+            </a>
+          </li>
           <li class="nxl-item nxl-hasmenu" [class.nxl-trigger]="configExpanded" *ngIf="hasRoleSuper">
             <a href="javascript:void(0)" class="nxl-link" (click)="toggleConfigMenu()" [attr.data-tooltip]="'NAV.CONFIGURATION' | translate">
               <span class="nxl-micon">
@@ -258,6 +355,8 @@ import { CommonModule } from '@angular/common';
               <li class="nxl-item"><a routerLink="/backoffice/configuration/roles" routerLinkActive="active" class="nxl-link">{{ 'NAV.ROLES' | translate }}</a></li>
               <li class="nxl-item"><a routerLink="/backoffice/configuration/payment-types" routerLinkActive="active" class="nxl-link">{{ 'NAV.PAYMENT_TYPES' | translate }}</a></li>
               <li class="nxl-item"><a routerLink="/backoffice/configuration/client-types" routerLinkActive="active" class="nxl-link">{{ 'NAV.CLIENT_TYPES' | translate }}</a></li>
+              <li class="nxl-item"><a routerLink="/backoffice/configuration/allergens" routerLinkActive="active" class="nxl-link">{{ 'NAV.ALLERGENS' | translate }}</a></li>
+              <li class="nxl-item"><a routerLink="/backoffice/configuration/vat-types" routerLinkActive="active" class="nxl-link">{{ 'NAV.VAT_TYPES' | translate }}</a></li>
             </ul>
           </li>
         </ul>

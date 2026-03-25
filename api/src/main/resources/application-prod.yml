@@ -1,0 +1,34 @@
+# Production profile
+# Start with: mvn spring-boot:run -Dspring-boot.run.profiles=prod
+# Or set SPRING_PROFILES_ACTIVE=prod
+#
+# Required environment variables for production:
+# - JWT_SECRET: Secret key for JWT token signing (required)
+# - NETOPIA_API_KEY: Netopia payment API key (required)
+# - NETOPIA_POS_SIGNATURE: Netopia POS signature (required)
+
+jwt:
+  secret: ${JWT_SECRET}
+
+# CORS for production domain
+cors:
+  allowed-origins: https://servioapp.ro,https://www.servioapp.ro
+
+# Netopia production settings
+netopia:
+  api-key: ${NETOPIA_API_KEY}
+  pos-signature: ${NETOPIA_POS_SIGNATURE}
+  base-url: ${NETOPIA_BASE_URL:https://secure.sandbox.netopia-payments.com}
+  notify-url: https://servioapp.ro/api/payments/netopia/notify
+  redirect-url: https://servioapp.ro/payment/confirmed
+
+# Production logging - less verbose
+logging:
+  level:
+    com.servio.event: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+
+spring:
+  jpa:
+    show-sql: false

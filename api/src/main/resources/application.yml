@@ -2,18 +2,21 @@ spring:
   application:
     name: event
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
+      group-id: event-api
+      properties:
+        spring.json.trusted.packages: com.servio.event.dto.kafka
   datasource:
-    url: jdbc:postgresql://localhost:5432/eventdb
-    username: eventuser
-    password: eventpass
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/eventdb}
+    username: ${DATABASE_USERNAME:eventuser}
+    password: ${DATABASE_PASSWORD:eventpass}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -27,17 +30,40 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=300s
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
   address: 0.0.0.0
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:
     org.apache.kafka.clients.producer.ProducerConfig: WARN
 
 application:
-  base-url: ${APPLICATION_BASE_URL:http://192.168.1.151:4200}
+  base-url: ${APPLICATION_BASE_URL:http://localhost:4200}
+
+# JWT configuration - use profiles (local/prod) or set JWT_SECRET env var
+jwt:
+  secret: ${JWT_SECRET:}
+
+# CORS configuration
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
 
 kafka:
   order:
@@ -45,28 +71,29 @@ kafka:
       cancel:
         topic: cancel.order.item
         group: cancel.order.item
+  # Topics consumed from Order microservice
+  topics:
+    order-created: order.created
+    order-status-changed: order.status.changed
+    order-item-status-changed: order.item.status.changed
+    payment-completed: payment.completed
+    validation-requested: validation.requested
 
 elasticsearch:
   host: ${ELASTICSEARCH_HOST:localhost}
 
 minio:
   url: ${MINIO_URL:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
   bucket: ${MINIO_BUCKET:images}
-
-revolut:
-  api:
-    secret-key: sk_eC6h3MjJQl8BbQHm5LBHdKSGvg3MdahqcDCBwL5b4-q26_W2CRZDuWSRfN1wW7u6
-    public-key: pk_fy8RXwsu7HgqX88GDbjGlA4JMp9fhLzXxu8MOQOIVdNxmNfU
-    base-url: https://sandbox-merchant.revolut.com
 
 netopia:
   api-key: ${NETOPIA_API_KEY:GMaWOObfdYQBlUWcuZFVnEqw-5DOTm6s7iOz5FFbdh0TYH23CJPEeKFx284g}
   pos-signature: ${NETOPIA_POS_SIGNATURE:37ZT-B3X1-VZOC-GOIK-2RXP}
   base-url: ${NETOPIA_BASE_URL:https://secure.sandbox.netopia-payments.com}
-  notify-url: ${NETOPIA_NOTIFY_URL:https://preliberally-nonesoteric-denny.ngrok-free.dev/notify}
-  redirect-url: ${NETOPIA_REDIRECT_URL:http://192.168.1.151:4200/payment/confirmed}
+  notify-url: ${NETOPIA_NOTIFY_URL:http://localhost:8080/api/payments/netopia/callback}
+  redirect-url: ${NETOPIA_REDIRECT_URL:http://localhost:4200/payment/confirmed}
   language: ${NETOPIA_LANGUAGE:ro}
   currency: ${NETOPIA_CURRENCY:RON}
   email-template: ${NETOPIA_EMAIL_TEMPLATE:confirm}

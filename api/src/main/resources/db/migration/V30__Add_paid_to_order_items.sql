@@ -1,0 +1,1 @@
+ALTER TABLE order_items ADD COLUMN paid BOOLEAN NOT NULL DEFAULT false;

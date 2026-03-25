@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Client } from '@stomp/stompjs';
 import * as SockJS from 'sockjs-client';
@@ -22,7 +23,15 @@ interface MenuItem {
   price?: number;
   imagePath?: string;
   description?: string;
+  allergenIds?: string[];
   children: MenuItem[];
+}
+
+interface Allergen {
+  id: string;
+  number: number;
+  name: string;
+  active: boolean;
 }
 
 interface OrderItem {
@@ -37,6 +46,7 @@ interface ApiOrderItem {
   quantity: number;
   status: string;
   note?: string;
+  paid?: boolean;
 }
 
 interface ApiOrder {
@@ -44,7 +54,17 @@ interface ApiOrder {
   orderNo: number;
   status: string;
   note?: string;
+  nickname?: string;
+  needsPayment?: boolean;
+  registrationId?: string;
   items: ApiOrderItem[];
+}
+
+interface GuestOrders {
+  nickname: string;
+  registrationId: string;
+  orders: ApiOrder[];
+  total: number;
 }
 
 interface EventData {
@@ -53,10 +73,19 @@ interface EventData {
   logoPath?: string;
 }
 
+interface PendingTeamRegistration {
+  id: string;
+  orderPointId: string;
+  orderPointName: string;
+  validationStatus: string;
+  createdAt: string;
+  nickname?: string;
+}
+
 @Component({
   selector: 'app-registration',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './registration.component.html',
   styleUrls: ['./registration.component.css']
 })
@@ -69,7 +98,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Navigation
   menuOpen: boolean = false;
-  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' = 'menu';
+  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' = 'menu';
+  orderPointPayLater: boolean = false;
   categoryNavExpanded: boolean = false;
 
   // Validation polling
@@ -77,6 +107,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Menu
   menuItems: MenuItem[] = [];
+  allergens: Allergen[] = [];
   loadingMenu: boolean = false;
   quantities: Map<string, number> = new Map();
   placingOrder: boolean = false;
@@ -84,7 +115,10 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Orders
   orders: ApiOrder[] = [];
+  orderPointOrders: ApiOrder[] = []; // All orders at the order point (for payLater)
   loadingOrders: boolean = false;
+  ordersGroupMode: 'all' | 'guest' = 'all';
+  ordersViewMode: 'total' | 'order' = 'order';
 
   // Event data
   eventData: EventData | null = null;
@@ -95,11 +129,31 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   activeOrderIds: Set<string> = new Set();
   connected: boolean = false;
   private audioContext: AudioContext | null = null;
+  private visibilityHandler: (() => void) | null = null;
+  private onlineHandler: (() => void) | null = null;
 
   // Toast
   showingToast: boolean = false;
   toastMessage: string = '';
   toastType: 'success' | 'error' = 'success';
+
+  // Payment choice dialog
+  showPaymentChoice: boolean = false;
+  nickname: string = '';
+  processingPayment: boolean = false;
+
+  // Team
+  teamPendingRegistrations: PendingTeamRegistration[] = [];
+  loadingTeam: boolean = false;
+  approvedMembers: string[] = [];
+
+  // Order categories collapse state (delivered collapsed by default)
+  orderCategoryExpanded = {
+    ready: true,
+    inProgress: true,
+    ordered: true,
+    delivered: false
+  };
 
   constructor(
     private route: ActivatedRoute,
@@ -107,9 +161,14 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Ensure activeView is menu at start
+    this.activeView = 'menu';
+    console.log('[Init] Starting, activeView:', this.activeView);
+
     this.route.params.subscribe(params => {
       this.eventId = params['eventId'];
       this.orderPointId = params['orderPointId'];
+      console.log('[Init] In route subscribe, activeView:', this.activeView);
 
       const existingRegistration = this.getCookie('registrationResponse');
       const storedEventId = this.getCookie('eventId');
@@ -138,31 +197,41 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           .subscribe({
             next: (registration) => {
               this.registrationResponse = registration;
+              this.orderPointPayLater = registration.orderPointPayLater || false;
               this.setCookie('registrationResponse', JSON.stringify(registration), 7);
+              console.log('[Init] Registration loaded, validationStatus:', registration.validationStatus, 'orderPointPayLater:', this.orderPointPayLater);
 
               if (registration.validationStatus === 'PENDING') {
                 this.activeView = 'waiting';
+                this.loadApprovedMembers();
                 this.startValidationPolling();
               } else {
+                this.activeView = 'menu';
                 this.loadActiveOrders();
                 this.loadOrders();
+                // Connect WebSocket and load pending registrations for real-time badge updates
+                if (this.orderPointPayLater && this.orderPointId) {
+                  this.connectWebSocket();
+                  this.loadTeamPendingRegistrations();
+                }
               }
             },
             error: (err) => {
               console.error('Error checking registration status:', err);
               // Registration might not exist anymore, create new one
               this.clearAllCookies();
-              this.registerToEvent();
+              this.checkOrderPointAndRegister();
             }
           });
       } else {
         // Different event, different order point, or no registration - clear and start fresh
         console.log('[Init] Creating new registration (no match or missing data)');
         this.clearAllCookies();
-        this.registerToEvent();
+        this.checkOrderPointAndRegister();
       }
 
       this.loadMenuItems();
+      this.loadAllergens();
       this.loadEventData();
       this.checkPaymentResult();
     });
@@ -172,17 +241,29 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const paymentSuccess = localStorage.getItem('paymentSuccess');
     const paymentError = localStorage.getItem('paymentError');
     const confirmedOrderId = localStorage.getItem('confirmedOrderId');
+    const tableOrderPayment = localStorage.getItem('tableOrderPayment');
 
     console.log('[Payment] Checking payment result:', {
       paymentSuccess,
       paymentError,
       confirmedOrderId,
+      tableOrderPayment,
       hasRegistration: !!this.registrationResponse,
       registrationId: this.registrationResponse?.id
     });
 
     if (paymentSuccess) {
       localStorage.removeItem('paymentSuccess');
+      localStorage.removeItem('tableOrderPayment');
+
+      // Check if this was a table order payment
+      if (tableOrderPayment === 'true') {
+        console.log('[Payment] Table order payment completed, showing orders view');
+        this.activeView = 'orders';
+        this.showToast('Payment completed successfully!', 'success');
+        this.loadOrders();
+        return;
+      }
 
       // Add the confirmed order to active orders and connect WebSocket
       if (confirmedOrderId) {
@@ -195,6 +276,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     } else if (paymentError) {
       localStorage.removeItem('paymentError');
       localStorage.removeItem('confirmedOrderId');
+      localStorage.removeItem('tableOrderPayment');
     }
   }
 
@@ -239,8 +321,57 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.disconnectWebSocket();
     this.stopValidationPolling();
+    this.removeWakeUpListeners();
     if (this.audioContext) {
       this.audioContext.close();
+    }
+  }
+
+  private setupWakeUpListeners(): void {
+    // Listen for visibility changes (device wake up / tab focus)
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[WebSocket] Page became visible, checking connection...');
+        this.reconnectIfNeeded();
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+
+    // Listen for online events (network reconnection)
+    this.onlineHandler = () => {
+      console.log('[WebSocket] Device came online, reconnecting...');
+      this.reconnectIfNeeded();
+    };
+    window.addEventListener('online', this.onlineHandler);
+  }
+
+  private removeWakeUpListeners(): void {
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
+    if (this.onlineHandler) {
+      window.removeEventListener('online', this.onlineHandler);
+      this.onlineHandler = null;
+    }
+  }
+
+  private reconnectIfNeeded(): void {
+    const needsConnection = this.activeOrderIds.size > 0 ||
+                           this.activeView === 'team' ||
+                           (this.activeView === 'orders' && this.orderPointPayLater);
+    if (needsConnection) {
+      // Force disconnect and reconnect to ensure fresh connection
+      if (this.stompClient) {
+        console.log('[WebSocket] Forcing reconnection...');
+        this.stompClient.deactivate();
+        this.stompClient = null;
+        this.connected = false;
+      }
+      // Small delay before reconnecting
+      setTimeout(() => {
+        this.connectWebSocket();
+      }, 500);
     }
   }
 
@@ -267,9 +398,15 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           if (registration.validationStatus === 'APPROVED') {
             this.stopValidationPolling();
             this.registrationResponse = registration;
+            this.orderPointPayLater = registration.orderPointPayLater || false;
             this.setCookie('registrationResponse', JSON.stringify(registration), 7);
             this.activeView = 'menu';
             this.loadOrders();
+            // Connect WebSocket and load pending registrations for real-time badge updates
+            if (this.orderPointPayLater && this.orderPointId) {
+              this.connectWebSocket();
+              this.loadTeamPendingRegistrations();
+            }
           }
         },
         error: (err) => {
@@ -287,29 +424,90 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.menuOpen = false;
   }
 
-  navigateTo(view: 'menu' | 'orders' | 'team'): void {
+  navigateTo(view: 'menu' | 'orders' | 'team' | 'login' | 'payments'): void {
+    console.log('[Nav] navigateTo called with:', view, 'stack:', new Error().stack);
     this.activeView = view;
     this.closeMenu();
     if (view === 'orders') {
       this.loadOrders();
+      // Ensure WebSocket is connected for real-time table order updates
+      if (this.orderPointPayLater) {
+        this.connectWebSocket();
+      }
+    } else if (view === 'team') {
+      this.loadTeamPendingRegistrations();
+      // Ensure WebSocket is connected for real-time updates
+      this.connectWebSocket();
     }
+  }
+
+  checkOrderPointAndRegister(): void {
+    console.log('[CheckOP] Starting, orderPointId:', this.orderPointId);
+    if (!this.orderPointId) {
+      console.log('[CheckOP] No orderPointId, registering directly');
+      this.registerToEvent();
+      return;
+    }
+
+    this.loading = true;
+    console.log('[CheckOP] Fetching order point info...');
+    this.http.get<any>(`${environment.apiUrl}/api/register/order-points/${this.orderPointId}/info`)
+      .subscribe({
+        next: (orderPoint) => {
+          console.log('[CheckOP] Order point info received:', orderPoint);
+          this.orderPointPayLater = orderPoint.payLater;
+          this.loading = false;
+
+          if (orderPoint.payLater) {
+            // Show nickname form before registering
+            console.log('[CheckOP] payLater=true, showing nickname view');
+            this.activeView = 'nickname';
+          } else {
+            // Register immediately
+            console.log('[CheckOP] payLater=false, registering directly');
+            this.registerToEvent();
+          }
+          console.log('[CheckOP] activeView is now:', this.activeView);
+        },
+        error: (err) => {
+          console.error('[CheckOP] Error fetching order point info:', err);
+          // Fall back to normal registration
+          this.loading = false;
+          this.registerToEvent();
+        }
+      });
+  }
+
+  submitNickname(): void {
+    this.registerToEvent();
   }
 
   registerToEvent(): void {
     this.loading = true;
     this.error = '';
 
-    const url = this.orderPointId
-      ? `${environment.apiUrl}/api/register/events/${this.eventId}?orderPointId=${this.orderPointId}`
-      : `${environment.apiUrl}/api/register/events/${this.eventId}`;
+    let url = `${environment.apiUrl}/api/register/events/${this.eventId}`;
+    const params: string[] = [];
+
+    if (this.orderPointId) {
+      params.push(`orderPointId=${this.orderPointId}`);
+    }
+    if (this.nickname && this.nickname.trim()) {
+      params.push(`nickname=${encodeURIComponent(this.nickname.trim())}`);
+    }
+    if (params.length > 0) {
+      url += '?' + params.join('&');
+    }
 
     console.log('[Register] Creating registration with URL:', url);
+    console.log('[Register] Nickname being sent:', this.nickname);
     this.http.post<any>(url, {})
       .subscribe({
         next: (response) => {
           console.log('[Register] Response:', response);
           console.log('[Register] validationStatus:', response.validationStatus);
           this.registrationResponse = response;
+          this.orderPointPayLater = response.orderPointPayLater || false;
           this.setCookie('registrationResponse', JSON.stringify(response), 7);
           this.setCookie('orderPointId', this.orderPointId, 7);
           this.setCookie('eventId', this.eventId, 7);
@@ -319,9 +517,17 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           if (response.validationStatus === 'PENDING') {
             console.log('[Register] Status is PENDING, showing waiting view');
             this.activeView = 'waiting';
+            this.loadApprovedMembers();
             this.startValidationPolling();
           } else {
             console.log('[Register] Status is not PENDING, showing menu');
+            this.activeView = 'menu';
+            this.loadOrders();
+            // Connect WebSocket and load pending registrations for real-time badge updates
+            if (this.orderPointPayLater && this.orderPointId) {
+              this.connectWebSocket();
+              this.loadTeamPendingRegistrations();
+            }
           }
         },
         error: (err) => {
@@ -345,6 +551,27 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           this.loadingMenu = false;
         }
       });
+  }
+
+  loadAllergens(): void {
+    this.http.get<Allergen[]>(`${environment.apiUrl}/api/allergens/active`)
+      .subscribe({
+        next: (allergens) => {
+          this.allergens = allergens;
+        },
+        error: (err) => {
+          console.error('Error loading allergens:', err);
+        }
+      });
+  }
+
+  getAllergenNames(allergenIds: string[]): string {
+    if (!allergenIds?.length) return '';
+    return allergenIds
+      .map(id => this.allergens.find(a => a.id === id))
+      .filter(a => a)
+      .map(a => a!.name)
+      .join(', ');
   }
 
   getQuantity(itemId: string): number {
@@ -415,6 +642,24 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Check if pay later is enabled for this order point
+    if (this.registrationResponse?.orderPointPayLater) {
+      this.showPaymentChoice = true;
+      return;
+    }
+
+    // Otherwise proceed with normal payment flow
+    this.submitOrder(false);
+  }
+
+  closePaymentChoice(): void {
+    this.showPaymentChoice = false;
+  }
+
+  submitOrder(payLater: boolean): void {
+    this.showPaymentChoice = false;
+
+    const selectedItems = this.getSelectedItems();
     const registrationResponse = this.getCookie('registrationResponse');
     const orderPointId = this.getCookie('orderPointId');
 
@@ -433,48 +678,61 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const orderRequest = {
       registrationId: registration.id,
       orderPointId: orderPointId,
+      payLater: payLater,
       orderItems: orderItems
     };
 
-    console.log('[Order] Creating order with registrationId:', registration.id);
+    console.log('[Order] Creating order with registrationId:', registration.id, 'payLater:', payLater);
 
     this.placingOrder = true;
     this.orderStatus = '';
 
-    // First create the order (will be in DRAFT status)
+    // First create the order
     this.http.post<any>(`${environment.apiUrl}/api/orders`, orderRequest)
       .subscribe({
         next: (orderResponse) => {
-          // Store order ID for confirmation after payment
-          localStorage.setItem('pendingOrderId', orderResponse.id);
-          localStorage.setItem('paymentEventId', this.eventId);
-          localStorage.setItem('paymentOrderPointId', this.orderPointId);
+          if (payLater) {
+            // Pay later: order is already ACTIVE with needsPayment flag
+            // Clear cart and show success
+            this.quantities.clear();
+            this.placingOrder = false;
+            this.activeView = 'menu';
 
-          const totalAmount = this.getTotalPrice();
+            // Add to active orders for notifications
+            this.activeOrderIds.add(orderResponse.id);
+            this.saveActiveOrders();
+            this.connectWebSocket();
 
-          // Start payment with Netopia (use UUID for unique order ID)
-          this.http.post<any>(`${environment.apiUrl}/api/payments/netopia/start`, {
-            orderId: orderResponse.id,
-            amount: totalAmount
-          }).subscribe({
-            next: (paymentResponse) => {
-              // Clear cart before redirecting
-              this.quantities.clear();
+            this.showToast('Order placed! Pay at the counter.', 'success');
+            this.loadOrders();
+          } else {
+            // Pay now: proceed with payment
+            this.setCookie('pendingOrderId', orderResponse.id, 1);
+            this.setCookie('paymentEventId', this.eventId, 1);
+            this.setCookie('paymentOrderPointId', this.orderPointId, 1);
 
-              // Redirect to Netopia payment page
-              if (paymentResponse.payment?.paymentURL) {
-                window.location.href = paymentResponse.payment.paymentURL;
-              } else {
-                this.orderStatus = 'Payment URL not received';
+            const totalAmount = this.getTotalPrice();
+
+            // Start payment with Netopia
+            const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&orderId=${orderResponse.id}`;
+            this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderResponse.id}/start`, { returnUrl }).subscribe({
+              next: (paymentResponse) => {
+                this.quantities.clear();
+
+                if (paymentResponse.payment?.paymentURL) {
+                  window.location.href = paymentResponse.payment.paymentURL;
+                } else {
+                  this.orderStatus = 'Payment URL not received';
+                  this.placingOrder = false;
+                }
+              },
+              error: (err) => {
+                console.error('Payment error:', err);
+                this.orderStatus = 'Failed to start payment: ' + (err.error?.message || err.message || 'Unknown error');
                 this.placingOrder = false;
               }
-            },
-            error: (err) => {
-              console.error('Payment error:', err);
-              this.orderStatus = 'Failed to start payment: ' + (err.error?.message || err.message || 'Unknown error');
-              this.placingOrder = false;
-            }
-          });
+            });
+          }
         },
         error: (err) => {
           this.orderStatus = 'Failed to create order: ' + (err.message || 'Unknown error');
@@ -497,6 +755,28 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         error: (err) => {
           console.error('Error loading orders:', err);
           this.loadingOrders = false;
+        }
+      });
+
+    // For payLater order points, also load all orders at the order point
+    console.log('[Orders] orderPointPayLater:', this.orderPointPayLater, 'orderPointId:', this.orderPointId);
+    if (this.orderPointPayLater && this.orderPointId) {
+      this.loadOrderPointOrders();
+    }
+  }
+
+  loadOrderPointOrders(): void {
+    if (!this.orderPointId || !this.registrationResponse?.id) return;
+
+    console.log('[Orders] Loading order point orders for:', this.orderPointId);
+    this.http.get<ApiOrder[]>(`${environment.apiUrl}/api/orders/order-points/${this.orderPointId}?registrationId=${this.registrationResponse.id}`)
+      .subscribe({
+        next: (orders) => {
+          console.log('[Orders] Loaded order point orders:', orders.length);
+          this.orderPointOrders = orders;
+        },
+        error: (err) => {
+          console.error('Error loading order point orders:', err);
         }
       });
   }
@@ -554,6 +834,322 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   getOrderTotal(order: ApiOrder): number {
     return order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  }
+
+  getOrdersByStatus(status: string): ApiOrder[] {
+    return this.orders.filter(order => order.status === status);
+  }
+
+  // Orders by status for the new Orders view
+  getOrderedOrders(): ApiOrder[] {
+    return this.orders.filter(order => order.status === 'ACTIVE');
+  }
+
+  getInProgressOrders(): ApiOrder[] {
+    return this.orders.filter(order => order.status === 'IN_PROGRESS');
+  }
+
+  getReadyOrders(): ApiOrder[] {
+    return this.orders.filter(order => order.status === 'READY');
+  }
+
+  getDeliveredOrders(): ApiOrder[] {
+    return this.orders.filter(order => order.status === 'DELIVERED');
+  }
+
+  toggleOrderCategory(category: 'ready' | 'inProgress' | 'ordered' | 'delivered'): void {
+    this.orderCategoryExpanded[category] = !this.orderCategoryExpanded[category];
+  }
+
+  // Order point orders methods (for payLater)
+  setOrdersGroupMode(mode: 'all' | 'guest'): void {
+    this.ordersGroupMode = mode;
+  }
+
+  setOrdersViewMode(mode: 'total' | 'order'): void {
+    this.ordersViewMode = mode;
+  }
+
+  getOrderPointOrdersTotal(): number {
+    return this.orderPointOrders.reduce((total, order) => total + this.getOrderTotal(order), 0);
+  }
+
+  getAggregatedOrderItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number }[] {
+    const itemMap = new Map<string, { quantity: number; totalPrice: number }>();
+
+    for (const order of orders) {
+      for (const item of order.items) {
+        const existing = itemMap.get(item.name);
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.totalPrice += item.price * item.quantity;
+        } else {
+          itemMap.set(item.name, {
+            quantity: item.quantity,
+            totalPrice: item.price * item.quantity
+          });
+        }
+      }
+    }
+
+    return Array.from(itemMap.entries()).map(([name, data]) => ({
+      name,
+      quantity: data.quantity,
+      totalPrice: data.totalPrice
+    }));
+  }
+
+  // Aggregates only active (non-paid, non-cancelled) items for total view
+  getAggregatedActiveItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number }[] {
+    const itemMap = new Map<string, { quantity: number; totalPrice: number }>();
+
+    for (const order of orders) {
+      for (const item of order.items) {
+        // Only include non-paid, non-cancelled items
+        if (item.paid || item.status === 'CANCELLED') {
+          continue;
+        }
+        const existing = itemMap.get(item.name);
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.totalPrice += item.price * item.quantity;
+        } else {
+          itemMap.set(item.name, {
+            quantity: item.quantity,
+            totalPrice: item.price * item.quantity
+          });
+        }
+      }
+    }
+
+    return Array.from(itemMap.entries()).map(([name, data]) => ({
+      name,
+      quantity: data.quantity,
+      totalPrice: data.totalPrice
+    }));
+  }
+
+  getOrderPointOrdersByGuest(): GuestOrders[] {
+    const groups = new Map<string, { nickname: string; registrationId: string; orders: ApiOrder[] }>();
+
+    for (const order of this.orderPointOrders) {
+      const registrationId = order.registrationId || 'unknown';
+      if (!groups.has(registrationId)) {
+        groups.set(registrationId, {
+          nickname: order.nickname || 'Unknown',
+          registrationId: registrationId,
+          orders: []
+        });
+      }
+      groups.get(registrationId)!.orders.push(order);
+    }
+
+    return Array.from(groups.values()).map(group => ({
+      nickname: group.nickname,
+      registrationId: group.registrationId,
+      orders: group.orders,
+      total: group.orders.reduce((sum, o) => sum + this.getOrderTotal(o), 0)
+    }));
+  }
+
+  // Payment methods for order point orders
+  getOrderUnpaidTotal(order: ApiOrder): number {
+    return order.items
+      .filter(item => !item.paid && item.status !== 'CANCELLED')
+      .reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  }
+
+  hasUnpaidItems(order: ApiOrder): boolean {
+    return order.items.some(item => !item.paid && item.status !== 'CANCELLED');
+  }
+
+  getActiveItems(order: ApiOrder): ApiOrderItem[] {
+    return order.items.filter(item => !item.paid && item.status !== 'CANCELLED');
+  }
+
+  getOrdersWithUnpaidItems(): ApiOrder[] {
+    return this.orderPointOrders.filter(o => this.hasUnpaidItems(o));
+  }
+
+  getUnpaidOrderPointTotal(): number {
+    return this.orderPointOrders.reduce((sum, o) => sum + this.getOrderUnpaidTotal(o), 0);
+  }
+
+  getGuestOrdersWithUnpaidItems(guest: GuestOrders): ApiOrder[] {
+    return guest.orders.filter(o => this.hasUnpaidItems(o));
+  }
+
+  getGuestUnpaidTotal(guest: GuestOrders): number {
+    return guest.orders.reduce((sum, o) => sum + this.getOrderUnpaidTotal(o), 0);
+  }
+
+  hasAnyUnpaidItems(): boolean {
+    return this.orderPointOrders.some(o => this.hasUnpaidItems(o));
+  }
+
+  guestHasUnpaidItems(guest: GuestOrders): boolean {
+    return guest.orders.some(o => this.hasUnpaidItems(o));
+  }
+
+  payOrder(order: ApiOrder): void {
+    if (this.processingPayment) return;
+    this.processingPayment = true;
+
+    // Store payment info for redirect back
+    this.setCookie('paymentEventId', this.eventId, 1);
+    this.setCookie('paymentOrderPointId', this.orderPointId, 1);
+    localStorage.setItem('tableOrderPayment', 'true');
+
+    const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=order`;
+    this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${order.id}/start`, { returnUrl }).subscribe({
+      next: (paymentResponse) => {
+        if (paymentResponse.payment?.paymentURL) {
+          // Store the payment reference for completion after redirect
+          this.setCookie('pendingPaymentReference', paymentResponse.reference, 1);
+          window.location.href = paymentResponse.payment.paymentURL;
+        } else {
+          this.showToast('Payment URL not received', 'error');
+          this.processingPayment = false;
+        }
+      },
+      error: (err) => {
+        console.error('Payment error:', err);
+        this.showToast('Failed to start payment', 'error');
+        this.processingPayment = false;
+      }
+    });
+  }
+
+  payAllOrders(): void {
+    if (this.processingPayment) return;
+    if (!this.hasAnyUnpaidItems()) return;
+
+    this.processingPayment = true;
+
+    // Store payment info for redirect back
+    this.setCookie('paymentEventId', this.eventId, 1);
+    this.setCookie('paymentOrderPointId', this.orderPointId, 1);
+    localStorage.setItem('tableOrderPayment', 'true');
+
+    const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=orderpoint`;
+    this.http.post<any>(`${environment.apiUrl}/api/payments/order-points/${this.orderPointId}/start`, { returnUrl }).subscribe({
+      next: (paymentResponse) => {
+        if (paymentResponse.payment?.paymentURL) {
+          // Store the payment reference for completion after redirect
+          this.setCookie('pendingPaymentReference', paymentResponse.reference, 1);
+          window.location.href = paymentResponse.payment.paymentURL;
+        } else {
+          this.showToast('Payment URL not received', 'error');
+          this.processingPayment = false;
+        }
+      },
+      error: (err) => {
+        console.error('Payment error:', err);
+        this.showToast('Failed to start payment', 'error');
+        this.processingPayment = false;
+      }
+    });
+  }
+
+  payGuestOrders(guest: GuestOrders): void {
+    if (this.processingPayment) return;
+    if (!this.guestHasUnpaidItems(guest)) return;
+
+    this.processingPayment = true;
+
+    // Store payment info for redirect back
+    this.setCookie('paymentEventId', this.eventId, 1);
+    this.setCookie('paymentOrderPointId', this.orderPointId, 1);
+    localStorage.setItem('tableOrderPayment', 'true');
+
+    const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=guest`;
+    this.http.post<any>(`${environment.apiUrl}/api/payments/registrations/${guest.registrationId}/start`, { returnUrl }).subscribe({
+      next: (paymentResponse) => {
+        console.log('[Payment] Guest payment response:', paymentResponse);
+        if (paymentResponse.payment?.paymentURL) {
+          // Store the payment reference for completion after redirect
+          console.log('[Payment] Storing reference:', paymentResponse.reference);
+          this.setCookie('pendingPaymentReference', paymentResponse.reference, 1);
+          console.log('[Payment] Stored pendingPaymentReference:', localStorage.getItem('pendingPaymentReference'));
+          window.location.href = paymentResponse.payment.paymentURL;
+        } else {
+          this.showToast('Payment URL not received', 'error');
+          this.processingPayment = false;
+        }
+      },
+      error: (err) => {
+        console.error('Payment error:', err);
+        this.showToast('Failed to start payment', 'error');
+        this.processingPayment = false;
+      }
+    });
+  }
+
+  // Team methods
+  loadTeamPendingRegistrations(): void {
+    if (!this.orderPointId || !this.registrationResponse?.id) return;
+
+    this.loadingTeam = true;
+    this.http.get<PendingTeamRegistration[]>(
+      `${environment.apiUrl}/api/register/order-points/${this.orderPointId}/pending?excludeRegistrationId=${this.registrationResponse.id}`
+    ).subscribe({
+      next: (registrations) => {
+        this.teamPendingRegistrations = registrations;
+        this.loadingTeam = false;
+      },
+      error: (err) => {
+        console.error('Error loading team pending registrations:', err);
+        this.loadingTeam = false;
+      }
+    });
+  }
+
+  loadApprovedMembers(): void {
+    if (!this.orderPointId || !this.registrationResponse?.id) return;
+
+    this.http.get<any[]>(
+      `${environment.apiUrl}/api/register/order-points/${this.orderPointId}/approved?excludeRegistrationId=${this.registrationResponse.id}`
+    ).subscribe({
+      next: (registrations) => {
+        this.approvedMembers = registrations
+          .map(r => r.nickname)
+          .filter((name: string | null) => name && name.trim() !== '');
+      },
+      error: (err) => {
+        console.error('Error loading approved members:', err);
+      }
+    });
+  }
+
+  approveTeamRegistration(registrationId: string): void {
+    if (!this.registrationResponse?.id) return;
+
+    this.http.post<PendingTeamRegistration>(
+      `${environment.apiUrl}/api/register/${registrationId}/approve-by-client?approverRegistrationId=${this.registrationResponse.id}`,
+      {}
+    ).subscribe({
+      next: () => {
+        this.showToast('Registration approved!', 'success');
+        this.loadTeamPendingRegistrations();
+      },
+      error: (err) => {
+        console.error('Error approving registration:', err);
+        this.showToast('Failed to approve registration', 'error');
+      }
+    });
+  }
+
+  // Login methods
+  loginWithFacebook(): void {
+    console.log('Login with Facebook clicked');
+    // TODO: Implement Facebook OAuth login
+    this.showToast('Facebook login coming soon', 'success');
+  }
+
+  loginWithGoogle(): void {
+    console.log('Login with Google clicked');
+    // TODO: Implement Google OAuth login
+    this.showToast('Google login coming soon', 'success');
   }
 
   // Storage methods (using localStorage instead of cookies for better iOS support)
@@ -618,8 +1214,18 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const registrationId = this.registrationResponse.id;
     console.log('[WebSocket] Connecting for registration:', registrationId);
 
+    // Setup wake-up listeners if not already done
+    if (!this.visibilityHandler) {
+      this.setupWakeUpListeners();
+    }
+
     this.stompClient = new Client({
       webSocketFactory: () => new (SockJS as any)(`${environment.apiUrl}/ws`),
+      // Heartbeat: send every 10s, expect every 10s
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      // Auto reconnect with increasing delay (1s, 2s, 4s... max 30s)
+      reconnectDelay: 2000,
       onConnect: () => {
         this.connected = true;
         console.log('[WebSocket] Connected, subscribing to /topic/registration/' + registrationId);
@@ -628,6 +1234,59 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           const notification = JSON.parse(message.body) as OrderNotification;
           this.handleNotification(notification);
         });
+
+        // Subscribe to order point registration updates (for team page)
+        if (this.orderPointId) {
+          console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/registrations');
+          this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/registrations`, (message) => {
+            console.log('[WebSocket] Received registration update:', message.body);
+            const data = JSON.parse(message.body);
+            if (data.type === 'REGISTRATION_APPROVED') {
+              // Remove the approved registration from the team pending list
+              this.teamPendingRegistrations = this.teamPendingRegistrations.filter(r => r.id !== data.registrationId);
+            }
+          });
+
+          // Subscribe to validation requests (when someone new needs approval)
+          console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/validation-requests');
+          this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/validation-requests`, (message) => {
+            console.log('[WebSocket] Received validation request:', message.body);
+            const data = JSON.parse(message.body);
+            if (data.type === 'VALIDATION_REQUESTED' && data.registrationId !== this.registrationResponse?.id) {
+              // Add the new pending registration to the list (use spread to trigger change detection)
+              const newRegistration: PendingTeamRegistration = {
+                id: data.registrationId,
+                orderPointId: data.orderPointId || this.orderPointId,
+                orderPointName: data.orderPointName || '',
+                validationStatus: 'PENDING',
+                createdAt: new Date().toISOString(),
+                nickname: data.nickname
+              };
+              // Check if not already in the list
+              if (!this.teamPendingRegistrations.find(r => r.id === data.registrationId)) {
+                this.teamPendingRegistrations = [...this.teamPendingRegistrations, newRegistration];
+              }
+            }
+          });
+
+          // Subscribe to order updates for real-time table orders (order point specific)
+          if (this.orderPointPayLater) {
+            console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/orders for table order updates');
+            this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/orders`, (message) => {
+              console.log('[WebSocket] Received order point order update:', message.body);
+              // Reload order point orders when any order update is received
+              this.loadOrderPointOrders();
+            });
+
+            // Also subscribe to payment updates for this order point
+            console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/payments for payment updates');
+            this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/payments`, (message) => {
+              console.log('[WebSocket] Received payment update:', message.body);
+              // Reload order point orders when payment status changes
+              this.loadOrderPointOrders();
+            });
+          }
+        }
       },
       onStompError: (error) => {
         console.error('[WebSocket] STOMP error:', error);
@@ -635,6 +1294,10 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       },
       onDisconnect: () => {
         console.log('[WebSocket] Disconnected');
+        this.connected = false;
+      },
+      onWebSocketClose: () => {
+        console.log('[WebSocket] Connection closed');
         this.connected = false;
       }
     });

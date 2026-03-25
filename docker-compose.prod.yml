@@ -1,0 +1,291 @@
+services:
+  # ===========================================
+  # DATABASES
+  # ===========================================
+
+  postgres-event:
+    image: postgres:16-alpine
+    container_name: servio-postgres-event
+    environment:
+      POSTGRES_DB: eventdb
+      POSTGRES_USER: eventuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-event-data:/var/lib/postgresql/data
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventuser -d eventdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres-order:
+    image: postgres:16-alpine
+    container_name: servio-postgres-order
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: orderuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-order-data:/var/lib/postgresql/data
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderuser -d orderdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================
+  # MESSAGE BROKER (Kafka)
+  # ===========================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: servio-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: servio-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================
+  # REDIS
+  # ===========================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: servio-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================
+  # OBJECT STORAGE (MinIO)
+  # ===========================================
+
+  minio:
+    image: minio/minio
+    container_name: servio-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc
+    container_name: servio-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb myminio/images --ignore-existing;
+      mc anonymous set public myminio/images;
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
+    networks:
+      - servio-network
+
+  # ===========================================
+  # API GATEWAY
+  # ===========================================
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: servio-gateway
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      event-api:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EVENT_API_URL: http://event-api:8081
+      ORDER_SERVICE_URL: http://order-service:8082
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+    ports:
+      - "8080:8080"
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ===========================================
+  # EVENT API
+  # ===========================================
+
+  event-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: servio-event-api
+    depends_on:
+      postgres-event:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: 8081
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres-event:5432/eventdb
+      DATABASE_USERNAME: eventuser
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD}
+      MINIO_BUCKET: images
+      JWT_SECRET: ${JWT_SECRET}
+      APPLICATION_BASE_URL: ${APPLICATION_BASE_URL}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      NETOPIA_API_KEY: ${NETOPIA_API_KEY}
+      NETOPIA_POS_SIGNATURE: ${NETOPIA_POS_SIGNATURE}
+      NETOPIA_NOTIFY_URL: ${NETOPIA_NOTIFY_URL}
+      NETOPIA_REDIRECT_URL: ${NETOPIA_REDIRECT_URL}
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ===========================================
+  # ORDER SERVICE
+  # ===========================================
+
+  order-service:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: servio-order-service
+    depends_on:
+      postgres-order:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      event-api:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8082
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres-order:5432/orderdb
+      DATABASE_USERNAME: orderuser
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      EVENT_API_URL: http://event-api:8081
+      NETOPIA_API_KEY: ${NETOPIA_API_KEY}
+      NETOPIA_POS_SIGNATURE: ${NETOPIA_POS_SIGNATURE}
+      NETOPIA_NOTIFY_URL: ${NETOPIA_NOTIFY_URL}
+      NETOPIA_REDIRECT_URL: ${NETOPIA_REDIRECT_URL}
+    networks:
+      - servio-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ===========================================
+  # FRONTEND
+  # ===========================================
+
+  frontend:
+    build:
+      context: ./unified
+      dockerfile: Dockerfile
+    container_name: servio-frontend
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "4200:80"
+    networks:
+      - servio-network
+    restart: unless-stopped
+
+volumes:
+  postgres-event-data:
+  postgres-order-data:
+  redis-data:
+  minio-data:
+
+networks:
+  servio-network:
+    driver: bridge

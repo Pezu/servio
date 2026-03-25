@@ -7,6 +7,7 @@ export interface ClientType {
   id?: string;
   name: string;
   description?: string;
+  active?: boolean;
 }
 
 export interface PageResponse<T> {
@@ -48,7 +49,7 @@ export class ClientTypeService {
     return this.http.put<ClientType>(`${this.apiUrl}/${id}`, clientType);
   }
 
-  deleteClientType(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  toggleActive(id: string): Observable<ClientType> {
+    return this.http.post<ClientType>(`${this.apiUrl}/${id}/toggle-active`, {});
   }
 }

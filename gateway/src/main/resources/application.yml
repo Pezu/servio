@@ -1,0 +1,78 @@
+spring:
+  application:
+    name: api-gateway
+
+  # Redis for WebSocket state
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # Kafka for consuming events (WebSocket notifications)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      auto-offset-reset: earliest
+      group-id: gateway-websocket
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+        spring.json.type.mapping: >
+          com.servio.event.dto.kafka.OrderCreatedEvent:com.servio.gateway.websocket.dto.kafka.OrderCreatedEvent,
+          com.servio.event.dto.kafka.OrderStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderStatusChangedEvent,
+          com.servio.event.dto.kafka.OrderItemStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderItemStatusChangedEvent,
+          com.servio.event.dto.kafka.PaymentCompletedEvent:com.servio.gateway.websocket.dto.kafka.PaymentCompletedEvent,
+          com.servio.event.dto.kafka.ValidationRequestedEvent:com.servio.gateway.websocket.dto.kafka.ValidationRequestedEvent,
+          com.servio.event.dto.kafka.RegistrationValidatedEvent:com.servio.gateway.websocket.dto.kafka.RegistrationValidatedEvent,
+          com.servio.order.dto.kafka.OrderCreatedEvent:com.servio.gateway.websocket.dto.kafka.OrderCreatedEvent,
+          com.servio.order.dto.kafka.OrderStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderStatusChangedEvent,
+          com.servio.order.dto.kafka.OrderItemStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderItemStatusChangedEvent,
+          com.servio.order.dto.kafka.PaymentCompletedEvent:com.servio.gateway.websocket.dto.kafka.PaymentCompletedEvent
+
+server:
+  port: ${SERVER_PORT:8080}
+  address: 0.0.0.0
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Backend services
+services:
+  event-api:
+    url: ${EVENT_API_URL:http://localhost:8081}
+  order-service:
+    url: ${ORDER_SERVICE_URL:http://localhost:8082}
+
+# JWT configuration
+jwt:
+  secret: ${JWT_SECRET:your-development-secret-key-at-least-32-chars}
+
+# Kafka topics for WebSocket notifications
+kafka:
+  topics:
+    order-created: order.created
+    order-status-changed: order.status.changed
+    order-item-status-changed: order.item.status.changed
+    payment-completed: payment.completed
+    registration-validated: registration.validated
+    validation-requested: validation.requested
+
+# CORS for WebSocket endpoints
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
+
+logging:
+  level:
+    com.servio.gateway: DEBUG
+    org.springframework.kafka: INFO

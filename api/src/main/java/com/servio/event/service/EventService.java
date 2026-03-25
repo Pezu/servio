@@ -1,0 +1,188 @@
+package com.servio.event.service;
+
+import com.servio.event.dto.CreateEventRequest;
+import com.servio.event.dto.Event;
+import com.servio.event.dto.UpdateEventRequest;
+import com.servio.event.entity.EventEntity;
+import com.servio.event.entity.LocationEntity;
+import com.servio.event.entity.MenuItemEntity;
+import com.servio.event.entity.PaymentTypeEntity;
+import com.servio.event.entity.UserEntity;
+import com.servio.event.exception.ResourceNotFoundException;
+import com.servio.event.mapper.EventMapper;
+import com.servio.event.repository.EventRepository;
+import com.servio.event.repository.LocationRepository;
+import com.servio.event.repository.MenuItemRepository;
+import com.servio.event.repository.PaymentTypeRepository;
+import com.servio.event.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+
+@Service
+@RequiredArgsConstructor
+public class EventService {
+
+    private final EventRepository eventRepository;
+    private final LocationRepository locationRepository;
+    private final UserRepository userRepository;
+    private final PaymentTypeRepository paymentTypeRepository;
+    private final MenuItemRepository menuItemRepository;
+    private final EventMapper eventMapper;
+    private final ImageService imageService;
+
+    public Event createEvent(UUID locationId, CreateEventRequest request) {
+        LocationEntity location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Location", locationId));
+
+        EventEntity eventEntity = new EventEntity();
+        eventEntity.setName(request.getName());
+        eventEntity.setStartDate(request.getStartDate());
+        eventEntity.setEndDate(request.getEndDate());
+        eventEntity.setLocation(location);
+
+        // Functional approach: batch load related entities
+        Optional.ofNullable(request.getUserIds())
+                .filter(ids -> !ids.isEmpty())
+                .map(userRepository::findAllById)
+                .map(HashSet::new)
+                .ifPresent(eventEntity::setUsers);
+
+        Optional.ofNullable(request.getPaymentTypeIds())
+                .filter(ids -> !ids.isEmpty())
+                .map(paymentTypeRepository::findAllById)
+                .map(HashSet::new)
+                .ifPresent(eventEntity::setPaymentTypes);
+
+        Optional.ofNullable(request.getMenuItemIds())
+                .filter(ids -> !ids.isEmpty())
+                .map(menuItemRepository::findAllById)
+                .map(HashSet::new)
+                .ifPresent(eventEntity::setMenuItems);
+
+        EventEntity savedEvent = eventRepository.save(eventEntity);
+        return eventMapper.toDto(savedEvent);
+    }
+
+    public Event getEventById(UUID id) {
+        EventEntity eventEntity = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", id));
+        return eventMapper.toDto(eventEntity);
+    }
+
+    public Page<Event> getAllEvents(Pageable pageable) {
+        return eventRepository.findAll(pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Page<Event> getEventsByLocationId(UUID locationId, Pageable pageable) {
+        return eventRepository.findByLocationId(locationId, pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Page<Event> getEventsByClientId(UUID clientId, Pageable pageable) {
+        return eventRepository.findByClientId(clientId, pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Page<Event> getEventsByUsername(String username, Pageable pageable) {
+        return eventRepository.findByUsersUsername(username, pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Page<Event> getActiveEventsByUsername(String username, Pageable pageable) {
+        LocalDate now = LocalDate.now();
+        return eventRepository.findByUsersUsernameAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                username, now, now, pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Page<Event> getAllActiveEvents(Pageable pageable) {
+        LocalDate now = LocalDate.now();
+        return eventRepository.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(now, now, pageable)
+                .map(eventMapper::toDto);
+    }
+
+    public Event updateEvent(UUID id, UpdateEventRequest request) {
+        EventEntity eventEntity = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", id));
+
+        LocationEntity location = locationRepository.findById(request.getLocationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Location", request.getLocationId()));
+
+        eventEntity.setName(request.getName());
+        eventEntity.setStartDate(request.getStartDate());
+        eventEntity.setEndDate(request.getEndDate());
+        eventEntity.setLocation(location);
+
+        // Functional approach: update or clear collections
+        updateCollection(request.getUserIds(), userRepository::findAllById, eventEntity::setUsers, eventEntity.getUsers());
+        updateCollection(request.getPaymentTypeIds(), paymentTypeRepository::findAllById, eventEntity::setPaymentTypes, eventEntity.getPaymentTypes());
+        updateCollection(request.getMenuItemIds(), menuItemRepository::findAllById, eventEntity::setMenuItems, eventEntity.getMenuItems());
+
+        EventEntity updatedEvent = eventRepository.save(eventEntity);
+        return eventMapper.toDto(updatedEvent);
+    }
+
+    private <T, ID> void updateCollection(List<ID> ids,
+                                          Function<List<ID>, List<T>> findAllById,
+                                          java.util.function.Consumer<java.util.Set<T>> setter,
+                                          Collection<T> currentCollection) {
+        Optional.ofNullable(ids)
+                .filter(list -> !list.isEmpty())
+                .map(findAllById)
+                .map(HashSet::new)
+                .ifPresentOrElse(setter, currentCollection::clear);
+    }
+
+    public Event uploadLogo(UUID id, MultipartFile file) throws Exception {
+        EventEntity eventEntity = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", id));
+
+        // Delete old logo if exists (ignoring failures for non-existent images)
+        Optional.ofNullable(eventEntity.getLogoPath())
+                .ifPresent(path -> {
+                    try { imageService.deleteImage(path); } catch (Exception ignored) {}
+                });
+
+        String logoPath = imageService.uploadImage(file);
+        eventEntity.setLogoPath(logoPath);
+
+        EventEntity updatedEvent = eventRepository.save(eventEntity);
+        return eventMapper.toDto(updatedEvent);
+    }
+
+    public Event deleteLogo(UUID id) throws Exception {
+        EventEntity eventEntity = eventRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", id));
+
+        Optional.ofNullable(eventEntity.getLogoPath())
+                .ifPresent(path -> {
+                    try {
+                        imageService.deleteImage(path);
+                        eventEntity.setLogoPath(null);
+                        eventRepository.save(eventEntity);
+                    } catch (Exception ignored) {}
+                });
+
+        return eventMapper.toDto(eventEntity);
+    }
+
+    /**
+     * Atomically increments and returns the next order number for an event.
+     * Used by the Order microservice.
+     */
+    public Integer incrementAndGetLastOrderNo(UUID eventId) {
+        return eventRepository.incrementAndGetLastOrderNo(eventId);
+    }
+}

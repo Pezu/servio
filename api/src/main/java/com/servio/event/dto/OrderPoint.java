@@ -1,0 +1,17 @@
+package com.servio.event.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderPoint {
+    private UUID id;
+    private String name;
+    private UUID locationId;
+    private boolean payLater;
+}

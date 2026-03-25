@@ -12,6 +12,22 @@ export interface MenuItem {
   imagePath?: string;
   description?: string;
   children: MenuItem[];
+  allergenIds?: string[];
+  vatTypeId?: string;
+}
+
+export interface Allergen {
+  id: string;
+  number: number;
+  name: string;
+  active: boolean;
+}
+
+export interface VatType {
+  id: string;
+  name: string;
+  value: number;
+  active: boolean;
 }
 
 @Injectable({
@@ -44,12 +60,11 @@ export class MenuService {
     return `${environment.apiUrl}/api/images/${imagePath}`;
   }
 
-  // Client-level menu methods
-  getClientMenuTree(clientId: string): Observable<MenuItem[]> {
-    return this.http.get<MenuItem[]>(`${this.apiUrl}/client/${clientId}`);
+  getActiveAllergens(): Observable<Allergen[]> {
+    return this.http.get<Allergen[]>(`${environment.apiUrl}/api/allergens/active`);
   }
 
-  saveClientMenuTree(clientId: string, menuItems: MenuItem[]): Observable<MenuItem[]> {
-    return this.http.put<MenuItem[]>(`${this.apiUrl}/client/${clientId}`, menuItems);
+  getActiveVatTypes(): Observable<VatType[]> {
+    return this.http.get<VatType[]>(`${environment.apiUrl}/api/vat-types/active`);
   }
 }

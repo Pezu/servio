@@ -126,27 +126,27 @@ interface PageResponse<T> {
       background: #22c55e;
       border-radius: 50%;
     }
-    .action-btn {
+    .arrow-btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.375rem;
-      padding: 0.5rem 0.875rem;
-      background: #3b82f6;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.8125rem;
-      font-weight: 500;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+      border-radius: 50%;
       text-decoration: none;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
     }
-    .action-btn:hover {
-      background: #2563eb;
+    .arrow-btn:hover {
+      border-color: #3b82f6;
+      color: #3b82f6;
     }
-    .action-btn svg {
-      width: 16px;
-      height: 16px;
+    .arrow-btn svg {
+      width: 18px;
+      height: 18px;
     }
     .empty-state {
       text-align: center;
@@ -226,11 +226,10 @@ interface PageResponse<T> {
               <td>{{ formatDate(event.endDate) }}</td>
               <td><span class="status-active">{{ 'MY_EVENTS.STATUS_ACTIVE' | translate }}</span></td>
               <td>
-                <a [href]="'/event/' + event.id + '/orders'" target="_blank" class="action-btn">
+                <a [href]="'/event/' + event.id + '/orders'" target="_blank" class="arrow-btn">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
-                  {{ 'MY_EVENTS.VIEW_ORDERS' | translate }}
                 </a>
               </td>
             </tr>

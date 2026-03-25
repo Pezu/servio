@@ -7,6 +7,7 @@ export interface Role {
   id?: string;
   name: string;
   description?: string;
+  active?: boolean;
 }
 
 export interface PageResponse<T> {
@@ -44,7 +45,7 @@ export class RoleService {
     return this.http.put<Role>(`${this.apiUrl}/${id}`, role);
   }
 
-  deleteRole(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  toggleActive(id: string): Observable<Role> {
+    return this.http.post<Role>(`${this.apiUrl}/${id}/toggle-active`, {});
   }
 }

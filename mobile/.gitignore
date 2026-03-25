@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+www/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Native platforms
+android/
+ios/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Capacitor
+capacitor.config.json
+
+# Environment
+*.local
+
+# Logs
+*.log
+npm-debug.log*

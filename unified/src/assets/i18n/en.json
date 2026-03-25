@@ -9,8 +9,11 @@
     "ROLES": "Roles",
     "PAYMENT_TYPES": "Payment Types",
     "CLIENT_TYPES": "Client Types",
+    "ALLERGENS": "Allergens",
+    "VAT_TYPES": "VAT Types",
     "MENU": "Menu",
     "EVENTS": "Events",
+    "REPORTS": "Reports",
     "LOGOUT": "Logout"
   },
   "COMMON": {
@@ -40,7 +43,8 @@
     "NO_DATA": "No data found",
     "SELECT": "Select",
     "UPLOADING": "Uploading",
-    "CLICK_TO_UPLOAD": "Click to upload"
+    "CLICK_TO_UPLOAD": "Click to upload",
+    "IN_PROGRESS": "In Progress"
   },
   "CLIENTS": {
     "TITLE": "Client",
@@ -115,16 +119,19 @@
     "START_DATE": "Start Date",
     "END_DATE": "End Date",
     "ASSIGNED_USERS": "Assigned Users",
-    "BAR_USERS": "Bar Users",
+    "SERVICE_USERS": "Service Users",
     "SELECT_USERS": "Select users",
     "PAYMENT_TYPES": "Payment Types",
     "SELECT_PAYMENT_TYPES": "Select payment types",
-    "MENU_SOURCE": "Menu Source",
-    "MENU_CLIENT": "Client Menu",
-    "MENU_LOCATION": "Location Menu",
     "DOWNLOAD_QR": "Download QR PDF",
     "UPLOAD_LOGO": "Upload Logo",
-    "DELETE_LOGO": "Delete Logo"
+    "DELETE_LOGO": "Delete Logo",
+    "DETAILS": "Details",
+    "TABLES": "Tables",
+    "PREPAID": "Prepaid",
+    "CLIENT": "Client",
+    "CREDIT": "Credit",
+    "CREDIT_VALUE": "Credit Value"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",
@@ -134,7 +141,7 @@
     "NO_ACTIVE_EVENTS": "No active events",
     "NO_ACTIVE_EVENTS_DESC": "You don't have any events running right now.",
     "STATUS_ACTIVE": "Active",
-    "VIEW_ORDERS": "View Orders",
+    "VIEW_ORDERS": "Details",
     "ALL_ACTIVE_EVENTS": "All Active Events",
     "ALL_IN_PROGRESS": "All In Progress",
     "NO_ALL_ACTIVE_EVENTS_DESC": "There are no events currently in progress."
@@ -159,7 +166,11 @@
     "COLLAPSE_ALL": "Collapse All",
     "LEVEL": "Menu Level",
     "CLIENT_LEVEL": "Client",
-    "LOCATION_LEVEL": "Location"
+    "LOCATION_LEVEL": "Location",
+    "ALLERGENS": "Allergens",
+    "NO_ALLERGENS": "No allergens available",
+    "VAT_TYPE": "VAT Type",
+    "SELECT_VAT_TYPE": "Select VAT type..."
   },
   "ORDERS": {
     "TITLE": "Orders",

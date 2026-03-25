@@ -48,6 +48,7 @@ import { EventService, Event } from '../clients/event.service';
 import { UserService, User } from '../clients/user.service';
 import { PaymentTypeService, PaymentType } from '../configuration/payment-types/payment-type.service';
 import { MenuService, MenuItem } from '../clients/menu.service';
+import { EventOrderPointService, EventOrderPoint } from '../clients/event-order-point.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 @Component({
@@ -185,6 +186,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           </div>
                         </div>
                       </th>
+                      <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
                       <th>{{ 'EVENTS.START_DATE' | translate }}</th>
                       <th>{{ 'EVENTS.END_DATE' | translate }}</th>
                       <th class="text-end">
@@ -200,9 +202,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   </thead>
                   <tbody>
                     @if (loadingEvents) {
-                      <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (events.length === 0) {
-                      <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
+                      <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
                     } @else {
                       @for (event of events; track event.id) {
                         <tr>
@@ -221,6 +223,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <div><a href="javascript:void(0);" class="d-block fw-semibold">{{ event.name }}</a></div>
                             </div>
                           </td>
+                          <td class="text-muted">{{ event.locationName }}</td>
                           <td class="text-muted">{{ formatDate(event.startDate) }}</td>
                           <td class="text-muted">{{ formatDate(event.endDate) }}</td>
                           <td class="text-end">
@@ -279,99 +282,188 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     <!-- Event Modal -->
     @if (showEventModal) {
       <div class="modal-overlay" (mousedown)="closeEventModal()">
-        <div class="modal" (mousedown)="$event.stopPropagation()">
+        <div class="modal modal-lg" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingEvent ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ 'EVENTS.EVENT' | translate }}</h3>
             <button class="close-btn" (click)="closeEventModal()">&times;</button>
           </div>
+          <div class="modal-tabs">
+            <button class="modal-tab" [class.active]="eventModalTab === 'details'" (click)="eventModalTab = 'details'">
+              {{ 'EVENTS.DETAILS' | translate }}
+            </button>
+            <button class="modal-tab" [class.active]="eventModalTab === 'tables'" (click)="eventModalTab = 'tables'" [disabled]="!editingEvent">
+              {{ 'EVENTS.TABLES' | translate }}
+            </button>
+          </div>
           <div class="modal-body">
-            <div class="form-group">
-              <label>{{ 'COMMON.NAME' | translate }}</label>
-              <input type="text" class="form-control" [(ngModel)]="eventFormData.name" [placeholder]="'COMMON.NAME' | translate">
-            </div>
-            <div class="form-row">
+            <!-- Details Tab -->
+            @if (eventModalTab === 'details') {
               <div class="form-group">
-                <label>{{ 'EVENTS.START_DATE' | translate }}</label>
-                <mat-form-field class="date-field" appearance="outline">
-                  <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" placeholder="Select date">
-                  <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
-                  <mat-datepicker #startPicker></mat-datepicker>
-                </mat-form-field>
+                <label>{{ 'COMMON.NAME' | translate }}</label>
+                <input type="text" class="form-control" [(ngModel)]="eventFormData.name" [placeholder]="'COMMON.NAME' | translate">
               </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ 'EVENTS.START_DATE' | translate }}</label>
+                  <mat-form-field class="date-field" appearance="outline">
+                    <input matInput [matDatepicker]="startPicker" [(ngModel)]="startDate" placeholder="Select date">
+                    <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
+                    <mat-datepicker #startPicker></mat-datepicker>
+                  </mat-form-field>
+                </div>
+                <div class="form-group">
+                  <label>{{ 'EVENTS.END_DATE' | translate }}</label>
+                  <mat-form-field class="date-field" appearance="outline">
+                    <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDate" placeholder="Select date">
+                    <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
+                    <mat-datepicker #endPicker></mat-datepicker>
+                  </mat-form-field>
+                </div>
+              </div>
+
+              <!-- Users Selection -->
               <div class="form-group">
-                <label>{{ 'EVENTS.END_DATE' | translate }}</label>
-                <mat-form-field class="date-field" appearance="outline">
-                  <input matInput [matDatepicker]="endPicker" [(ngModel)]="endDate" placeholder="Select date">
-                  <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
-                  <mat-datepicker #endPicker></mat-datepicker>
-                </mat-form-field>
+                <label>{{ 'EVENTS.SERVICE_USERS' | translate }}</label>
+                <div class="multi-select-wrapper users-dropdown" [class.open]="usersDropdownOpen">
+                  <div class="multi-select-input" (click)="toggleUsersDropdown(); $event.stopPropagation()">
+                    <span class="selected-text" *ngIf="getSelectedUsersText()">{{ getSelectedUsersText() }}</span>
+                    <span class="placeholder" *ngIf="!getSelectedUsersText()">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
+                    <span class="dropdown-arrow">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div class="multi-select-dropdown" *ngIf="usersDropdownOpen" (click)="$event.stopPropagation()">
+                    <div *ngIf="loadingUsers" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                    <div *ngIf="!loadingUsers && getServiceUsers().length === 0" class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
+                    <label *ngFor="let user of getServiceUsers()" class="checkbox-option">
+                      <input type="checkbox" [checked]="eventFormData.userIds.includes(user.id!)" (change)="toggleEventUser(user.id!, $event)">
+                      <span class="checkbox-label-text">{{ user.name }}</span>
+                    </label>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <!-- Users Selection -->
-            <div class="form-group">
-              <label>{{ 'EVENTS.BAR_USERS' | translate }}</label>
-              <div class="multi-select-wrapper users-dropdown" [class.open]="usersDropdownOpen">
-                <div class="multi-select-input" (click)="toggleUsersDropdown(); $event.stopPropagation()">
-                  <span class="selected-text" *ngIf="getSelectedUsersText()">{{ getSelectedUsersText() }}</span>
-                  <span class="placeholder" *ngIf="!getSelectedUsersText()">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
-                  <span class="dropdown-arrow">
+              <!-- Payment Types Selection -->
+              <div class="form-group">
+                <label>{{ 'EVENTS.PAYMENT_TYPES' | translate }}</label>
+                <div class="multi-select-wrapper payment-types-dropdown" [class.open]="paymentTypesDropdownOpen">
+                  <div class="multi-select-input" (click)="togglePaymentTypesDropdown(); $event.stopPropagation()">
+                    <span class="selected-text" *ngIf="getSelectedPaymentTypesText()">{{ getSelectedPaymentTypesText() }}</span>
+                    <span class="placeholder" *ngIf="!getSelectedPaymentTypesText()">{{ 'EVENTS.SELECT_PAYMENT_TYPES' | translate }}</span>
+                    <span class="dropdown-arrow">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div class="multi-select-dropdown open-upward" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
+                    <div *ngIf="loadingPaymentTypes" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                    <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
+                    <label *ngFor="let pt of paymentTypes" class="checkbox-option">
+                      <input type="checkbox" [checked]="eventFormData.paymentTypeIds.includes(pt.id!)" (change)="togglePaymentType(pt.id!, $event)">
+                      <span class="checkbox-label-text">{{ pt.name }}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Tables Tab -->
+            @if (eventModalTab === 'tables') {
+              <div class="tables-content">
+                @if (loadingTables) {
+                  <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                } @else if (eventTables.length === 0) {
+                  <div class="empty-tables-message">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
-                  </span>
-                </div>
-                <div class="multi-select-dropdown" *ngIf="usersDropdownOpen" (click)="$event.stopPropagation()">
-                  <div *ngIf="loadingUsers" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                  <div *ngIf="!loadingUsers && getBarUsers().length === 0" class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
-                  <label *ngFor="let user of getBarUsers()" class="checkbox-option">
-                    <input type="checkbox" [checked]="eventFormData.userIds.includes(user.id!)" (change)="toggleEventUser(user.id!, $event)">
-                    <span class="checkbox-label-text">{{ user.name }}</span>
-                  </label>
-                </div>
+                    <span>{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</span>
+                  </div>
+                } @else {
+                  <table class="tables-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
+                        <th>{{ 'EVENTS.PREPAID' | translate }}</th>
+                        <th>{{ 'EVENTS.CLIENT' | translate }}</th>
+                        <th>{{ 'COMMON.EMAIL' | translate }}</th>
+                        <th>{{ 'COMMON.PHONE' | translate }}</th>
+                        <th>{{ 'EVENTS.CREDIT' | translate }}</th>
+                        <th>{{ 'EVENTS.CREDIT_VALUE' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (group of groupedTables; track group.sublocationName) {
+                        <tr class="parent-row" (click)="toggleSublocation(group)">
+                          <td colspan="7">
+                            <div class="parent-cell">
+                              <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                              <span class="sublocation-name">{{ group.sublocationName }}</span>
+                            </div>
+                          </td>
+                        </tr>
+                        @if (group.expanded) {
+                          @for (table of group.orderPoints; track table.orderPointId) {
+                            <tr class="child-row">
+                              <td class="location-cell">
+                                <span class="order-point-name">{{ table.orderPointName }}</span>
+                              </td>
+                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'prepaid', $event)">
+                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'prepaid') {
+                                  <input type="number" class="inline-input prepaid-input" [(ngModel)]="table.prepaid" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'clientName')" #editInput>
+                                } @else {
+                                  <span class="cell-value">{{ table.prepaid || '' }}</span>
+                                }
+                              </td>
+                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'clientName', $event)">
+                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'clientName') {
+                                  <input type="text" class="inline-input" [(ngModel)]="table.clientName" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'email')" #editInput>
+                                } @else {
+                                  <span class="cell-value">{{ table.clientName || '' }}</span>
+                                }
+                              </td>
+                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'email', $event)">
+                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'email') {
+                                  <input type="email" class="inline-input" [(ngModel)]="table.email" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'phone')" #editInput>
+                                } @else {
+                                  <span class="cell-value">{{ table.email || '' }}</span>
+                                }
+                              </td>
+                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'phone', $event)">
+                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'phone') {
+                                  <input type="tel" class="inline-input" [(ngModel)]="table.phone" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, table.credit ? 'creditValue' : null)" #editInput>
+                                } @else {
+                                  <span class="cell-value">{{ table.phone || '' }}</span>
+                                }
+                              </td>
+                              <td class="checkbox-cell">
+                                <input type="checkbox" class="credit-checkbox" [(ngModel)]="table.credit" (change)="onCreditChange(table)">
+                              </td>
+                              <td class="editable-cell" [class.disabled-cell]="!table.credit" (click)="table.credit && startEditing(table.orderPointId, 'creditValue', $event)">
+                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'creditValue') {
+                                  <input type="number" class="inline-input credit-value-input" [(ngModel)]="table.creditValue" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, null)" #editInput>
+                                } @else {
+                                  <span class="cell-value">{{ table.creditValue || '' }}</span>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        }
+                      }
+                    </tbody>
+                  </table>
+                }
               </div>
-            </div>
-
-            <!-- Payment Types Selection -->
-            <div class="form-group">
-              <label>{{ 'EVENTS.PAYMENT_TYPES' | translate }}</label>
-              <div class="multi-select-wrapper payment-types-dropdown" [class.open]="paymentTypesDropdownOpen">
-                <div class="multi-select-input" (click)="togglePaymentTypesDropdown(); $event.stopPropagation()">
-                  <span class="selected-text" *ngIf="getSelectedPaymentTypesText()">{{ getSelectedPaymentTypesText() }}</span>
-                  <span class="placeholder" *ngIf="!getSelectedPaymentTypesText()">{{ 'EVENTS.SELECT_PAYMENT_TYPES' | translate }}</span>
-                  <span class="dropdown-arrow">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
-                </div>
-                <div class="multi-select-dropdown open-upward" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
-                  <div *ngIf="loadingPaymentTypes" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                  <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
-                  <label *ngFor="let pt of paymentTypes" class="checkbox-option">
-                    <input type="checkbox" [checked]="eventFormData.paymentTypeIds.includes(pt.id!)" (change)="togglePaymentType(pt.id!, $event)">
-                    <span class="checkbox-label-text">{{ pt.name }}</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Menu Source Switch -->
-            <div class="form-group">
-              <label>{{ 'EVENTS.MENU_SOURCE' | translate }}</label>
-              <div class="menu-source-switch">
-                <button type="button" class="switch-option" [class.active]="eventFormData.menuSource === 'client'" (click)="eventFormData.menuSource = 'client'">
-                  {{ 'EVENTS.MENU_CLIENT' | translate }}
-                </button>
-                <button type="button" class="switch-option" [class.active]="eventFormData.menuSource === 'location'" (click)="eventFormData.menuSource = 'location'">
-                  {{ 'EVENTS.MENU_LOCATION' | translate }}
-                </button>
-              </div>
-            </div>
+            }
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" (click)="closeEventModal()">{{ 'COMMON.CANCEL' | translate }}</button>
-            <button class="btn btn-primary" (click)="saveEvent()" [disabled]="!eventFormData.name.trim() || savingEvent">
+            <button class="btn btn-primary" (click)="saveEvent()" [disabled]="!eventFormData.name.trim() || savingEvent" *ngIf="eventModalTab === 'details'">
               {{ savingEvent ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
             </button>
           </div>
@@ -505,7 +597,61 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: white; border-radius: 12px; width: 100%; max-width: 680px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; }
-    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+    .modal.modal-lg { max-width: 800px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: none; flex-shrink: 0; }
+    .modal-tabs { display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #e2e8f0; }
+    .modal-tab { padding: 12px 20px; border: none; background: none; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; position: relative; transition: color 0.2s ease; }
+    .modal-tab:hover:not(:disabled) { color: var(--text-dark); }
+    .modal-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+    .modal-tab.active { color: var(--primary); }
+    .modal-tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--primary); }
+    .in-progress-message { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--text-muted); gap: 12px; }
+    .in-progress-message svg { width: 48px; height: 48px; opacity: 0.5; }
+    .in-progress-message span { font-size: 16px; font-weight: 500; }
+
+    /* Tables tab styles */
+    .tables-content { min-height: 200px; }
+    .tables-content .loading-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
+    .empty-tables-message { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--text-muted); gap: 12px; }
+    .empty-tables-message svg { width: 48px; height: 48px; opacity: 0.5; }
+    .empty-tables-message span { font-size: 14px; }
+    .tables-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .tables-table th, .tables-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    .tables-table th { font-size: 12px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); white-space: nowrap; }
+    .tables-table th:nth-child(1) { width: 20%; }
+    .tables-table th:nth-child(2) { width: 10%; }
+    .tables-table th:nth-child(3) { width: 15%; }
+    .tables-table th:nth-child(4) { width: 15%; }
+    .tables-table th:nth-child(5) { width: 12%; }
+    .tables-table th:nth-child(6) { width: 10%; text-align: center; }
+    .tables-table th:nth-child(7) { width: 18%; }
+    .tables-table td { font-size: 13px; color: var(--text-dark); }
+    .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
+    .tables-table .parent-row:hover { background: #e2e8f0; }
+    .tables-table .parent-row td { padding: 10px 12px; }
+    .parent-cell { display: flex; align-items: center; gap: 8px; }
+    .expand-icon { width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+    .expand-icon.expanded { transform: rotate(90deg); }
+    .sublocation-name { font-weight: 600; color: var(--text-dark); }
+    .tables-table .child-row:hover { background: var(--bg-light); }
+    .tables-table .child-row .location-cell { padding-left: 36px; }
+    .order-point-name { font-weight: 500; }
+    .editable-cell { cursor: pointer; }
+    .editable-cell:hover { background: rgba(59, 130, 246, 0.05); }
+    .cell-value { display: block; padding: 6px 10px; border-radius: 6px; height: 32px; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .editable-cell:hover .cell-value { background: rgba(59, 130, 246, 0.08); }
+    .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--primary); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; box-shadow: 0 0 0 2px var(--primary-light); height: 32px; box-sizing: border-box; }
+    .inline-input:focus { outline: none; }
+    .prepaid-input { text-align: right; }
+    .credit-value-input { text-align: right; }
+    .disabled-cell { cursor: not-allowed; opacity: 0.5; }
+    .disabled-cell:hover { background: transparent; }
+    .disabled-cell .cell-value { background: transparent; }
+    .checkbox-cell { text-align: center; }
+    .credit-checkbox { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; border: 1px solid #d1d5db; background: white; cursor: pointer; position: relative; transition: all 0.15s ease; }
+    .credit-checkbox:hover { border-color: #9ca3af; }
+    .credit-checkbox:checked { background: var(--primary); border-color: var(--primary); }
+    .credit-checkbox:checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px; border: solid white; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
     .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
     .close-btn:hover { background: #e2e8f0; color: #374151; }
@@ -534,13 +680,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .checkbox-label-text { margin-left: 8px; }
     .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: normal !important; }
     .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
-
-    /* Menu Source Switch */
-    .menu-source-switch { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-    .switch-option { flex: 1; padding: 10px 16px; border: none; background: white; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.15s ease; }
-    .switch-option:first-child { border-right: 1px solid var(--border-color); }
-    .switch-option:hover:not(.active) { background: var(--bg-light); }
-    .switch-option.active { background: var(--primary); color: white; }
 
     /* Custom DateTime Picker */
     .datetime-picker-wrapper { position: relative; }
@@ -818,14 +957,15 @@ export class EventsComponent implements OnInit {
   loadingEvents = false;
   savingEvent = false;
   showEventModal = false;
+  eventModalTab: 'details' | 'tables' = 'details';
   editingEvent: Event | null = null;
   eventCurrentPage = 0;
   eventTotalPages = 0;
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; paymentTypeIds: string[]; menuSource: 'client' | 'location' } = {
-    name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], menuSource: 'client'
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; paymentTypeIds: string[] } = {
+    name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: []
   };
 
   // Users
@@ -841,6 +981,13 @@ export class EventsComponent implements OnInit {
   // Menu Items for event
   eventMenuItems: MenuItem[] = [];
 
+  // Tables tab
+  eventTables: EventOrderPoint[] = [];
+  groupedTables: { sublocationName: string; orderPoints: EventOrderPoint[]; expanded: boolean }[] = [];
+  loadingTables = false;
+  savingTables = false;
+  editingCell: { orderPointId: string; field: string } | null = null;
+
   // Material Date Picker
   startDate: Date | null = null;
   endDate: Date | null = null;
@@ -854,6 +1001,7 @@ export class EventsComponent implements OnInit {
     private userService: UserService,
     private paymentTypeService: PaymentTypeService,
     private menuService: MenuService,
+    private eventOrderPointService: EventOrderPointService,
     private elementRef: ElementRef
   ) {}
 
@@ -926,7 +1074,7 @@ export class EventsComponent implements OnInit {
   loadClients(search?: string): void {
     this.loadingClients = true;
     if (this.hasRoleSuper) {
-      this.clientService.getClients(0, 50, search).subscribe({
+      this.clientService.getClients(0, 50, search, 'EVENT').subscribe({
         next: (response) => {
           this.clients = response.content;
           this.loadingClients = false;
@@ -937,7 +1085,8 @@ export class EventsComponent implements OnInit {
     } else if (this.userClientId) {
       this.clientService.getClient(this.userClientId).subscribe({
         next: (client) => {
-          this.clients = [client];
+          // Only show if client is of type EVENT
+          this.clients = client.clientTypeName === 'EVENT' ? [client] : [];
           this.loadingClients = false;
           this.autoSelectIfSingleClient();
         },
@@ -1082,7 +1231,8 @@ export class EventsComponent implements OnInit {
   // Modal Methods
   openEventModal(): void {
     this.editingEvent = null;
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [], menuSource: 'client' };
+    this.eventModalTab = 'details';
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [] };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1097,13 +1247,13 @@ export class EventsComponent implements OnInit {
 
   editEvent(event: Event): void {
     this.editingEvent = event;
+    this.eventModalTab = 'details';
     this.eventFormData = {
       name: event.name,
       startDate: '',
       endDate: '',
       userIds: event.userIds || [],
-      paymentTypeIds: event.paymentTypeIds || [],
-      menuSource: (event.menuItemIds && event.menuItemIds.length > 0) ? 'location' : 'client'
+      paymentTypeIds: event.paymentTypeIds || []
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
@@ -1115,6 +1265,7 @@ export class EventsComponent implements OnInit {
       this.loadPaymentTypes();
     }
     this.loadEventMenuItems();
+    this.loadEventTables();
     this.showEventModal = true;
   }
 
@@ -1132,10 +1283,8 @@ export class EventsComponent implements OnInit {
     if (!locationId) return;
 
     this.savingEvent = true;
-    // If location menu is selected, include all menu items from the location
-    const menuItemIds = this.eventFormData.menuSource === 'location'
-      ? this.eventMenuItems.map(item => item.id!).filter(id => id)
-      : [];
+    // Always use location menu items
+    const menuItemIds = this.eventMenuItems.map(item => item.id!).filter(id => id);
     const eventData = {
       name: this.eventFormData.name,
       startDate: this.dateToApiFormat(this.startDate),
@@ -1205,13 +1354,13 @@ export class EventsComponent implements OnInit {
     });
   }
 
-  getBarUsers(): User[] {
-    return this.users.filter(u => u.roles && u.roles.includes('BAR'));
+  getServiceUsers(): User[] {
+    return this.users.filter(u => u.roles && u.roles.includes('SERVICE'));
   }
 
   getSelectedUsersText(): string {
-    const barUsers = this.getBarUsers();
-    const selectedUsers = barUsers.filter(u => this.eventFormData.userIds.includes(u.id!));
+    const serviceUsers = this.getServiceUsers();
+    const selectedUsers = serviceUsers.filter(u => this.eventFormData.userIds.includes(u.id!));
     if (selectedUsers.length === 0) return '';
     if (selectedUsers.length <= 2) return selectedUsers.map(u => u.name).join(', ');
     return `${selectedUsers.length} users selected`;
@@ -1277,6 +1426,112 @@ export class EventsComponent implements OnInit {
       }
     }
     return result;
+  }
+
+  // Tables tab methods
+  loadEventTables(): void {
+    if (!this.editingEvent?.id) return;
+
+    this.loadingTables = true;
+    this.eventTables = [];
+    this.groupedTables = [];
+
+    this.eventOrderPointService.getEventOrderPoints(this.editingEvent.id).subscribe({
+      next: (tables) => {
+        this.eventTables = tables;
+        this.groupedTables = this.groupTablesBySublocation(tables);
+        this.loadingTables = false;
+      },
+      error: (err) => {
+        console.error('Error loading event tables:', err);
+        this.loadingTables = false;
+      }
+    });
+  }
+
+  private groupTablesBySublocation(tables: EventOrderPoint[]): { sublocationName: string; orderPoints: EventOrderPoint[]; expanded: boolean }[] {
+    const groups: { [key: string]: EventOrderPoint[] } = {};
+    for (const table of tables) {
+      if (!groups[table.sublocationName]) {
+        groups[table.sublocationName] = [];
+      }
+      groups[table.sublocationName].push(table);
+    }
+    return Object.keys(groups).map(sublocationName => ({
+      sublocationName,
+      orderPoints: groups[sublocationName],
+      expanded: true
+    }));
+  }
+
+  toggleSublocation(group: { expanded: boolean }): void {
+    group.expanded = !group.expanded;
+  }
+
+  startEditing(orderPointId: string, field: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this.editingCell = { orderPointId, field };
+    // Focus the input after Angular renders it
+    setTimeout(() => {
+      const input = this.elementRef.nativeElement.querySelector('.editable-cell input');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 0);
+  }
+
+  onCellBlur(table: EventOrderPoint): void {
+    if (!this.editingCell) return;
+    this.editingCell = null;
+    this.saveEventTable(table);
+  }
+
+  onCellTab(event: globalThis.Event, table: EventOrderPoint, nextField: string | null): void {
+    event.preventDefault();
+    if (nextField) {
+      // Save current and move to next field
+      this.saveEventTable(table);
+      this.editingCell = { orderPointId: table.orderPointId, field: nextField };
+      setTimeout(() => {
+        const input = this.elementRef.nativeElement.querySelector('.editable-cell input');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 0);
+    } else {
+      // Last column - just blur
+      this.editingCell = null;
+      this.saveEventTable(table);
+    }
+  }
+
+  saveEventTable(table: EventOrderPoint): void {
+    if (!this.editingEvent?.id) return;
+
+    this.savingTables = true;
+    this.eventOrderPointService.saveEventOrderPoint(this.editingEvent.id, table.orderPointId, table).subscribe({
+      next: (saved) => {
+        // Update the table in the list
+        const index = this.eventTables.findIndex(t => t.orderPointId === saved.orderPointId);
+        if (index >= 0) {
+          this.eventTables[index] = saved;
+        }
+        this.savingTables = false;
+      },
+      error: (err) => {
+        console.error('Error saving event table:', err);
+        this.savingTables = false;
+      }
+    });
+  }
+
+  onCreditChange(table: EventOrderPoint): void {
+    if (!table.credit) {
+      table.creditValue = undefined;
+    }
+    this.saveEventTable(table);
   }
 
 }

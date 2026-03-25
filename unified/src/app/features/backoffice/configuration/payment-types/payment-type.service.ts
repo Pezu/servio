@@ -7,6 +7,7 @@ export interface PaymentType {
   id?: string;
   name: string;
   description?: string;
+  active?: boolean;
 }
 
 export interface PageResponse<T> {
@@ -44,7 +45,7 @@ export class PaymentTypeService {
     return this.http.put<PaymentType>(`${this.apiUrl}/${id}`, paymentType);
   }
 
-  deletePaymentType(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  toggleActive(id: string): Observable<PaymentType> {
+    return this.http.post<PaymentType>(`${this.apiUrl}/${id}/toggle-active`, {});
   }
 }

@@ -9,6 +9,7 @@ export interface Event {
   startDate: string;
   endDate: string;
   locationId: string;
+  locationName?: string;
   logoPath?: string;
   userIds?: string[];
   paymentTypeIds?: string[];

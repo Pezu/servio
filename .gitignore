@@ -3,12 +3,9 @@ api/target/
 **/target/
 
 # Angular
-web/node_modules/
-web/dist/
-web/.angular/
-unified/node_modules/
-unified/dist/
-unified/.angular/
+**/node_modules/
+**/dist/
+**/.angular/
 
 # IDE
 .idea/

@@ -9,8 +9,11 @@
     "ROLES": "Roluri",
     "PAYMENT_TYPES": "Tipuri de Plată",
     "CLIENT_TYPES": "Tipuri de Clienți",
+    "ALLERGENS": "Alergeni",
+    "VAT_TYPES": "Tipuri TVA",
     "MENU": "Meniu",
     "EVENTS": "Evenimente",
+    "REPORTS": "Rapoarte",
     "LOGOUT": "Deconectare"
   },
   "COMMON": {
@@ -40,7 +43,8 @@
     "NO_DATA": "Nu s-au găsit date",
     "SELECT": "Selectează",
     "UPLOADING": "Se încarcă",
-    "CLICK_TO_UPLOAD": "Click pentru încărcare"
+    "CLICK_TO_UPLOAD": "Click pentru încărcare",
+    "IN_PROGRESS": "În Lucru"
   },
   "CLIENTS": {
     "TITLE": "Client",
@@ -115,16 +119,19 @@
     "START_DATE": "Data de Început",
     "END_DATE": "Data de Sfârșit",
     "ASSIGNED_USERS": "Utilizatori Atribuiți",
-    "BAR_USERS": "Utilizatori Bar",
+    "SERVICE_USERS": "Utilizatori Serviciu",
     "SELECT_USERS": "Selectează utilizatori",
     "PAYMENT_TYPES": "Tipuri de Plată",
     "SELECT_PAYMENT_TYPES": "Selectează tipuri de plată",
-    "MENU_SOURCE": "Sursă Meniu",
-    "MENU_CLIENT": "Meniu Client",
-    "MENU_LOCATION": "Meniu Locație",
     "DOWNLOAD_QR": "Descarcă PDF QR",
     "UPLOAD_LOGO": "Încarcă Logo",
-    "DELETE_LOGO": "Șterge Logo"
+    "DELETE_LOGO": "Șterge Logo",
+    "DETAILS": "Detalii",
+    "TABLES": "Mese",
+    "PREPAID": "Preplătit",
+    "CLIENT": "Client",
+    "CREDIT": "Credit",
+    "CREDIT_VALUE": "Valoare Credit"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",
@@ -134,7 +141,7 @@
     "NO_ACTIVE_EVENTS": "Nu există evenimente active",
     "NO_ACTIVE_EVENTS_DESC": "Nu aveți niciun eveniment în desfășurare.",
     "STATUS_ACTIVE": "Activ",
-    "VIEW_ORDERS": "Vezi Comenzi",
+    "VIEW_ORDERS": "Detalii",
     "ALL_ACTIVE_EVENTS": "Toate Evenimentele Active",
     "ALL_IN_PROGRESS": "Toate În Desfășurare",
     "NO_ALL_ACTIVE_EVENTS_DESC": "Nu există evenimente în desfășurare."
@@ -159,7 +166,11 @@
     "COLLAPSE_ALL": "Restrânge Tot",
     "LEVEL": "Nivel Meniu",
     "CLIENT_LEVEL": "Client",
-    "LOCATION_LEVEL": "Locație"
+    "LOCATION_LEVEL": "Locație",
+    "ALLERGENS": "Alergeni",
+    "NO_ALLERGENS": "Nu există alergeni disponibili",
+    "VAT_TYPE": "Tip TVA",
+    "SELECT_VAT_TYPE": "Selectează tipul TVA..."
   },
   "ORDERS": {
     "TITLE": "Comenzi",

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
-import { MenuService, MenuItem } from '../clients/menu.service';
+import { MenuService, MenuItem, Allergen, VatType } from '../clients/menu.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 @Component({
@@ -67,23 +67,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           </div>
         </div>
 
-        <!-- Menu Level Selector -->
-        @if (selectedClient) {
-          <div class="level-selector">
-            <label class="selector-label">{{ 'MENU.LEVEL' | translate }}</label>
-            <div class="level-tabs">
-              <button class="level-tab" [class.active]="menuLevel === 'client'" (click)="setMenuLevel('client')">
-                {{ 'MENU.CLIENT_LEVEL' | translate }}
-              </button>
-              <button class="level-tab" [class.active]="menuLevel === 'location'" (click)="setMenuLevel('location')">
-                {{ 'MENU.LOCATION_LEVEL' | translate }}
-              </button>
-            </div>
-          </div>
-        }
-
         <!-- Location Selector -->
-        @if (selectedClient && menuLevel === 'location') {
+        @if (selectedClient) {
           <div class="location-selector-container">
             <label class="selector-label">{{ 'LOCATIONS.LOCATION' | translate }}</label>
             <div class="selector-wrapper location-wrapper" [class.open]="locationDropdownOpen">
@@ -139,7 +124,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <div class="card-header">
               <h6 class="card-title">
                 {{ 'MENU.MENU_ITEMS' | translate }}
-                <span class="text-muted fw-normal">- {{ menuLevel === 'client' ? selectedClient?.name : selectedLocationName }}</span>
+                <span class="text-muted fw-normal">- {{ selectedLocationName }}</span>
               </h6>
               <div class="header-actions">
                 <button class="action-btn" (click)="expandAll()" [title]="'MENU.EXPAND_ALL' | translate">
@@ -238,12 +223,21 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                             @if (item.description) {
                               <span class="item-description">{{ item.description }}</span>
                             }
+                            @if (item.allergenIds?.length) {
+                              <span class="item-allergens">{{ getAllergenNames(item.allergenIds) }}</span>
+                            }
                           </div>
                         </div>
                         <div class="menu-row-right">
                           @if (item.price) {
                             <span class="item-price">{{ item.price | number:'1.2-2' }} RON</span>
                           }
+                          <select class="vat-select" [ngModel]="item.vatTypeId || ''" (ngModelChange)="onVatTypeChange(item, $event)" [disabled]="!item.id">
+                            <option value="">-</option>
+                            @for (vat of vatTypes; track vat.id) {
+                              <option [value]="vat.id">{{ vat.name }}</option>
+                            }
+                          </select>
                           <div class="menu-row-actions">
                             @if (item.id) {
                               <label class="image-upload-btn" [title]="'MENU.UPLOAD_IMAGE' | translate">
@@ -284,13 +278,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 </ng-template>
               </div>
             </div>
-            @if (hasChanges) {
-              <div class="card-footer">
-                <button class="btn btn-primary" (click)="saveMenu()" [disabled]="savingMenu">
-                  {{ savingMenu ? ('COMMON.SAVING' | translate) : ('MENU.SAVE_MENU' | translate) }}
-                </button>
-              </div>
-            }
           </div>
         </div>
       }
@@ -317,6 +304,30 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
               <div class="form-group">
                 <label>{{ 'COMMON.DESCRIPTION' | translate }}</label>
                 <textarea class="form-control" [(ngModel)]="formData.description" rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label>{{ 'MENU.ALLERGENS' | translate }}</label>
+                <div class="allergen-chips">
+                  @for (allergen of allergens; track allergen.id) {
+                    <label class="allergen-chip" [class.selected]="isAllergenSelected(allergen.id)">
+                      <input type="checkbox" [checked]="isAllergenSelected(allergen.id)" (change)="toggleAllergen(allergen.id)">
+                      <span class="allergen-number">{{ allergen.number }}</span>
+                      <span class="allergen-name">{{ allergen.name }}</span>
+                    </label>
+                  }
+                  @if (allergens.length === 0) {
+                    <span class="text-muted">{{ 'MENU.NO_ALLERGENS' | translate }}</span>
+                  }
+                </div>
+              </div>
+              <div class="form-group">
+                <label>{{ 'MENU.VAT_TYPE' | translate }}</label>
+                <select class="form-control" [(ngModel)]="formData.vatTypeId">
+                  <option value="">{{ 'MENU.SELECT_VAT_TYPE' | translate }}</option>
+                  @for (vat of vatTypes; track vat.id) {
+                    <option [value]="vat.id">{{ vat.name }}</option>
+                  }
+                </select>
               </div>
             }
           </div>
@@ -389,14 +400,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .location-pin-icon { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
     .selected-location { display: flex; align-items: center; gap: 8px; }
     .location-name { font-size: 14px; font-weight: 500; color: #1e293b; }
-
-    /* Level Selector */
-    .level-selector { display: flex; align-items: center; gap: 12px; }
-    .level-tabs { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-    .level-tab { padding: 10px 16px; border: none; background: white; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.15s ease; }
-    .level-tab:not(:last-child) { border-right: 1px solid var(--border-color); }
-    .level-tab:hover { background: var(--bg-light); }
-    .level-tab.active { background: var(--primary); color: white; }
 
     /* Location Selector */
     .location-selector { display: flex; align-items: center; gap: 12px; }
@@ -471,6 +474,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     .item-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .item-description { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+    .item-allergens { font-size: 11px; color: #a0aec0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
 
     .item-price { font-size: 14px; font-weight: 600; color: var(--text-dark); white-space: nowrap; }
 
@@ -487,6 +491,12 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .action-btn-disabled { opacity: 0.4; cursor: not-allowed; }
     .action-btn-disabled:hover { background: transparent; color: #64748b; }
 
+    /* VAT Type Select */
+    .vat-select { height: 32px; padding: 0 8px; border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 6px; font-size: 13px; color: #64748b; background: transparent; min-width: 90px; cursor: pointer; transition: all 0.15s ease; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; background-size: 14px; padding-right: 24px; }
+    .vat-select:hover { background-color: rgba(0, 0, 0, 0.04); color: #374151; }
+    .vat-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+    .vat-select:disabled { background-color: transparent; color: #94a3b8; cursor: not-allowed; opacity: 0.4; }
+
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: white; border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); }
@@ -502,6 +512,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     textarea.form-control { resize: vertical; min-height: 80px; }
+
+    /* Allergen Chips */
+    .allergen-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .allergen-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 20px; cursor: pointer; transition: all 0.15s ease; background: white; }
+    .allergen-chip:hover { border-color: var(--primary); background: var(--primary-light); }
+    .allergen-chip.selected { border-color: var(--primary); background: var(--primary); color: white; }
+    .allergen-chip input { display: none; }
+    .allergen-number { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: var(--bg-light); border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    .allergen-chip.selected .allergen-number { background: rgba(255, 255, 255, 0.2); color: white; }
+    .allergen-name { font-size: 13px; font-weight: 500; }
   `]
 })
 export class ClientMenuComponent implements OnInit {
@@ -515,7 +535,6 @@ export class ClientMenuComponent implements OnInit {
   hasRoleSuper = false;
   userClientId: string | null = null;
 
-  menuLevel: 'client' | 'location' = 'client';
   locations: Location[] = [];
   selectedLocationId = '';
   locationDropdownOpen = false;
@@ -532,7 +551,10 @@ export class ClientMenuComponent implements OnInit {
   showModal = false;
   editingItem: MenuItem | null = null;
   editingParent: MenuItem | null = null;
-  formData = { name: '', orderable: false, price: 0, description: '' };
+  formData = { name: '', orderable: false, price: 0, description: '', allergenIds: [] as string[], vatTypeId: '' };
+
+  allergens: Allergen[] = [];
+  vatTypes: VatType[] = [];
 
   private searchSubject = new Subject<string>();
 
@@ -546,7 +568,23 @@ export class ClientMenuComponent implements OnInit {
   ngOnInit(): void {
     this.initUserRoles();
     this.loadClients();
+    this.loadAllergens();
+    this.loadVatTypes();
     this.searchSubject.pipe(debounceTime(300), distinctUntilChanged()).subscribe(term => this.loadClients(term));
+  }
+
+  loadAllergens(): void {
+    this.menuService.getActiveAllergens().subscribe({
+      next: (allergens) => { this.allergens = allergens; },
+      error: () => { this.allergens = []; }
+    });
+  }
+
+  loadVatTypes(): void {
+    this.menuService.getActiveVatTypes().subscribe({
+      next: (vatTypes) => { this.vatTypes = vatTypes; },
+      error: () => { this.vatTypes = []; }
+    });
   }
 
   private initUserRoles(): void {
@@ -625,7 +663,6 @@ export class ClientMenuComponent implements OnInit {
     this.hasChanges = false;
     this.selectedLocationId = '';
     this.loadLocations();
-    if (this.menuLevel === 'client') this.loadMenu();
   }
 
   loadLocations(): void {
@@ -643,16 +680,6 @@ export class ClientMenuComponent implements OnInit {
       },
       error: () => {}
     });
-  }
-
-  setMenuLevel(level: 'client' | 'location'): void {
-    this.menuLevel = level;
-    this.menuItems = [];
-    this.hasChanges = false;
-    if (level === 'client') {
-      this.selectedLocationId = '';
-      this.loadMenu();
-    }
   }
 
   toggleLocationDropdown(): void {
@@ -674,9 +701,7 @@ export class ClientMenuComponent implements OnInit {
   }
 
   get canShowMenu(): boolean {
-    if (!this.selectedClient) return false;
-    if (this.menuLevel === 'client') return true;
-    return !!this.selectedLocationId;
+    return !!this.selectedClient && !!this.selectedLocationId;
   }
 
   get selectedLocationName(): string {
@@ -695,11 +720,7 @@ export class ClientMenuComponent implements OnInit {
 
   loadMenu(): void {
     this.loadingMenu = true;
-    const obs = this.menuLevel === 'client'
-      ? this.menuService.getClientMenuTree(this.selectedClient!.id!)
-      : this.menuService.getMenuTree(this.selectedLocationId);
-
-    obs.subscribe({
+    this.menuService.getMenuTree(this.selectedLocationId).subscribe({
       next: (items) => {
         this.menuItems = items;
         this.loadingMenu = false;
@@ -748,35 +769,53 @@ export class ClientMenuComponent implements OnInit {
   addCategory(): void {
     this.editingItem = null;
     this.editingParent = null;
-    this.formData = { name: '', orderable: false, price: 0, description: '' };
+    this.formData = { name: '', orderable: false, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
   }
 
   addSubcategory(parent: MenuItem): void {
     this.editingItem = null;
     this.editingParent = parent;
-    this.formData = { name: '', orderable: false, price: 0, description: '' };
+    this.formData = { name: '', orderable: false, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
   }
 
   addItem(parent: MenuItem): void {
     this.editingItem = null;
     this.editingParent = parent;
-    this.formData = { name: '', orderable: true, price: 0, description: '' };
+    this.formData = { name: '', orderable: true, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
   }
 
   editItem(item: MenuItem, parent?: MenuItem): void {
     this.editingItem = item;
     this.editingParent = parent || null;
-    this.formData = { name: item.name, orderable: item.orderable, price: item.price || 0, description: item.description || '' };
+    this.formData = { name: item.name, orderable: item.orderable, price: item.price || 0, description: item.description || '', allergenIds: [...(item.allergenIds || [])], vatTypeId: item.vatTypeId || '' };
     this.showModal = true;
+  }
+
+  isAllergenSelected(allergenId: string): boolean {
+    return this.formData.allergenIds.includes(allergenId);
+  }
+
+  toggleAllergen(allergenId: string): void {
+    const index = this.formData.allergenIds.indexOf(allergenId);
+    if (index === -1) {
+      this.formData.allergenIds.push(allergenId);
+    } else {
+      this.formData.allergenIds.splice(index, 1);
+    }
   }
 
   deleteItem(item: MenuItem, parent?: MenuItem): void {
     if (parent) parent.children = parent.children.filter(c => c !== item);
     else this.menuItems = this.menuItems.filter(i => i !== item);
-    this.hasChanges = true;
+    this.saveMenu();
+  }
+
+  onVatTypeChange(item: MenuItem, vatTypeId: string): void {
+    item.vatTypeId = vatTypeId || undefined;
+    this.saveMenu();
   }
 
   closeModal(): void {
@@ -792,6 +831,8 @@ export class ClientMenuComponent implements OnInit {
       this.editingItem.name = this.formData.name;
       this.editingItem.price = this.formData.orderable ? this.formData.price : undefined;
       this.editingItem.description = this.formData.description;
+      this.editingItem.allergenIds = this.formData.orderable ? [...this.formData.allergenIds] : [];
+      this.editingItem.vatTypeId = this.formData.orderable ? this.formData.vatTypeId || undefined : undefined;
     } else {
       const newItem: MenuItem = {
         tempId: `temp-${++this.tempIdCounter}`,
@@ -799,7 +840,9 @@ export class ClientMenuComponent implements OnInit {
         orderable: this.formData.orderable,
         price: this.formData.orderable ? this.formData.price : undefined,
         description: this.formData.description,
-        children: []
+        children: [],
+        allergenIds: this.formData.orderable ? [...this.formData.allergenIds] : [],
+        vatTypeId: this.formData.orderable ? this.formData.vatTypeId || undefined : undefined
       };
 
       if (this.editingParent) {
@@ -812,17 +855,13 @@ export class ClientMenuComponent implements OnInit {
       }
     }
 
-    this.hasChanges = true;
     this.closeModal();
+    this.saveMenu();
   }
 
   saveMenu(): void {
     this.savingMenu = true;
-    const obs = this.menuLevel === 'client'
-      ? this.menuService.saveClientMenuTree(this.selectedClient!.id!, this.menuItems)
-      : this.menuService.saveMenuTree(this.selectedLocationId, this.menuItems);
-
-    obs.subscribe({
+    this.menuService.saveMenuTree(this.selectedLocationId, this.menuItems).subscribe({
       next: (items) => { this.menuItems = items; this.savingMenu = false; this.hasChanges = false; },
       error: () => { this.savingMenu = false; }
     });
@@ -830,6 +869,15 @@ export class ClientMenuComponent implements OnInit {
 
   getImageUrl(imagePath: string): string {
     return this.menuService.getImageUrl(imagePath);
+  }
+
+  getAllergenNames(allergenIds: string[]): string {
+    if (!allergenIds?.length) return '';
+    return allergenIds
+      .map(id => this.allergens.find(a => a.id === id))
+      .filter(a => a)
+      .map(a => `${a!.number}. ${a!.name}`)
+      .join(', ');
   }
 
   uploadImage(event: Event, item: MenuItem): void {

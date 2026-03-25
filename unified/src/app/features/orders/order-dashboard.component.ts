@@ -25,6 +25,8 @@ interface Order {
   status: string;
   assignedUser: string | null;
   note?: string;
+  needsPayment: boolean;
+  nickname?: string;
   items: OrderItem[];
 }
 
@@ -34,6 +36,7 @@ interface PendingRegistration {
   orderPointName: string;
   validationStatus: string;
   createdAt: string;
+  nickname?: string;
 }
 
 @Component({
@@ -44,7 +47,7 @@ interface PendingRegistration {
     <!-- Header -->
     <header class="dashboard-header">
       <div class="header-left">
-        <h1 class="header-title">{{ activeView === 'orders' ? 'Orders' : 'Permissions' }}</h1>
+        <h1 class="header-title">{{ activeView === 'orders' ? 'Orders' : (activeView === 'permissions' ? 'Validations' : 'Payments') }}</h1>
         <span class="order-count" *ngIf="activeView === 'orders' && orders.length > 0">{{ orders.length }} orders</span>
       </div>
       <div class="header-right">
@@ -73,62 +76,95 @@ interface PendingRegistration {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
         </svg>
         Orders
+        <span class="tab-badge" *ngIf="orders.length > 0">{{ orders.length }}</span>
       </button>
       <button class="nav-tab" [class.active]="activeView === 'permissions'" (click)="navigateTo('permissions')">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
-        Permissions
+        Validations
+        <span class="tab-badge" *ngIf="pendingRegistrations.length > 0">{{ pendingRegistrations.length }}</span>
+      </button>
+      <button class="nav-tab" [class.active]="activeView === 'payments'" (click)="navigateTo('payments')">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Payments
+        <span class="tab-badge" *ngIf="groupedPaymentOrders.length > 0">{{ groupedPaymentOrders.length }}</span>
       </button>
     </nav>
 
     <div class="dashboard-content">
       <!-- ORDERS VIEW -->
       <ng-container *ngIf="activeView === 'orders'">
-        <!-- Empty State -->
-        <div *ngIf="orders.length === 0" class="empty-state">
-          <div class="empty-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
+        <!-- Kanban Board -->
+        <div class="kanban-board">
+          <!-- Ordered Column -->
+          <div class="kanban-column">
+            <div class="column-header column-ordered">
+              <h3>Ordered<span class="column-count" *ngIf="orderedOrders.length > 0">{{ orderedOrders.length }}</span></h3>
+            </div>
+            <div class="column-content">
+              <div *ngFor="let order of orderedOrders" class="order-card">
+                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
+              </div>
+              <div *ngIf="orderedOrders.length === 0" class="column-empty">No orders</div>
+            </div>
           </div>
-          <h3>No orders yet</h3>
-          <p>Waiting for new orders to arrive...</p>
+
+          <!-- In Progress Column -->
+          <div class="kanban-column">
+            <div class="column-header column-in-progress">
+              <h3>In Progress<span class="column-count" *ngIf="inProgressOrders.length > 0">{{ inProgressOrders.length }}</span></h3>
+            </div>
+            <div class="column-content">
+              <div *ngFor="let order of inProgressOrders" class="order-card">
+                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
+              </div>
+              <div *ngIf="inProgressOrders.length === 0" class="column-empty">No orders</div>
+            </div>
+          </div>
+
+          <!-- Ready Column -->
+          <div class="kanban-column">
+            <div class="column-header column-ready">
+              <h3>Ready<span class="column-count" *ngIf="readyOrders.length > 0">{{ readyOrders.length }}</span></h3>
+            </div>
+            <div class="column-content">
+              <div *ngFor="let order of readyOrders" class="order-card">
+                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
+              </div>
+              <div *ngIf="readyOrders.length === 0" class="column-empty">No orders</div>
+            </div>
+          </div>
         </div>
 
-        <!-- Orders Grid -->
-        <div class="orders-grid" *ngIf="orders.length > 0">
-        <div *ngFor="let order of orders" class="order-card" [class]="'status-' + order.status.toLowerCase()">
+        <!-- Order Card Template -->
+        <ng-template #orderCardTemplate let-order>
           <!-- Card Header -->
           <div class="card-header">
-            <div class="order-number">
-              <span class="hash">#</span>{{ order.orderNo }}
-              <span *ngIf="order.assignedUser" class="locked-icon" title="Assigned">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
+            <span class="order-number">#{{ order.orderNo }}</span>
+            <div class="header-center">
+              <span class="order-point-name">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
+                {{ order.orderPointName }}
+              </span>
+              <span class="order-nickname" *ngIf="order.nickname">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                {{ order.nickname }}
               </span>
             </div>
-            <span class="order-point-name">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
+            <span *ngIf="order.assignedUser" class="locked-icon" title="Assigned">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
               </svg>
-              {{ order.orderPointName }}
             </span>
-            <span class="status-badge" [class]="'badge-' + order.status.toLowerCase()">
-              {{ getStatusLabel(order.status) }}
-            </span>
-          </div>
-
-          <!-- Card Meta -->
-          <div class="card-meta" *ngIf="order.assignedUser">
-            <div class="meta-item">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span>{{ order.assignedUser }}</span>
-            </div>
           </div>
 
           <!-- Order Note -->
@@ -173,89 +209,229 @@ interface PendingRegistration {
 
           <!-- Card Footer -->
           <div class="card-footer">
-            <div class="order-total">
-              <span class="total-label">Total</span>
-              <span class="total-value">{{ getOrderTotal(order).toFixed(2) }} RON</span>
-            </div>
             <div class="card-actions">
-              <button *ngIf="order.status === 'ACTIVE'" class="btn btn-start" (click)="startOrder(order.id)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+              <button *ngIf="order.status === 'ACTIVE'" class="arrow-btn arrow-btn-start" (click)="startOrder(order.id)" title="Start">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
-                Start
               </button>
-              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="btn btn-return" (click)="returnOrder(order.id)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-return" (click)="returnOrder(order.id)" title="Return">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
-                Return
               </button>
-              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="btn btn-complete" (click)="completeOrder(order)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-complete" (click)="completeOrder(order)" title="Complete">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
-                Complete
               </button>
-              <button *ngIf="order.status === 'READY' && order.assignedUser === currentUser" class="btn btn-deliver" (click)="markOrderDelivered(order.id)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                  <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7h4.05a1 1 0 01.95 1.316l-1.35 4.052A1 1 0 0116.706 13H14a1 1 0 01-1-1V8a1 1 0 011-1z" />
+              <button *ngIf="order.status === 'READY' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-deliver" (click)="markOrderDelivered(order.id)" title="Picked Up">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
-                Picked Up
               </button>
             </div>
           </div>
-        </div>
-        </div>
+        </ng-template>
       </ng-container>
 
-      <!-- PERMISSIONS VIEW -->
+      <!-- VALIDATIONS VIEW -->
       <ng-container *ngIf="activeView === 'permissions'">
-        <!-- Loading -->
-        <div *ngIf="loadingPending" class="empty-state">
-          <div class="empty-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h3>Loading...</h3>
-        </div>
-
         <!-- Empty State -->
-        <div *ngIf="!loadingPending && pendingRegistrations.length === 0" class="empty-state">
-          <div class="empty-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <div *ngIf="!loadingPending && pendingRegistrations.length === 0" class="empty-state validations-empty">
+          <div class="servio-logo">
+            <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="38,19 66,22 38,25" fill="url(#goldGradEmpty)"/>
+              <polygon points="34,25 64,28 34,31" fill="url(#goldGradEmpty)" opacity="0.85"/>
+              <polygon points="29,31 57,34 29,37" fill="url(#goldGradEmpty)" opacity="0.7"/>
+              <circle cx="22" cy="22" r="18" fill="white"/>
+              <circle cx="22" cy="22" r="17" fill="url(#grayGradEmpty)"/>
+              <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
+              <defs>
+                <linearGradient id="goldGradEmpty" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#fbbf24"/>
+                  <stop offset="100%" stop-color="#f59e0b"/>
+                </linearGradient>
+                <linearGradient id="grayGradEmpty" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop stop-color="#6b7280"/>
+                  <stop offset="0.5" stop-color="#4b5563"/>
+                  <stop offset="1" stop-color="#374151"/>
+                </linearGradient>
+              </defs>
             </svg>
           </div>
-          <h3>No pending requests</h3>
+          <h3>No validations waiting</h3>
           <p>All registrations have been approved.</p>
         </div>
 
-        <!-- Pending Registrations List -->
-        <div *ngIf="!loadingPending && pendingRegistrations.length > 0" class="pending-list">
-          <div *ngFor="let registration of pendingRegistrations" class="pending-card">
-            <div class="pending-info">
-              <div class="pending-location">
+        <!-- Validation Cards Grid -->
+        <div *ngIf="pendingRegistrations.length > 0" class="validations-grid">
+          <div *ngFor="let registration of pendingRegistrations" class="validation-card">
+            <div class="validation-info">
+              <div class="validation-row">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>{{ registration.nickname || 'Guest' }}</span>
+              </div>
+              <div class="validation-row">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                {{ registration.orderPointName }}
+                <span>{{ registration.orderPointName }}</span>
               </div>
-              <div class="pending-time">
+              <div class="validation-row">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {{ formatTime(registration.createdAt) }}
+                <span>{{ formatTime(registration.createdAt) }}</span>
               </div>
             </div>
-            <button class="btn btn-approve" (click)="approveRegistration(registration.id)">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-              </svg>
-              Approve
-            </button>
+            <div class="validation-action">
+              <button class="approve-btn" (click)="approveRegistration(registration.id)" title="Approve">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- PAYMENTS VIEW -->
+      <ng-container *ngIf="activeView === 'payments'">
+        <!-- Empty State -->
+        <div *ngIf="!loadingNeedsPayment && needsPaymentOrders.length === 0" class="empty-state payments-empty">
+          <div class="servio-logo">
+            <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="38,19 66,22 38,25" fill="url(#goldGradPayments)"/>
+              <polygon points="34,25 64,28 34,31" fill="url(#goldGradPayments)" opacity="0.85"/>
+              <polygon points="29,31 57,34 29,37" fill="url(#goldGradPayments)" opacity="0.7"/>
+              <circle cx="22" cy="22" r="18" fill="white"/>
+              <circle cx="22" cy="22" r="17" fill="url(#grayGradPayments)"/>
+              <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
+              <defs>
+                <linearGradient id="goldGradPayments" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#fbbf24"/>
+                  <stop offset="100%" stop-color="#f59e0b"/>
+                </linearGradient>
+                <linearGradient id="grayGradPayments" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop stop-color="#6b7280"/>
+                  <stop offset="0.5" stop-color="#4b5563"/>
+                  <stop offset="1" stop-color="#374151"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h3>No pending payments</h3>
+          <p>All orders have been paid.</p>
+        </div>
+
+        <!-- Payments Grid -->
+        <div *ngIf="!loadingNeedsPayment && needsPaymentOrders.length > 0" class="payments-container">
+          <!-- Controls Bar -->
+          <div class="payments-controls">
+            <div class="controls-left">
+              <div class="view-toggle-bar">
+                <button class="toggle-btn" [class.active]="paymentMode === 'all'" (click)="paymentMode = 'all'">All</button>
+                <button class="toggle-btn" [class.active]="paymentMode === 'guest'" (click)="paymentMode = 'guest'">By Guest</button>
+              </div>
+            </div>
+            <div class="controls-right">
+              <span class="payments-total-badge">{{ getTotalPayments().toFixed(2) }} RON</span>
+            </div>
+          </div>
+
+          <!-- ALL MODE - Grid of Order Cards -->
+          <div *ngIf="paymentMode === 'all'" class="payments-grid">
+            <div *ngFor="let order of needsPaymentOrders" class="payment-order-card">
+              <div class="card-header">
+                <span class="order-number">#{{ order.orderNo }}</span>
+                <div class="header-center">
+                  <span class="order-point-name">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {{ order.orderPointName }}
+                  </span>
+                  <span class="order-nickname" *ngIf="order.nickname">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    {{ order.nickname }}
+                  </span>
+                </div>
+                <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
+              </div>
+              <div class="items-list">
+                <div *ngFor="let item of order.items" class="item-row">
+                  <div class="item-info">
+                    <span class="item-qty">{{ item.quantity }}x</span>
+                    <span class="item-name">{{ item.name }}</span>
+                    <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="card-footer">
+                <button class="btn-mark-paid" (click)="markOrderPaid(order.id)">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  Mark Paid
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- GUEST MODE - Grouped by Guest -->
+          <div *ngIf="paymentMode === 'guest'" class="payments-by-guest">
+            <div *ngFor="let guest of getOrdersByGuestAll()" class="guest-section">
+              <div class="guest-section-header">
+                <div class="guest-info">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span class="guest-nickname">{{ guest.nickname }}</span>
+                </div>
+                <span class="guest-total-badge">{{ guest.total.toFixed(2) }} RON</span>
+              </div>
+              <div class="guest-orders-grid">
+                <div *ngFor="let order of guest.orders" class="payment-order-card">
+                  <div class="card-header">
+                    <span class="order-number">#{{ order.orderNo }}</span>
+                    <div class="header-center">
+                      <span class="order-point-name">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {{ order.orderPointName }}
+                      </span>
+                    </div>
+                    <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
+                  </div>
+                  <div class="items-list">
+                    <div *ngFor="let item of order.items" class="item-row">
+                      <div class="item-info">
+                        <span class="item-qty">{{ item.quantity }}x</span>
+                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-footer">
+                    <button class="btn-mark-paid" (click)="markOrderPaid(order.id)">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                      Mark Paid
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </ng-container>
@@ -266,7 +442,7 @@ interface PendingRegistration {
     :host {
       display: block;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f0f2f5;
+      background: #fff;
       min-height: 100vh;
     }
 
@@ -276,21 +452,22 @@ interface PendingRegistration {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: #fff;
+      color: #1a1a2e;
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+      border-bottom: 1px solid #e0e0e0;
     }
     .header-left { display: flex; align-items: center; gap: 16px; }
     .header-title { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
     .order-count {
-      background: rgba(255,255,255,0.2);
+      background: #f0f2f5;
       padding: 4px 12px;
       border-radius: 20px;
       font-size: 13px;
       font-weight: 500;
+      color: #64748b;
     }
     .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -300,18 +477,18 @@ interface PendingRegistration {
       width: 42px;
       height: 42px;
       border-radius: 50%;
-      background: rgba(255,255,255,0.25);
-      color: white;
+      background: #f0f2f5;
+      color: #64748b;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
       font-size: 14px;
       cursor: pointer;
-      border: 2px solid rgba(255,255,255,0.4);
+      border: 1px solid #e0e0e0;
       transition: all 0.2s ease;
     }
-    .user-avatar:hover { background: rgba(255,255,255,0.35); }
+    .user-avatar:hover { background: #e8ecf1; }
     .user-dropdown {
       position: absolute;
       top: calc(100% + 8px);
@@ -353,38 +530,58 @@ interface PendingRegistration {
       gap: 8px;
       padding: 12px 24px;
       background: #fff;
-      border-bottom: 1px solid #e8ecf1;
+      border-bottom: 1px solid #e0e0e0;
     }
     .nav-tab {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 10px 20px;
-      border: none;
-      background: transparent;
+      border: 1px solid #e0e0e0;
+      background: #fff;
       border-radius: 8px;
       font-size: 14px;
       font-weight: 500;
       color: #64748b;
       cursor: pointer;
       transition: all 0.2s ease;
+      position: relative;
     }
     .nav-tab:hover {
-      background: #f1f5f9;
+      background: #f8f9fa;
       color: #334155;
     }
     .nav-tab.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      border-color: #ccc;
     }
     .nav-tab svg {
       width: 18px;
       height: 18px;
     }
+    .tab-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #ef4444;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+    }
 
     /* Content */
     .dashboard-content {
       padding: 24px;
+      background: white;
+      min-height: calc(100vh - 130px);
     }
 
     /* Empty State */
@@ -409,24 +606,111 @@ interface PendingRegistration {
     .empty-state h3 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1a1a2e; }
     .empty-state p { margin: 0; color: #8492a6; font-size: 15px; }
 
-    /* Orders Grid */
-    .orders-grid {
+    /* Validations Empty State */
+    .validations-empty {
+      box-shadow: none;
+      background: transparent;
+    }
+    .servio-logo {
+      width: 120px;
+      height: 70px;
+      margin: 0 auto 20px;
+    }
+    .servio-logo svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Kanban Board */
+    .kanban-board {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      height: calc(100vh - 180px);
+    }
+    .kanban-column {
+      display: flex;
+      flex-direction: column;
+      background: white;
+      overflow: hidden;
+    }
+    .kanban-column:not(:last-child) {
+      border-right: 1px solid #d1d5db;
+    }
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 20px;
+      position: relative;
+    }
+    .column-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 5%;
+      width: 90%;
+      height: 3px;
+      border-radius: 2px;
+    }
+    .column-ordered::after { background: #3b82f6; }
+    .column-in-progress::after { background: #f59e0b; }
+    .column-ready::after { background: #10b981; }
+    .column-header h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      position: relative;
+      display: inline-block;
+    }
+    .column-count {
+      position: absolute;
+      top: -8px;
+      right: -20px;
+      background: #ef4444;
+      color: white;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .column-ordered { border-color: #3b82f6; }
+    .column-in-progress { border-color: #f59e0b; }
+    .column-ready { border-color: #10b981; }
+    .column-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .column-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+      font-size: 14px;
     }
 
     /* Order Card */
     .order-card {
       background: white;
       border-radius: 16px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      overflow: hidden;
+      border: 1px solid #d1d5db;
       transition: all 0.3s ease;
-      border: 1px solid #e8ecf1;
+      height: auto;
+      flex-shrink: 0;
+      width: 85%;
+      margin: 0 auto;
+      overflow: hidden;
     }
     .order-card:hover {
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
       transform: translateY(-2px);
     }
 
@@ -458,24 +742,53 @@ interface PendingRegistration {
     .order-number .hash { color: #c0c5ce; font-weight: 400; }
     .locked-icon { display: flex; color: #f59e0b; }
     .locked-icon svg { width: 18px; height: 18px; }
-    .order-point-name {
+    .header-center {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      font-size: 14px;
+      gap: 12px;
+      min-width: 0;
+    }
+    .order-point-name {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
       font-weight: 500;
       color: #64748b;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     .order-point-name svg {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       flex-shrink: 0;
       color: #94a3b8;
+    }
+    .order-amount {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+      flex-shrink: 0;
+    }
+
+    /* Card Nickname Row */
+    .card-nickname {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #0369a1;
+      background: #f0f9ff;
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .card-nickname svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      color: #0ea5e9;
     }
 
     /* Status Badge */
@@ -510,6 +823,21 @@ interface PendingRegistration {
     }
     .meta-item svg { width: 16px; height: 16px; color: #94a3b8; }
 
+    /* Order Nickname */
+    .order-nickname {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #0369a1;
+      background: #e0f2fe;
+      padding: 4px 10px;
+      border-radius: 12px;
+      flex-shrink: 0;
+    }
+    .order-nickname svg { width: 14px; height: 14px; flex-shrink: 0; color: #0ea5e9; }
+
     /* Order Note */
     .order-note {
       padding: 10px 20px;
@@ -535,7 +863,6 @@ interface PendingRegistration {
     }
     .item-row:hover { background: #f8fafc; }
     .item-row.item-done { opacity: 0.6; }
-    .item-row.item-done .item-name { text-decoration: line-through; }
     .item-row.item-cancelled { opacity: 0.5; }
     .item-row.item-cancelled .item-name { text-decoration: line-through; color: #ef4444; }
 
@@ -604,15 +931,11 @@ interface PendingRegistration {
     /* Card Footer */
     .card-footer {
       padding: 16px 20px;
-      background: #f8fafc;
-      border-top: 1px solid #f0f2f5;
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
+      border-radius: 0 0 16px 16px;
     }
-    .order-total { display: flex; flex-direction: column; gap: 2px; }
-    .total-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .total-value { font-size: 18px; font-weight: 700; color: #1e293b; }
 
     .card-actions { display: flex; gap: 8px; }
     .btn {
@@ -638,6 +961,45 @@ interface PendingRegistration {
     .btn-deliver:hover { background: #7c3aed; }
     .btn-approve { background: #10b981; color: white; }
     .btn-approve:hover { background: #059669; }
+
+    /* Arrow Buttons */
+    .arrow-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: transparent;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .arrow-btn:hover {
+      border-color: #3b82f6;
+      color: #3b82f6;
+    }
+    .arrow-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+    .arrow-btn-start:hover {
+      border-color: #3b82f6;
+      color: #3b82f6;
+    }
+    .arrow-btn-return:hover {
+      border-color: #64748b;
+      color: #64748b;
+    }
+    .arrow-btn-complete:hover {
+      border-color: #10b981;
+      color: #10b981;
+    }
+    .arrow-btn-deliver:hover {
+      border-color: #8b5cf6;
+      color: #8b5cf6;
+    }
 
     /* Pending Registrations */
     .pending-list {
@@ -686,10 +1048,552 @@ interface PendingRegistration {
       height: 14px;
     }
 
+    /* Validations Grid */
+    .validations-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .validation-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #e8ecf1;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
+    .validation-info {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .validation-action {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .validation-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #1e293b;
+    }
+    .validation-row svg {
+      width: 18px;
+      height: 18px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .validation-row span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .approve-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      color: #10b981;
+      border: 2px solid #e2e8f0;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .approve-btn:hover {
+      border-color: #10b981;
+      background: #10b981;
+      color: white;
+    }
+    .approve-btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    @media (max-width: 1200px) {
+      .validations-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 900px) {
+      .validations-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 600px) {
+      .validations-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Payment Groups */
+    .payment-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .payment-group {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    .payment-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .payment-group-location {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .payment-group-location svg {
+      width: 22px;
+      height: 22px;
+    }
+    .payment-group-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .view-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 3px;
+      cursor: pointer;
+    }
+    .toggle-option {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 16px;
+      transition: all 0.2s ease;
+      opacity: 0.7;
+    }
+    .toggle-option.active {
+      background: white;
+      color: #667eea;
+      opacity: 1;
+    }
+    .payment-group-total {
+      font-size: 18px;
+      font-weight: 700;
+      background: rgba(255,255,255,0.2);
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    /* Total View */
+    .payment-total-view {
+      padding: 16px;
+      background: #f8fafc;
+    }
+    .aggregated-items {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+      overflow: hidden;
+    }
+    .aggregated-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .aggregated-item:last-child {
+      border-bottom: none;
+    }
+    .aggregated-item .item-qty {
+      background: #f1f5f9;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-right: 12px;
+    }
+    .aggregated-item .item-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+      color: #1e293b;
+    }
+    .aggregated-item .item-total {
+      font-size: 14px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .payment-total-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+    }
+    .payment-total-footer .total-label {
+      font-size: 14px;
+      color: #64748b;
+    }
+    .payment-total-footer .total-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    /* Payment Cards */
+    .payment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      background: #f8fafc;
+    }
+    .payment-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      padding: 16px 20px;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .payment-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .payment-order-number {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+      min-width: 60px;
+    }
+    .payment-order-number .hash {
+      color: #c0c5ce;
+      font-weight: 400;
+    }
+    .payment-items {
+      font-size: 13px;
+      color: #64748b;
+    }
+    .payment-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e293b;
+      white-space: nowrap;
+    }
+
+    /* Guest View */
+    .payment-guest-view {
+      padding: 16px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .guest-group {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+      overflow: hidden;
+    }
+    .guest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .guest-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .guest-name svg {
+      width: 18px;
+      height: 18px;
+      color: #64748b;
+    }
+    .guest-total {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    .guest-orders {
+      display: flex;
+      flex-direction: column;
+    }
+    .guest-aggregated {
+      padding: 8px 0;
+    }
+    .guest-order-card {
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .guest-order-card:last-child {
+      border-bottom: none;
+    }
+    .guest-order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #fafafa;
+    }
+    .guest-order-number {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .guest-order-number .hash {
+      color: #94a3b8;
+    }
+    .guest-order-amount {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .guest-order-items {
+      padding: 6px 0;
+    }
+    .guest-item-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 16px;
+    }
+    .guest-item-row .item-qty {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      margin-right: 8px;
+      min-width: 28px;
+      text-align: center;
+    }
+    .guest-item-row .item-name {
+      flex: 1;
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .guest-item-row .item-price {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* Payments Empty State */
+    .payments-empty {
+      box-shadow: none;
+      background: transparent;
+    }
+
+    /* Payments Container */
+    .payments-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Payments Controls */
+    .payments-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+    }
+    .controls-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .controls-right {
+      display: flex;
+      align-items: center;
+    }
+    .view-toggle-bar {
+      display: flex;
+      background: #e8ecf1;
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .toggle-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .toggle-btn:hover {
+      color: #1e293b;
+    }
+    .toggle-btn.active {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .payments-total-badge {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      background: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #e8ecf1;
+    }
+
+    /* Payments Grid */
+    .payments-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 1200px) {
+      .payments-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .payments-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Payment Order Card */
+    .payment-order-card {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #d1d5db;
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+    .payment-order-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    /* Mark Paid Button */
+    .btn-mark-paid {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: none;
+      background: #10b981;
+      color: white;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-mark-paid:hover {
+      background: #059669;
+    }
+    .btn-mark-paid svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Payments By Guest */
+    .payments-by-guest {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .guest-section {
+      background: #f8f9fa;
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid #e8ecf1;
+    }
+    .guest-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .guest-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .guest-info svg {
+      width: 22px;
+      height: 22px;
+      color: #64748b;
+    }
+    .guest-nickname {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .guest-total-badge {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      background: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid #e8ecf1;
+    }
+    .guest-orders-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 1200px) {
+      .guest-orders-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .guest-orders-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     /* Responsive */
+    @media (max-width: 1024px) {
+      .kanban-board {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .kanban-column {
+        max-height: none;
+      }
+    }
     @media (max-width: 768px) {
       .dashboard-content { padding: 16px; }
-      .orders-grid { grid-template-columns: 1fr; }
       .card-footer { flex-direction: column; gap: 12px; align-items: stretch; }
       .card-actions { justify-content: stretch; }
       .btn { flex: 1; justify-content: center; }
@@ -705,15 +1609,127 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   currentUser = '';
   userInitials = '';
   userMenuOpen = false;
-  activeView: 'orders' | 'permissions' = 'orders';
+  activeView: 'orders' | 'permissions' | 'payments' = 'orders';
   pendingRegistrations: PendingRegistration[] = [];
   loadingPending = false;
+  needsPaymentOrders: Order[] = [];
+  loadingNeedsPayment = false;
+  paymentGroupMode: Map<string, 'all' | 'guest'> = new Map();
+  paymentViewMode: Map<string, 'total' | 'order'> = new Map();
+  paymentMode: 'all' | 'guest' = 'all';
+  private visibilityHandler: (() => void) | null = null;
+  private onlineHandler: (() => void) | null = null;
 
-  navigateTo(view: 'orders' | 'permissions'): void {
+  // Getters for kanban columns
+  get orderedOrders(): Order[] {
+    return this.orders.filter(o => o.status === 'ACTIVE');
+  }
+
+  get inProgressOrders(): Order[] {
+    return this.orders.filter(o => o.status === 'IN_PROGRESS');
+  }
+
+  get readyOrders(): Order[] {
+    return this.orders.filter(o => o.status === 'READY');
+  }
+
+  get groupedPaymentOrders(): { orderPointName: string; orders: Order[] }[] {
+    const groups = new Map<string, Order[]>();
+    for (const order of this.needsPaymentOrders) {
+      const key = order.orderPointName || 'Unknown';
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(order);
+    }
+    return Array.from(groups.entries()).map(([orderPointName, orders]) => ({
+      orderPointName,
+      orders
+    }));
+  }
+
+  getGroupTotal(orders: Order[]): number {
+    return orders.reduce((total, order) => total + this.getOrderTotal(order), 0);
+  }
+
+  getPaymentGroupMode(orderPointName: string): 'all' | 'guest' {
+    return this.paymentGroupMode.get(orderPointName) || 'all';
+  }
+
+  setPaymentGroupMode(orderPointName: string, mode: 'all' | 'guest'): void {
+    this.paymentGroupMode.set(orderPointName, mode);
+  }
+
+  getPaymentViewMode(orderPointName: string): 'total' | 'order' {
+    return this.paymentViewMode.get(orderPointName) || 'order';
+  }
+
+  setPaymentViewMode(orderPointName: string, mode: 'total' | 'order'): void {
+    this.paymentViewMode.set(orderPointName, mode);
+  }
+
+  getOrdersByGuest(orders: Order[]): { nickname: string; orders: Order[]; total: number }[] {
+    const groups = new Map<string, Order[]>();
+    for (const order of orders) {
+      const key = order.nickname || 'Unknown';
+      console.log('[Guest] Order', order.orderNo, 'nickname:', order.nickname);
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(order);
+    }
+    return Array.from(groups.entries()).map(([nickname, guestOrders]) => ({
+      nickname,
+      orders: guestOrders,
+      total: guestOrders.reduce((sum, o) => sum + this.getOrderTotal(o), 0)
+    }));
+  }
+
+  getAggregatedItems(orders: Order[]): { name: string; quantity: number; totalPrice: number }[] {
+    const itemMap = new Map<string, { quantity: number; totalPrice: number }>();
+    for (const order of orders) {
+      for (const item of order.items) {
+        const existing = itemMap.get(item.name);
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.totalPrice += item.price * item.quantity;
+        } else {
+          itemMap.set(item.name, {
+            quantity: item.quantity,
+            totalPrice: item.price * item.quantity
+          });
+        }
+      }
+    }
+    return Array.from(itemMap.entries()).map(([name, data]) => ({
+      name,
+      quantity: data.quantity,
+      totalPrice: data.totalPrice
+    }));
+  }
+
+  navigateTo(view: 'orders' | 'permissions' | 'payments'): void {
     this.activeView = view;
     if (view === 'permissions') {
       this.loadPendingRegistrations();
+    } else if (view === 'payments') {
+      this.loadNeedsPaymentOrders();
     }
+  }
+
+  loadNeedsPaymentOrders(): void {
+    this.loadingNeedsPayment = true;
+    this.http.get<Order[]>(`${environment.apiUrl}/api/orders/events/${this.eventId}/needs-payment`)
+      .subscribe({
+        next: (orders) => {
+          this.needsPaymentOrders = orders;
+          this.loadingNeedsPayment = false;
+        },
+        error: (err) => {
+          console.error('Failed to load orders needing payment:', err);
+          this.loadingNeedsPayment = false;
+        }
+      });
   }
 
   loadPendingRegistrations(): void {
@@ -779,6 +1795,8 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     this.eventId = this.route.snapshot.paramMap.get('eventId') || '';
     if (this.eventId) {
       this.loadOrders();
+      this.loadPendingRegistrations();
+      this.loadNeedsPaymentOrders();
       this.connect();
     }
   }
@@ -822,24 +1840,125 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   }
 
   connect(): void {
+    // Setup wake-up listeners
+    this.setupWakeUpListeners();
+
     this.stompClient = new Client({
       webSocketFactory: () => new SockJS(`${environment.apiUrl}/ws`),
+      // Heartbeat: send every 10s, expect every 10s
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      // Auto reconnect with 2s delay
+      reconnectDelay: 2000,
       onConnect: () => {
         this.connected = true;
         console.log('Connected to WebSocket');
 
-        this.stompClient?.subscribe('/topic/orders', (message) => {
-          console.log('Received new order via WebSocket');
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/orders`, (message) => {
+          console.log('Received order update via WebSocket:', message.body);
           this.loadOrders();
+          this.loadNeedsPaymentOrders();
+        });
+
+        // Subscribe to registration approvals for this event
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/registrations`, (message) => {
+          console.log('Received registration update via WebSocket');
+          const data = JSON.parse(message.body);
+          if (data.type === 'REGISTRATION_APPROVED') {
+            // Remove the approved registration from the pending list
+            this.pendingRegistrations = this.pendingRegistrations.filter(r => r.id !== data.registrationId);
+          }
+        });
+
+        // Subscribe to new validation requests for this event
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/validation-requests`, (message) => {
+          console.log('Received validation request via WebSocket');
+          const data = JSON.parse(message.body);
+          if (data.type === 'VALIDATION_REQUESTED') {
+            // Add the new pending registration to the list
+            const newRegistration: PendingRegistration = {
+              id: data.registrationId,
+              orderPointId: data.orderPointId,
+              orderPointName: data.orderPointName || 'Unknown',
+              validationStatus: 'PENDING',
+              createdAt: new Date().toISOString(),
+              nickname: data.nickname
+            };
+            // Avoid duplicates
+            if (!this.pendingRegistrations.some(r => r.id === data.registrationId)) {
+              this.pendingRegistrations = [...this.pendingRegistrations, newRegistration];
+            }
+          }
+        });
+
+        // Subscribe to payment updates for this event
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/payments`, (message) => {
+          console.log('Received payment update via WebSocket:', message.body);
+          // Reload the needs payment orders when a payment is processed
+          this.loadNeedsPaymentOrders();
         });
       },
       onStompError: (error) => {
         console.error('STOMP error:', error);
         this.connected = false;
+      },
+      onDisconnect: () => {
+        console.log('WebSocket disconnected');
+        this.connected = false;
+      },
+      onWebSocketClose: () => {
+        console.log('WebSocket connection closed');
+        this.connected = false;
       }
     });
 
     this.stompClient.activate();
+  }
+
+  private setupWakeUpListeners(): void {
+    // Listen for visibility changes (device wake up / tab focus)
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[WebSocket] Page became visible, checking connection...');
+        this.reconnectIfNeeded();
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+
+    // Listen for online events (network reconnection)
+    this.onlineHandler = () => {
+      console.log('[WebSocket] Device came online, reconnecting...');
+      this.reconnectIfNeeded();
+    };
+    window.addEventListener('online', this.onlineHandler);
+  }
+
+  private removeWakeUpListeners(): void {
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
+    if (this.onlineHandler) {
+      window.removeEventListener('online', this.onlineHandler);
+      this.onlineHandler = null;
+    }
+  }
+
+  private reconnectIfNeeded(): void {
+    // Force disconnect and reconnect to ensure fresh connection
+    if (this.stompClient) {
+      console.log('[WebSocket] Forcing reconnection...');
+      this.stompClient.deactivate();
+      this.stompClient = null;
+      this.connected = false;
+    }
+    // Small delay before reconnecting, then reload data
+    setTimeout(() => {
+      this.connect();
+      this.loadOrders();
+      this.loadPendingRegistrations();
+      this.loadNeedsPaymentOrders();
+    }, 500);
   }
 
   toggleOrder(orderId: string): void {
@@ -935,28 +2054,16 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   }
 
   completeOrder(order: Order): void {
-    const itemsToComplete = order.items.filter(item => item.status !== 'CANCELLED' && item.status !== 'DONE');
-
-    if (itemsToComplete.length === 0) {
-      this.markOrderReady(order.id);
-      return;
-    }
-
-    let completed = 0;
-    itemsToComplete.forEach(item => {
-      this.http.patch(`${environment.apiUrl}/api/orders/items/${item.id}/status?status=DONE`, {})
-        .subscribe({
-          next: () => {
-            completed++;
-            if (completed === itemsToComplete.length) {
-              this.markOrderReady(order.id);
-            }
-          },
-          error: (err) => {
-            console.error('Failed to complete item:', err);
-          }
-        });
-    });
+    // Single API call to mark all items as DONE and set order to READY
+    this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/complete`, {})
+      .subscribe({
+        next: () => {
+          this.loadOrders();
+        },
+        error: (err) => {
+          console.error('Failed to complete order:', err);
+        }
+      });
   }
 
   markOrderReady(orderId: string): void {
@@ -971,7 +2078,28 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       });
   }
 
+  getTotalPayments(): number {
+    return this.needsPaymentOrders.reduce((total, order) => total + this.getOrderTotal(order), 0);
+  }
+
+  getOrdersByGuestAll(): { nickname: string; orders: Order[]; total: number }[] {
+    return this.getOrdersByGuest(this.needsPaymentOrders);
+  }
+
+  markOrderPaid(orderId: string): void {
+    this.http.patch(`${environment.apiUrl}/api/orders/${orderId}/paid`, {})
+      .subscribe({
+        next: () => {
+          this.needsPaymentOrders = this.needsPaymentOrders.filter(o => o.id !== orderId);
+        },
+        error: (err) => {
+          console.error('Failed to mark order as paid:', err);
+        }
+      });
+  }
+
   ngOnDestroy(): void {
+    this.removeWakeUpListeners();
     if (this.stompClient) {
       this.stompClient.deactivate();
     }

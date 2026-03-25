@@ -30,12 +30,15 @@ export class ClientService {
 
   constructor(private http: HttpClient) {}
 
-  getClients(page: number = 0, size: number = 10, search?: string): Observable<PageResponse<Client>> {
+  getClients(page: number = 0, size: number = 10, search?: string, clientType?: string): Observable<PageResponse<Client>> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('size', size.toString());
     if (search) {
       params = params.set('search', search);
+    }
+    if (clientType) {
+      params = params.set('clientType', clientType);
     }
     return this.http.get<PageResponse<Client>>(this.apiUrl, { params });
   }
