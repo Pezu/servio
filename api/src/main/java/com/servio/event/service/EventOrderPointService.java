@@ -90,6 +90,7 @@ public class EventOrderPointService {
         entity.setPhone(request.getPhone());
         entity.setCredit(request.isCredit());
         entity.setCreditValue(request.isCredit() ? request.getCreditValue() : null);
+        entity.setPaymentMethod(request.getPaymentMethod());
 
         EventOrderPointEntity saved = eventOrderPointRepository.save(entity);
         return eventOrderPointMapper.toDto(saved);

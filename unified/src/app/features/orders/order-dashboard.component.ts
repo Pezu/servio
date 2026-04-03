@@ -579,8 +579,8 @@ interface PendingRegistration {
 
     /* Content */
     .dashboard-content {
-      padding: 24px;
-      background: white;
+      padding: 20px 24px;
+      background: #fff;
       min-height: calc(100vh - 130px);
     }
 
@@ -625,17 +625,16 @@ interface PendingRegistration {
     .kanban-board {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 0;
+      gap: 16px;
       height: calc(100vh - 180px);
     }
     .kanban-column {
       display: flex;
       flex-direction: column;
-      background: white;
+      background: #f8f9fb;
       overflow: hidden;
-    }
-    .kanban-column:not(:last-child) {
-      border-right: 1px solid #d1d5db;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
     }
     .column-header {
       display: flex;
@@ -686,10 +685,10 @@ interface PendingRegistration {
     .column-content {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
     .column-empty {
       text-align: center;
@@ -701,17 +700,16 @@ interface PendingRegistration {
     /* Order Card */
     .order-card {
       background: white;
-      border-radius: 16px;
-      border: 1px solid #d1d5db;
-      transition: all 0.3s ease;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s ease;
       height: auto;
       flex-shrink: 0;
-      width: 85%;
-      margin: 0 auto;
+      width: 100%;
       overflow: hidden;
     }
     .order-card:hover {
-      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
 
     /* Status Colors on Card */
@@ -726,18 +724,19 @@ interface PendingRegistration {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
+      padding: 12px 16px;
       border-bottom: 1px solid #f0f2f5;
-      gap: 12px;
+      gap: 10px;
     }
     .order-number {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 24px;
+      gap: 4px;
+      font-size: 20px;
       font-weight: 700;
       color: #1a1a2e;
       flex-shrink: 0;
+      min-width: 48px;
     }
     .order-number .hash { color: #c0c5ce; font-weight: 400; }
     .locked-icon { display: flex; color: #f59e0b; }
@@ -852,12 +851,12 @@ interface PendingRegistration {
     .order-note svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
 
     /* Items List */
-    .items-list { padding: 12px 0; }
+    .items-list { padding: 8px 0; }
     .item-row {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      padding: 10px 20px;
+      padding: 6px 16px;
       gap: 8px;
       transition: all 0.15s ease;
     }
@@ -930,11 +929,11 @@ interface PendingRegistration {
 
     /* Card Footer */
     .card-footer {
-      padding: 16px 20px;
+      padding: 10px 16px;
       display: flex;
       justify-content: flex-end;
       align-items: center;
-      border-radius: 0 0 16px 16px;
+      border-top: 1px solid #f0f2f5;
     }
 
     .card-actions { display: flex; gap: 8px; }

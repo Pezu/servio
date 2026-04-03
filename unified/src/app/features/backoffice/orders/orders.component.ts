@@ -235,14 +235,17 @@ const CUSTOM_DATE_FORMATS = {
     }
   `,
   styles: [`
-    .card { background: var(--white); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
+    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    .page-header { flex-shrink: 0; }
+    .card { background: var(--white); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
     .card-title { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-dark); }
-    .card-body.p-0 { padding: 0 !important; }
-    .card-footer { padding: 10px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: center; align-items: center; position: relative; }
+    .card-body.p-0 { padding: 0 !important; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .card-footer { padding: 10px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: center; align-items: center; position: relative; flex-shrink: 0; margin-top: auto; }
 
-    .table-responsive { overflow-x: auto; }
+    .table-responsive { overflow: auto; flex: 1; min-height: 0; }
     .table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    .table thead { position: sticky; top: 0; z-index: 1; }
     .table thead th { padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: var(--bg-light); border-bottom: 1px solid var(--border-color); white-space: nowrap; }
     .table tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 13px; }
     .table tbody tr:last-child td { border-bottom: none; }

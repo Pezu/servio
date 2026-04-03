@@ -46,4 +46,7 @@ public class EventOrderPointEntity {
 
     @Column(name = "credit_value", precision = 10, scale = 2)
     private BigDecimal creditValue;
+
+    @Column(name = "payment_method", length = 20)
+    private String paymentMethod;
 }

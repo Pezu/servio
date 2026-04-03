@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -29,4 +31,16 @@ public class OrderPointEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "location_id", nullable = false)
     private LocationEntity location;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "menu_item_id")
+    private MenuItemEntity menuItem;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "order_point_menus",
+            joinColumns = @JoinColumn(name = "order_point_id"),
+            inverseJoinColumns = @JoinColumn(name = "menu_id")
+    )
+    private Set<MenuEntity> menus = new HashSet<>();
 }

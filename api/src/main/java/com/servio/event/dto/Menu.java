@@ -4,19 +4,14 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
 import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderPoint {
+public class Menu {
     private UUID id;
     private String name;
     private UUID locationId;
-    private boolean payLater;
-    private UUID menuItemId;
-    private String menuItemName;
-    private List<UUID> menuIds;
-    private List<String> menuNames;
+    private String locationName;
 }
