@@ -5,8 +5,7 @@ import lombok.Data;
 import java.util.UUID;
 
 @Data
-public class CreateOrderPointRequest {
+public class UpdateMenuRequest {
     private String name;
-    private boolean payLater;
-    private UUID menuItemId;
+    private UUID locationId;
 }

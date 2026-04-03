@@ -14,6 +14,7 @@
     "MENU": "Menu",
     "EVENTS": "Events",
     "REPORTS": "Reports",
+    "MENU_MANAGEMENT": "Menus",
     "LOGOUT": "Logout"
   },
   "COMMON": {
@@ -104,7 +105,8 @@
     "NO_ORDER_POINTS": "No order points found",
     "SELECT_LOCATION": "Select a location to view order points",
     "ENTER_NAME": "Enter order point name",
-    "PAY_LATER": "Pay Later"
+    "PAY_LATER": "Pay Later",
+    "MENU": "Menu"
   },
   "EVENTS": {
     "TITLE": "Events",
@@ -131,7 +133,13 @@
     "PREPAID": "Prepaid",
     "CLIENT": "Client",
     "CREDIT": "Credit",
-    "CREDIT_VALUE": "Credit Value"
+    "CREDIT_VALUE": "Credit Value",
+    "PAYMENT_METHOD": "Payment Method",
+    "PAYMENT_UNPAID": "Unpaid",
+    "PAYMENT_CASH": "Cash",
+    "PAYMENT_CARD": "Card",
+    "PAYMENT_ONLINE": "Online",
+    "PAYMENT_PAID": "Paid"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",
@@ -170,7 +178,11 @@
     "ALLERGENS": "Allergens",
     "NO_ALLERGENS": "No allergens available",
     "VAT_TYPE": "VAT Type",
-    "SELECT_VAT_TYPE": "Select VAT type..."
+    "SELECT_VAT_TYPE": "Select VAT type...",
+    "ITEMS": "Menu Items",
+    "NO_ITEMS": "No items yet. Add a category to get started.",
+    "PRICE": "Price",
+    "DESCRIPTION": "Description"
   },
   "ORDERS": {
     "TITLE": "Orders",
@@ -243,6 +255,16 @@
     "SIGNING_IN": "Signing in...",
     "ENTER_USERNAME": "Enter username",
     "ENTER_PASSWORD": "Enter password"
+  },
+  "MENUS": {
+    "TITLE": "Menus",
+    "ADD_MENU": "Add Menu",
+    "EDIT_MENU": "Edit Menu",
+    "NO_MENUS": "No menus found",
+    "SELECT_LOCATION": "Select a location to view menus",
+    "ENTER_NAME": "Enter menu name",
+    "MENU_NAME": "Menu Name",
+    "DELETE_CONFIRM": "Are you sure you want to delete this menu?"
   },
   "LANGUAGE": {
     "SELECT": "Language",

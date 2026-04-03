@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -48,6 +49,14 @@ public class OrderPointController {
             @PathVariable UUID id,
             @RequestBody UpdateOrderPointRequest request) {
         OrderPoint response = orderPointService.updateOrderPoint(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}/menus")
+    public ResponseEntity<OrderPoint> assignMenus(
+            @PathVariable UUID id,
+            @RequestBody List<UUID> menuIds) {
+        OrderPoint response = orderPointService.assignMenus(id, menuIds);
         return ResponseEntity.ok(response);
     }
 }

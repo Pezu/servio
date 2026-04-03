@@ -15,6 +15,7 @@ export interface EventOrderPoint {
   phone?: string;
   credit: boolean;
   creditValue?: number;
+  paymentMethod?: string;
 }
 
 @Injectable({

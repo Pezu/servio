@@ -14,6 +14,7 @@
     "MENU": "Meniu",
     "EVENTS": "Evenimente",
     "REPORTS": "Rapoarte",
+    "MENU_MANAGEMENT": "Meniuri",
     "LOGOUT": "Deconectare"
   },
   "COMMON": {
@@ -104,7 +105,8 @@
     "NO_ORDER_POINTS": "Nu s-au găsit puncte de comandă",
     "SELECT_LOCATION": "Selectează o locație pentru a vedea punctele de comandă",
     "ENTER_NAME": "Introduceți numele punctului de comandă",
-    "PAY_LATER": "Plătește Mai Târziu"
+    "PAY_LATER": "Plătește Mai Târziu",
+    "MENU": "Meniu"
   },
   "EVENTS": {
     "TITLE": "Evenimente",
@@ -131,7 +133,13 @@
     "PREPAID": "Preplătit",
     "CLIENT": "Client",
     "CREDIT": "Credit",
-    "CREDIT_VALUE": "Valoare Credit"
+    "CREDIT_VALUE": "Valoare Credit",
+    "PAYMENT_METHOD": "Metoda de Plată",
+    "PAYMENT_UNPAID": "Neplătit",
+    "PAYMENT_CASH": "Cash",
+    "PAYMENT_CARD": "Card",
+    "PAYMENT_ONLINE": "Online",
+    "PAYMENT_PAID": "Plătit"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",
@@ -170,7 +178,11 @@
     "ALLERGENS": "Alergeni",
     "NO_ALLERGENS": "Nu există alergeni disponibili",
     "VAT_TYPE": "Tip TVA",
-    "SELECT_VAT_TYPE": "Selectează tipul TVA..."
+    "SELECT_VAT_TYPE": "Selectează tipul TVA...",
+    "ITEMS": "Elemente Meniu",
+    "NO_ITEMS": "Niciun element. Adaugă o categorie pentru a începe.",
+    "PRICE": "Preț",
+    "DESCRIPTION": "Descriere"
   },
   "ORDERS": {
     "TITLE": "Comenzi",
@@ -243,6 +255,16 @@
     "SIGNING_IN": "Se conectează...",
     "ENTER_USERNAME": "Introduceți numele de utilizator",
     "ENTER_PASSWORD": "Introduceți parola"
+  },
+  "MENUS": {
+    "TITLE": "Meniuri",
+    "ADD_MENU": "Adaugă Meniu",
+    "EDIT_MENU": "Editează Meniu",
+    "NO_MENUS": "Nu s-au găsit meniuri",
+    "SELECT_LOCATION": "Selectează o locație pentru a vedea meniurile",
+    "ENTER_NAME": "Introduceți numele meniului",
+    "MENU_NAME": "Numele Meniului",
+    "DELETE_CONFIRM": "Sigur doriți să ștergeți acest meniu?"
   },
   "LANGUAGE": {
     "SELECT": "Limbă",

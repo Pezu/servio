@@ -345,29 +345,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 </div>
               </div>
 
-              <!-- Payment Types Selection -->
-              <div class="form-group">
-                <label>{{ 'EVENTS.PAYMENT_TYPES' | translate }}</label>
-                <div class="multi-select-wrapper payment-types-dropdown" [class.open]="paymentTypesDropdownOpen">
-                  <div class="multi-select-input" (click)="togglePaymentTypesDropdown(); $event.stopPropagation()">
-                    <span class="selected-text" *ngIf="getSelectedPaymentTypesText()">{{ getSelectedPaymentTypesText() }}</span>
-                    <span class="placeholder" *ngIf="!getSelectedPaymentTypesText()">{{ 'EVENTS.SELECT_PAYMENT_TYPES' | translate }}</span>
-                    <span class="dropdown-arrow">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div class="multi-select-dropdown open-upward" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
-                    <div *ngIf="loadingPaymentTypes" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                    <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
-                    <label *ngFor="let pt of paymentTypes" class="checkbox-option">
-                      <input type="checkbox" [checked]="eventFormData.paymentTypeIds.includes(pt.id!)" (change)="togglePaymentType(pt.id!, $event)">
-                      <span class="checkbox-label-text">{{ pt.name }}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
             }
 
             <!-- Tables Tab -->
@@ -387,7 +364,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <thead>
                       <tr>
                         <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
-                        <th>{{ 'EVENTS.PREPAID' | translate }}</th>
+                        <th>Cash</th>
+                        <th>Card</th>
+                        <th>Online</th>
                         <th>{{ 'EVENTS.CLIENT' | translate }}</th>
                         <th>{{ 'COMMON.EMAIL' | translate }}</th>
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
@@ -398,7 +377,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="7">
+                          <td colspan="9">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -413,43 +392,29 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <td class="location-cell">
                                 <span class="order-point-name">{{ table.orderPointName }}</span>
                               </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'prepaid', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'prepaid') {
-                                  <input type="number" class="inline-input prepaid-input" [(ngModel)]="table.prepaid" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'clientName')" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.prepaid || '' }}</span>
-                                }
+                              <td class="radio-cell">
+                                <input type="radio" [name]="'pm_' + table.orderPointId" value="CASH" [(ngModel)]="table.paymentMethod" (change)="onCellBlur(table)" class="payment-radio">
                               </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'clientName', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'clientName') {
-                                  <input type="text" class="inline-input" [(ngModel)]="table.clientName" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'email')" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.clientName || '' }}</span>
-                                }
+                              <td class="radio-cell">
+                                <input type="radio" [name]="'pm_' + table.orderPointId" value="CARD" [(ngModel)]="table.paymentMethod" (change)="onCellBlur(table)" class="payment-radio">
                               </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'email', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'email') {
-                                  <input type="email" class="inline-input" [(ngModel)]="table.email" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'phone')" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.email || '' }}</span>
-                                }
+                              <td class="radio-cell">
+                                <input type="radio" [name]="'pm_' + table.orderPointId" value="ONLINE" [(ngModel)]="table.paymentMethod" (change)="onCellBlur(table)" class="payment-radio">
                               </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'phone', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'phone') {
-                                  <input type="tel" class="inline-input" [(ngModel)]="table.phone" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, table.credit ? 'creditValue' : null)" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.phone || '' }}</span>
-                                }
+                              <td>
+                                <input type="text" class="inline-input" [(ngModel)]="table.clientName" (blur)="onCellBlur(table)" [placeholder]="'COMMON.NAME' | translate">
+                              </td>
+                              <td>
+                                <input type="email" class="inline-input" [(ngModel)]="table.email" (blur)="onCellBlur(table)" placeholder="Email">
+                              </td>
+                              <td>
+                                <input type="tel" class="inline-input" [(ngModel)]="table.phone" (blur)="onCellBlur(table)" [placeholder]="'COMMON.PHONE' | translate">
                               </td>
                               <td class="checkbox-cell">
                                 <input type="checkbox" class="credit-checkbox" [(ngModel)]="table.credit" (change)="onCreditChange(table)">
                               </td>
-                              <td class="editable-cell" [class.disabled-cell]="!table.credit" (click)="table.credit && startEditing(table.orderPointId, 'creditValue', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'creditValue') {
-                                  <input type="number" class="inline-input credit-value-input" [(ngModel)]="table.creditValue" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, null)" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.creditValue || '' }}</span>
-                                }
+                              <td>
+                                <input type="number" class="inline-input credit-value-input" [(ngModel)]="table.creditValue" step="0.01" min="0" [disabled]="!table.credit" (blur)="onCellBlur(table)" placeholder="0.00">
                               </td>
                             </tr>
                           }
@@ -597,7 +562,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: white; border-radius: 12px; width: 100%; max-width: 680px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; }
-    .modal.modal-lg { max-width: 800px; }
+    .modal.modal-lg { max-width: 1100px; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: none; flex-shrink: 0; }
     .modal-tabs { display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #e2e8f0; }
     .modal-tab { padding: 12px 20px; border: none; background: none; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; position: relative; transition: color 0.2s ease; }
@@ -616,16 +581,20 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .empty-tables-message svg { width: 48px; height: 48px; opacity: 0.5; }
     .empty-tables-message span { font-size: 14px; }
     .tables-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .tables-table th, .tables-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
-    .tables-table th { font-size: 12px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); white-space: nowrap; }
-    .tables-table th:nth-child(1) { width: 20%; }
-    .tables-table th:nth-child(2) { width: 10%; }
-    .tables-table th:nth-child(3) { width: 15%; }
-    .tables-table th:nth-child(4) { width: 15%; }
-    .tables-table th:nth-child(5) { width: 12%; }
-    .tables-table th:nth-child(6) { width: 10%; text-align: center; }
-    .tables-table th:nth-child(7) { width: 18%; }
+    .tables-table th, .tables-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+    .tables-table th { font-size: 11px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.3px; }
+    .tables-table th:nth-child(1) { width: 15%; }
+    .tables-table th:nth-child(2) { width: 5%; text-align: center; }
+    .tables-table th:nth-child(3) { width: 5%; text-align: center; }
+    .tables-table th:nth-child(4) { width: 6%; text-align: center; }
+    .tables-table th:nth-child(5) { width: 15%; }
+    .tables-table th:nth-child(6) { width: 18%; }
+    .tables-table th:nth-child(7) { width: 12%; }
+    .tables-table th:nth-child(8) { width: 6%; text-align: center; }
+    .tables-table th:nth-child(9) { width: 12%; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
+    .radio-cell { text-align: center !important; }
+    .payment-radio { width: 16px; height: 16px; accent-color: #3b82f6; cursor: pointer; }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
     .tables-table .parent-row:hover { background: #e2e8f0; }
     .tables-table .parent-row td { padding: 10px 12px; }
@@ -640,8 +609,11 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .editable-cell:hover { background: rgba(59, 130, 246, 0.05); }
     .cell-value { display: block; padding: 6px 10px; border-radius: 6px; height: 32px; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .editable-cell:hover .cell-value { background: rgba(59, 130, 246, 0.08); }
-    .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--primary); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; box-shadow: 0 0 0 2px var(--primary-light); height: 32px; box-sizing: border-box; }
-    .inline-input:focus { outline: none; }
+    .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; height: 32px; box-sizing: border-box; }
+    .inline-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+    .inline-input:disabled { background: var(--bg-light); color: var(--text-muted); cursor: not-allowed; }
+    .inline-select { width: 100%; padding: 5px 9px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; height: 32px; box-sizing: border-box; cursor: pointer; }
+    .inline-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
     .prepaid-input { text-align: right; }
     .credit-value-input { text-align: right; }
     .disabled-cell { cursor: not-allowed; opacity: 0.5; }

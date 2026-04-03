@@ -13,4 +13,6 @@ public interface MenuItemRepository extends JpaRepository<MenuItemEntity, UUID> 
     List<MenuItemEntity> findByParentId(UUID parentId);
     List<MenuItemEntity> findByLocationIdAndParentIsNull(UUID locationId);
     void deleteByLocationId(UUID locationId);
+    List<MenuItemEntity> findByMenuIdOrderBySortOrder(UUID menuId);
+    void deleteByMenuId(UUID menuId);
 }

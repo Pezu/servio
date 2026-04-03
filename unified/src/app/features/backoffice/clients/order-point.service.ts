@@ -8,6 +8,10 @@ export interface OrderPoint {
   name: string;
   locationId: string;
   payLater: boolean;
+  menuItemId?: string;
+  menuItemName?: string;
+  menuIds?: string[];
+  menuNames?: string[];
 }
 
 export interface PageResponse<T> {
@@ -37,11 +41,15 @@ export class OrderPointService {
     return this.http.get<OrderPoint>(`${this.apiUrl}/${id}`);
   }
 
-  createOrderPoint(locationId: string, name: string, payLater: boolean = false): Observable<OrderPoint> {
-    return this.http.post<OrderPoint>(`${this.apiUrl}/location/${locationId}`, { name, payLater });
+  createOrderPoint(locationId: string, name: string, payLater: boolean = false, menuItemId?: string): Observable<OrderPoint> {
+    return this.http.post<OrderPoint>(`${this.apiUrl}/location/${locationId}`, { name, payLater, menuItemId });
   }
 
-  updateOrderPoint(id: string, name: string, locationId: string, payLater: boolean = false): Observable<OrderPoint> {
-    return this.http.put<OrderPoint>(`${this.apiUrl}/${id}`, { name, locationId, payLater });
+  updateOrderPoint(id: string, name: string, locationId: string, payLater: boolean = false, menuItemId?: string): Observable<OrderPoint> {
+    return this.http.put<OrderPoint>(`${this.apiUrl}/${id}`, { name, locationId, payLater, menuItemId });
+  }
+
+  assignMenus(orderPointId: string, menuIds: string[]): Observable<OrderPoint> {
+    return this.http.put<OrderPoint>(`${this.apiUrl}/${orderPointId}/menus`, menuIds);
   }
 }

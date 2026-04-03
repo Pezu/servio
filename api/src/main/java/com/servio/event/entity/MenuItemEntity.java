@@ -28,6 +28,10 @@ public class MenuItemEntity {
     private LocationEntity location;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "menu_id")
+    private MenuEntity menu;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private MenuItemEntity parent;
 

@@ -3,8 +3,10 @@ package com.servio.event.service;
 import com.servio.event.dto.MenuItem;
 import com.servio.event.entity.AllergenEntity;
 import com.servio.event.entity.LocationEntity;
+import com.servio.event.entity.MenuEntity;
 import com.servio.event.entity.MenuItemEntity;
 import com.servio.event.entity.VatTypeEntity;
+import com.servio.event.repository.MenuRepository;
 import com.servio.event.mapper.MenuItemMapper;
 import com.servio.event.repository.AllergenRepository;
 import com.servio.event.repository.LocationRepository;
@@ -24,6 +26,7 @@ import java.util.stream.Stream;
 public class MenuService {
 
     private final MenuItemRepository menuItemRepository;
+    private final MenuRepository menuRepository;
     private final LocationRepository locationRepository;
     private final AllergenRepository allergenRepository;
     private final VatTypeRepository vatTypeRepository;
@@ -136,6 +139,91 @@ public class MenuService {
         List<MenuItem> children = item.getChildren() != null ? item.getChildren() : Collections.emptyList();
         for (int i = 0; i < children.size(); i++) {
             saveMenuItemRecursively(children.get(i), savedEntity, location, existingMap, i);
+        }
+    }
+
+    public List<MenuItem> getMenuItemTree(UUID menuId) {
+        List<MenuItemEntity> allItems = menuItemRepository.findByMenuIdOrderBySortOrder(menuId);
+
+        Map<UUID, MenuItem> dtoMap = allItems.stream()
+                .collect(Collectors.toMap(MenuItemEntity::getId, menuItemMapper::toDto));
+
+        allItems.stream()
+                .filter(entity -> Objects.nonNull(entity.getParent()))
+                .forEach(entity -> Optional.ofNullable(dtoMap.get(entity.getParent().getId()))
+                        .ifPresent(parentDto -> parentDto.getChildren().add(dtoMap.get(entity.getId()))));
+
+        return allItems.stream()
+                .filter(mi -> Objects.isNull(mi.getParent()))
+                .map(mi -> dtoMap.get(mi.getId()))
+                .toList();
+    }
+
+    @Transactional
+    public List<MenuItem> saveMenuItemTree(UUID menuId, List<MenuItem> menuItems) {
+        MenuEntity menu = menuRepository.findById(menuId)
+                .orElseThrow(() -> new RuntimeException("Menu not found: " + menuId));
+        LocationEntity location = menu.getLocation();
+
+        Map<UUID, MenuItemEntity> existingMap = menuItemRepository.findByMenuIdOrderBySortOrder(menuId).stream()
+                .collect(Collectors.toMap(MenuItemEntity::getId, item -> item));
+
+        Set<UUID> incomingIds = collectIds(menuItems);
+        existingMap.values().stream()
+                .filter(existing -> !incomingIds.contains(existing.getId()))
+                .forEach(menuItemRepository::delete);
+
+        List<MenuItem> items = Optional.ofNullable(menuItems).orElse(Collections.emptyList());
+        for (int i = 0; i < items.size(); i++) {
+            saveMenuItemForMenu(items.get(i), null, location, menu, existingMap, i);
+        }
+
+        return getMenuItemTree(menuId);
+    }
+
+    private void saveMenuItemForMenu(MenuItem item, MenuItemEntity parent, LocationEntity location, MenuEntity menu, Map<UUID, MenuItemEntity> existingMap, int sortOrder) {
+        MenuItemEntity entity = Optional.ofNullable(item.getId())
+                .map(existingMap::get)
+                .map(existing -> {
+                    existing.setName(item.getName());
+                    existing.setOrderable(Optional.ofNullable(item.getOrderable()).orElse(true));
+                    existing.setPrice(item.getPrice());
+                    existing.setDescription(item.getDescription());
+                    existing.setParent(parent);
+                    existing.setSortOrder(sortOrder);
+                    return existing;
+                })
+                .orElseGet(() -> {
+                    MenuItemEntity newEntity = new MenuItemEntity();
+                    newEntity.setName(item.getName());
+                    newEntity.setOrderable(Optional.ofNullable(item.getOrderable()).orElse(true));
+                    newEntity.setPrice(item.getPrice());
+                    newEntity.setDescription(item.getDescription());
+                    newEntity.setLocation(location);
+                    newEntity.setMenu(menu);
+                    newEntity.setParent(parent);
+                    newEntity.setSortOrder(sortOrder);
+                    return newEntity;
+                });
+
+        if (Boolean.TRUE.equals(item.getOrderable()) && item.getAllergenIds() != null && !item.getAllergenIds().isEmpty()) {
+            List<AllergenEntity> allergenList = allergenRepository.findAllById(item.getAllergenIds());
+            entity.setAllergens(new HashSet<>(allergenList));
+        } else {
+            entity.setAllergens(new HashSet<>());
+        }
+
+        if (item.getVatTypeId() != null) {
+            entity.setVatType(vatTypeRepository.findById(item.getVatTypeId()).orElse(null));
+        } else {
+            entity.setVatType(null);
+        }
+
+        MenuItemEntity savedEntity = menuItemRepository.save(entity);
+
+        List<MenuItem> children = item.getChildren() != null ? item.getChildren() : Collections.emptyList();
+        for (int i = 0; i < children.size(); i++) {
+            saveMenuItemForMenu(children.get(i), savedEntity, location, menu, existingMap, i);
         }
     }
 

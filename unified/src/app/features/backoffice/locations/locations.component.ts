@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
 import { OrderPointService, OrderPoint } from '../clients/order-point.service';
+import { MenuManagementService, Menu } from '../clients/menu-management.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 @Component({
@@ -170,17 +171,18 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <thead>
                     <tr>
                       <th>{{ 'COMMON.NAME' | translate }}</th>
+                      <th class="col-menu text-center">Menu</th>
                       <th class="text-center col-pay-later">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</th>
-                      <th></th>
+                      <th class="col-actions"></th>
                     </tr>
                   </thead>
                   <tbody>
                     @if (!selectedLocation) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
+                      <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
                     } @else if (loadingOrderPoints) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (orderPoints.length === 0) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
+                      <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
                     } @else {
                       @for (orderPoint of orderPoints; track orderPoint.id) {
                         <tr>
@@ -195,13 +197,45 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <div><a href="javascript:void(0);" class="d-block fw-semibold">{{ orderPoint.name }}</a></div>
                             </div>
                           </td>
+                          <td class="col-menu">
+                            <div class="menu-chips-wrapper">
+                              <div class="menu-chips">
+                                @for (menuName of orderPoint.menuNames; track menuName; let i = $index) {
+                                  <span class="menu-chip" (click)="openEditMenuModal(orderPoint, orderPoint.menuIds![i], menuName)">
+                                    {{ menuName }}
+                                    <button class="chip-remove" (click)="removeMenu(orderPoint, orderPoint.menuIds![i]); $event.stopPropagation()">&times;</button>
+                                  </span>
+                                }
+                              </div>
+                              <div class="menu-actions">
+                                <div class="menu-dropdown-wrapper">
+                                  <button class="btn-add-menu" (click)="toggleMenuDropdown(orderPoint.id!); $event.stopPropagation()" title="Add menu">+</button>
+                                  @if (menuDropdownOpenFor === orderPoint.id) {
+                                    <div class="menu-dropdown" (click)="$event.stopPropagation()">
+                                      @for (menu of getAvailableMenus(orderPoint); track menu.id) {
+                                        <div class="menu-dropdown-item" (click)="addMenuToOrderPoint(orderPoint, menu.id!)">{{ menu.name }}</div>
+                                      }
+                                      @if (getAvailableMenus(orderPoint).length === 0) {
+                                        <div class="menu-dropdown-empty">{{ 'MENUS.NO_MENUS' | translate }}</div>
+                                      }
+                                      <div class="menu-dropdown-divider"></div>
+                                      <div class="menu-dropdown-item menu-dropdown-create" (click)="openNewMenuModal(orderPoint)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                                        {{ 'MENUS.ADD_MENU' | translate }}
+                                      </div>
+                                    </div>
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                          </td>
                           <td class="text-center col-pay-later">
                             <input type="checkbox"
                                    class="table-checkbox"
                                    [checked]="orderPoint.payLater"
                                    (change)="togglePayLater(orderPoint)">
                           </td>
-                          <td class="text-end">
+                          <td class="text-end col-actions">
                             <button class="btn-icon-action btn-icon-action-sm" (click)="editOrderPoint(orderPoint)" [title]="'ORDER_POINTS.EDIT_ORDER_POINT' | translate">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -289,6 +323,117 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <button class="btn btn-primary" (click)="saveOrderPoint()" [disabled]="!orderPointForm.name || savingOrderPoint">
               {{ savingOrderPoint ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
             </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Menu Editor Modal -->
+    @if (showNewMenuModal) {
+      <div class="modal-overlay" (mousedown)="closeNewMenuModal()">
+        <div class="modal modal-menu-editor" (mousedown)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{ editingMenuId ? ('MENUS.EDIT_MENU' | translate) : ('MENUS.ADD_MENU' | translate) }}</h3>
+            <button class="close-btn" (click)="closeNewMenuModal()" title="Close">&times;</button>
+          </div>
+          <div class="modal-body modal-body-menu">
+            <!-- Menu Name -->
+            <div class="form-group">
+              <label for="newMenuName">{{ 'MENUS.MENU_NAME' | translate }}</label>
+              <input type="text" id="newMenuName" class="form-control" [(ngModel)]="newMenuName" [placeholder]="'MENUS.ENTER_NAME' | translate">
+            </div>
+
+            <!-- Menu Items Tree -->
+            <div class="menu-tree-section">
+              <div class="menu-tree-header">
+                <span class="menu-tree-title">{{ 'MENU.ITEMS' | translate }}</span>
+                <div class="menu-tree-actions">
+                  <button class="btn-sm btn-outline" (click)="addCategory()">+ {{ 'MENU.ADD_CATEGORY' | translate }}</button>
+                </div>
+              </div>
+              <div class="menu-tree-content">
+                @if (menuEditorItems.length === 0) {
+                  <div class="menu-tree-empty">{{ 'MENU.NO_ITEMS' | translate }}</div>
+                }
+                <ng-container *ngTemplateOutlet="menuTreeTpl; context: { items: menuEditorItems, depth: 0 }"></ng-container>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeNewMenuModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button class="btn btn-primary" (click)="saveMenuWithItems()" [disabled]="!newMenuName.trim() || savingMenu">
+              {{ savingMenu ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Menu Tree Template -->
+    <ng-template #menuTreeTpl let-items="items" let-depth="depth">
+      @for (item of items; track item.id || item.tempId) {
+        <div class="tree-row" [style.padding-left.px]="depth * 24 + 12">
+          <div class="tree-item" [class.tree-category]="!item.orderable" [class.tree-product]="item.orderable">
+            <div class="tree-item-info">
+              @if (!item.orderable && item.children?.length) {
+                <button class="tree-toggle" (click)="toggleTreeExpand(item)">
+                  <svg [class.rotated]="isTreeExpanded(item)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+              } @else {
+                <span class="tree-toggle-placeholder"></span>
+              }
+              <span class="tree-item-name">{{ item.name }}</span>
+              @if (item.orderable && item.price != null) {
+                <span class="tree-item-price">{{ item.price }} RON</span>
+              }
+            </div>
+            <div class="tree-item-actions">
+              @if (!item.orderable) {
+                <button class="btn-xs" (click)="addSubcategory(item)">+ Sub</button>
+                <button class="btn-xs" (click)="addItem(item)">+ Item</button>
+              }
+              <button class="btn-xs btn-xs-edit" (click)="editMenuItem(item)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+              <button class="btn-xs btn-xs-delete" (click)="deleteMenuItem(item, items)">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        @if (!item.orderable && isTreeExpanded(item) && item.children?.length) {
+          <ng-container *ngTemplateOutlet="menuTreeTpl; context: { items: item.children, depth: depth + 1 }"></ng-container>
+        }
+      }
+    </ng-template>
+
+    <!-- Menu Item Edit Modal -->
+    @if (showMenuItemModal) {
+      <div class="modal-overlay modal-overlay-top" (mousedown)="closeMenuItemModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{ editingMenuItemRef ? 'Edit Item' : 'Add Item' }}</h3>
+            <button class="close-btn" (click)="closeMenuItemModal()" title="Close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>{{ 'COMMON.NAME' | translate }}</label>
+              <input type="text" class="form-control" [(ngModel)]="menuItemForm.name" placeholder="Name">
+            </div>
+            @if (menuItemForm.orderable) {
+              <div class="form-group">
+                <label>{{ 'MENU.PRICE' | translate }}</label>
+                <input type="number" class="form-control" [(ngModel)]="menuItemForm.price" step="0.01" min="0" placeholder="0.00">
+              </div>
+            }
+            <div class="form-group">
+              <label>{{ 'MENU.DESCRIPTION' | translate }}</label>
+              <input type="text" class="form-control" [(ngModel)]="menuItemForm.description" placeholder="Description">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeMenuItemModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button class="btn btn-primary" (click)="saveMenuItem()" [disabled]="!menuItemForm.name.trim()">{{ 'COMMON.SAVE' | translate }}</button>
           </div>
         </div>
       </div>
@@ -891,7 +1036,163 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     }
     .col-pay-later {
       width: 100px;
+      vertical-align: middle !important;
     }
+    .col-menu {
+      width: 280px;
+      vertical-align: middle !important;
+    }
+    .col-actions {
+      width: 50px;
+      vertical-align: middle !important;
+    }
+
+    /* Menu chips */
+    .menu-chips-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .menu-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+    .menu-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: #eff6ff;
+      color: #3b82f6;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .menu-chip:hover {
+      background: #dbeafe;
+    }
+    .chip-remove {
+      border: none;
+      background: none;
+      color: #93c5fd;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      margin-left: 2px;
+    }
+    .chip-remove:hover {
+      color: #2563eb;
+    }
+    .menu-actions {
+      flex-shrink: 0;
+    }
+    .menu-dropdown-wrapper {
+      position: relative;
+    }
+    .btn-add-menu {
+      width: 24px;
+      height: 24px;
+      border: 1px dashed #cbd5e1;
+      background: transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 16px;
+      line-height: 1;
+      transition: all 0.15s ease;
+    }
+    .btn-add-menu:hover {
+      border-color: #3b82f6;
+      color: #3b82f6;
+      background: #eff6ff;
+    }
+    .menu-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 200px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      z-index: 100;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .menu-dropdown-item {
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .menu-dropdown-item:hover {
+      background: #f8fafc;
+    }
+    .menu-dropdown-create {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #3b82f6;
+      font-weight: 500;
+    }
+    .menu-dropdown-create svg {
+      width: 14px;
+      height: 14px;
+    }
+    .menu-dropdown-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 4px 0;
+    }
+    .menu-dropdown-empty {
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    /* Menu Editor Modal */
+    .modal-menu-editor { max-width: 720px; max-height: 85vh; display: flex; flex-direction: column; }
+    .modal-body-menu { overflow-y: auto; flex: 1; min-height: 0; }
+    .modal-overlay-top { z-index: 1100; }
+    .menu-tree-section { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+    .menu-tree-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .menu-tree-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+    .menu-tree-actions { display: flex; gap: 6px; }
+    .menu-tree-content { max-height: 400px; overflow-y: auto; }
+    .menu-tree-empty { padding: 24px; text-align: center; color: #94a3b8; font-size: 13px; }
+    .btn-sm { padding: 4px 10px; border: 1px solid #e2e8f0; background: white; border-radius: 6px; font-size: 12px; font-weight: 500; color: #374151; cursor: pointer; transition: all 0.15s ease; }
+    .btn-sm:hover { border-color: #3b82f6; color: #3b82f6; }
+    .btn-outline { background: transparent; }
+
+    /* Tree rows */
+    .tree-row { border-bottom: 1px solid #f1f5f9; }
+    .tree-row:last-child { border-bottom: none; }
+    .tree-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 8px 0; gap: 8px; }
+    .tree-item-info { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+    .tree-item-name { font-size: 13px; font-weight: 500; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tree-category .tree-item-name { font-weight: 600; }
+    .tree-item-price { font-size: 12px; color: #64748b; font-weight: 500; flex-shrink: 0; }
+    .tree-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .tree-toggle { border: none; background: none; cursor: pointer; padding: 0; display: flex; color: #94a3b8; }
+    .tree-toggle svg { width: 14px; height: 14px; transition: transform 0.2s ease; }
+    .tree-toggle svg.rotated { transform: rotate(90deg); }
+    .tree-toggle-placeholder { width: 14px; height: 14px; flex-shrink: 0; }
+    .btn-xs { padding: 2px 6px; border: 1px solid #e2e8f0; background: white; border-radius: 4px; font-size: 11px; color: #64748b; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.15s ease; }
+    .btn-xs:hover { border-color: #cbd5e1; color: #374151; }
+    .btn-xs svg { width: 12px; height: 12px; }
+    .btn-xs-edit:hover { border-color: #3b82f6; color: #3b82f6; }
+    .btn-xs-delete:hover { border-color: #fd6a6a; color: #fd6a6a; }
   `]
 })
 export class LocationsComponent implements OnInit {
@@ -920,6 +1221,25 @@ export class LocationsComponent implements OnInit {
   orderPointTotalPages = 0;
   orderPointPageSize = 20;
 
+  // Menus for selected location
+  locationMenus: Menu[] = [];
+  menuDropdownOpenFor: string | null = null;
+
+  // Menu Editor Modal
+  showNewMenuModal = false;
+  newMenuName = '';
+  savingMenu = false;
+  newMenuForOrderPoint: OrderPoint | null = null;
+  editingMenuId: string | null = null;
+  menuEditorItems: any[] = [];
+  expandedTreeNodes = new Set<string>();
+  tempIdCounter = 0;
+
+  // Menu Item Edit Modal
+  showMenuItemModal = false;
+  editingMenuItemRef: any = null;
+  menuItemForm = { name: '', orderable: true, price: null as number | null, description: '' };
+
   // Location Modal
   showLocationModal = false;
   editingLocation: Location | null = null;
@@ -939,6 +1259,7 @@ export class LocationsComponent implements OnInit {
     private clientService: ClientService,
     private locationService: LocationService,
     private orderPointService: OrderPointService,
+    private menuManagementService: MenuManagementService,
     private elementRef: ElementRef
   ) {}
 
@@ -975,6 +1296,14 @@ export class LocationsComponent implements OnInit {
     const selector = this.elementRef.nativeElement.querySelector('.selector-wrapper');
     if (selector && !selector.contains(event.target)) {
       this.dropdownOpen = false;
+    }
+    // Close menu dropdown on outside click
+    const menuDropdown = this.elementRef.nativeElement.querySelector('.menu-dropdown');
+    if (this.menuDropdownOpenFor && (!menuDropdown || !menuDropdown.contains(event.target))) {
+      const addBtn = (event.target as HTMLElement).closest('.btn-add-menu');
+      if (!addBtn) {
+        this.menuDropdownOpenFor = null;
+      }
     }
   }
 
@@ -1081,6 +1410,7 @@ export class LocationsComponent implements OnInit {
     this.selectedLocation = location;
     this.orderPointCurrentPage = 0;
     this.loadOrderPoints();
+    this.loadLocationMenus();
   }
 
   // Order Point Methods
@@ -1106,6 +1436,197 @@ export class LocationsComponent implements OnInit {
     if (page < 0 || page >= this.orderPointTotalPages) return;
     this.orderPointCurrentPage = page;
     this.loadOrderPoints();
+  }
+
+  loadLocationMenus(): void {
+    if (!this.selectedLocation?.id) {
+      this.locationMenus = [];
+      return;
+    }
+    this.menuManagementService.getMenusByLocationId(this.selectedLocation.id, 0, 100).subscribe({
+      next: (response) => {
+        this.locationMenus = response.content;
+      },
+      error: () => {
+        this.locationMenus = [];
+      }
+    });
+  }
+
+  toggleMenuDropdown(orderPointId: string): void {
+    this.menuDropdownOpenFor = this.menuDropdownOpenFor === orderPointId ? null : orderPointId;
+  }
+
+  getAvailableMenus(orderPoint: OrderPoint): Menu[] {
+    const assignedIds = orderPoint.menuIds || [];
+    return this.locationMenus.filter(m => !assignedIds.includes(m.id!));
+  }
+
+  addMenuToOrderPoint(orderPoint: OrderPoint, menuId: string): void {
+    if (!orderPoint.id) return;
+    const newIds = [...(orderPoint.menuIds || []), menuId];
+    this.orderPointService.assignMenus(orderPoint.id, newIds).subscribe({
+      next: (updated) => {
+        orderPoint.menuIds = updated.menuIds;
+        orderPoint.menuNames = updated.menuNames;
+        this.menuDropdownOpenFor = null;
+      },
+      error: (err) => console.error('Error assigning menu:', err)
+    });
+  }
+
+  removeMenu(orderPoint: OrderPoint, menuId: string): void {
+    if (!orderPoint.id) return;
+    const newIds = (orderPoint.menuIds || []).filter(id => id !== menuId);
+    this.orderPointService.assignMenus(orderPoint.id, newIds).subscribe({
+      next: (updated) => {
+        orderPoint.menuIds = updated.menuIds;
+        orderPoint.menuNames = updated.menuNames;
+      },
+      error: (err) => console.error('Error removing menu:', err)
+    });
+  }
+
+  openNewMenuModal(orderPoint: OrderPoint): void {
+    this.newMenuForOrderPoint = orderPoint;
+    this.newMenuName = '';
+    this.editingMenuId = null;
+    this.menuEditorItems = [];
+    this.expandedTreeNodes.clear();
+    this.menuDropdownOpenFor = null;
+    this.showNewMenuModal = true;
+  }
+
+  openEditMenuModal(orderPoint: OrderPoint, menuId: string, menuName: string): void {
+    this.newMenuForOrderPoint = orderPoint;
+    this.newMenuName = menuName;
+    this.editingMenuId = menuId;
+    this.menuEditorItems = [];
+    this.expandedTreeNodes.clear();
+    this.showNewMenuModal = true;
+    this.menuManagementService.getMenuItems(menuId).subscribe({
+      next: (items) => { this.menuEditorItems = items; },
+      error: () => { this.menuEditorItems = []; }
+    });
+  }
+
+  closeNewMenuModal(): void {
+    this.showNewMenuModal = false;
+    this.newMenuForOrderPoint = null;
+    this.newMenuName = '';
+    this.editingMenuId = null;
+    this.menuEditorItems = [];
+  }
+
+  saveMenuWithItems(): void {
+    if (!this.newMenuName.trim() || !this.selectedLocation?.id) return;
+    this.savingMenu = true;
+
+    if (this.editingMenuId) {
+      // Update existing menu name + items
+      this.menuManagementService.updateMenu(this.editingMenuId, this.newMenuName.trim(), this.selectedLocation.id).subscribe({
+        next: () => {
+          this.menuManagementService.saveMenuItems(this.editingMenuId!, this.menuEditorItems).subscribe({
+            next: () => {
+              this.savingMenu = false;
+              this.loadLocationMenus();
+              this.closeNewMenuModal();
+            },
+            error: (err) => { console.error('Error saving menu items:', err); this.savingMenu = false; }
+          });
+        },
+        error: (err) => { console.error('Error updating menu:', err); this.savingMenu = false; }
+      });
+    } else {
+      // Create new menu then save items
+      this.menuManagementService.createMenu(this.selectedLocation.id, this.newMenuName.trim()).subscribe({
+        next: (newMenu) => {
+          this.locationMenus.push(newMenu);
+          if (this.newMenuForOrderPoint) {
+            this.addMenuToOrderPoint(this.newMenuForOrderPoint, newMenu.id!);
+          }
+          if (this.menuEditorItems.length > 0) {
+            this.menuManagementService.saveMenuItems(newMenu.id!, this.menuEditorItems).subscribe({
+              next: () => { this.savingMenu = false; this.closeNewMenuModal(); },
+              error: () => { this.savingMenu = false; this.closeNewMenuModal(); }
+            });
+          } else {
+            this.savingMenu = false;
+            this.closeNewMenuModal();
+          }
+        },
+        error: (err) => { console.error('Error creating menu:', err); this.savingMenu = false; }
+      });
+    }
+  }
+
+  // Tree methods
+  toggleTreeExpand(item: any): void {
+    const key = item.id || item.tempId;
+    if (this.expandedTreeNodes.has(key)) {
+      this.expandedTreeNodes.delete(key);
+    } else {
+      this.expandedTreeNodes.add(key);
+    }
+  }
+
+  isTreeExpanded(item: any): boolean {
+    return this.expandedTreeNodes.has(item.id || item.tempId);
+  }
+
+  addCategory(): void {
+    this.menuEditorItems.push({ tempId: 'temp-' + (++this.tempIdCounter), name: '', orderable: false, children: [] });
+    this.openMenuItemEdit(this.menuEditorItems[this.menuEditorItems.length - 1], false);
+  }
+
+  addSubcategory(parent: any): void {
+    if (!parent.children) parent.children = [];
+    const item = { tempId: 'temp-' + (++this.tempIdCounter), name: '', orderable: false, children: [] };
+    parent.children.push(item);
+    this.expandedTreeNodes.add(parent.id || parent.tempId);
+    this.openMenuItemEdit(item, false);
+  }
+
+  addItem(parent: any): void {
+    if (!parent.children) parent.children = [];
+    const item = { tempId: 'temp-' + (++this.tempIdCounter), name: '', orderable: true, price: null, children: [] };
+    parent.children.push(item);
+    this.expandedTreeNodes.add(parent.id || parent.tempId);
+    this.openMenuItemEdit(item, true);
+  }
+
+  editMenuItem(item: any): void {
+    this.openMenuItemEdit(item, item.orderable);
+  }
+
+  deleteMenuItem(item: any, parentList: any[]): void {
+    const idx = parentList.indexOf(item);
+    if (idx >= 0) parentList.splice(idx, 1);
+  }
+
+  private openMenuItemEdit(item: any, orderable: boolean): void {
+    this.editingMenuItemRef = item;
+    this.menuItemForm = {
+      name: item.name || '',
+      orderable: orderable,
+      price: item.price ?? null,
+      description: item.description || ''
+    };
+    this.showMenuItemModal = true;
+  }
+
+  closeMenuItemModal(): void {
+    this.showMenuItemModal = false;
+    this.editingMenuItemRef = null;
+  }
+
+  saveMenuItem(): void {
+    if (!this.editingMenuItemRef || !this.menuItemForm.name.trim()) return;
+    this.editingMenuItemRef.name = this.menuItemForm.name.trim();
+    this.editingMenuItemRef.orderable = this.menuItemForm.orderable;
+    this.editingMenuItemRef.price = this.menuItemForm.orderable ? this.menuItemForm.price : null;
+    this.editingMenuItemRef.description = this.menuItemForm.description;
+    this.closeMenuItemModal();
   }
 
   // Pagination helper
