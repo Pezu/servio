@@ -145,6 +145,11 @@ export class WebSocketService implements OnDestroy {
     return this.getOrCreateSubject<ValidationNotification>(destination).asObservable();
   }
 
+  subscribeToEventOrders(eventId: string): Observable<any> {
+    const destination = `/topic/event/${eventId}/orders`;
+    return this.getOrCreateSubject<any>(destination).asObservable();
+  }
+
   unsubscribe(destination: string): void {
     const subscription = this.stompSubscriptions.get(destination);
     if (subscription) {
