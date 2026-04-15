@@ -1,8 +1,9 @@
 package com.servio.order.consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.awspring.cloud.sqs.annotation.SqsListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -16,33 +17,28 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RegistrationEventConsumer {
 
+    private final ObjectMapper objectMapper;
+
     /**
      * Handles registration validation events.
      * When a registration is validated, orders can be processed.
      */
-    @KafkaListener(topics = "${kafka.topics.registration-validated}", groupId = "order-service")
-    public void handleRegistrationValidated(Map<String, Object> event) {
-        log.info("Received registration validated event: {}", event);
+    @SqsListener("${sqs.queues.registration-validated}")
+    public void handleRegistrationValidated(String message) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> event = objectMapper.readValue(message, Map.class);
+            log.info("Received registration validated event: {}", event);
 
-        String registrationId = (String) event.get("registrationId");
-        String eventId = (String) event.get("eventId");
-        Boolean validated = (Boolean) event.get("validated");
+            String registrationId = (String) event.get("registrationId");
+            String eventId = (String) event.get("eventId");
+            Boolean validated = (Boolean) event.get("validated");
 
-        log.info("Registration {} validated: {} for event {}", registrationId, validated, eventId);
+            log.info("Registration {} validated: {} for event {}", registrationId, validated, eventId);
 
-        // Future: Could trigger order processing or notifications
-    }
-
-    /**
-     * Handles event order number updates for tracking.
-     */
-    @KafkaListener(topics = "${kafka.topics.event-order-number}", groupId = "order-service")
-    public void handleEventOrderNumber(Map<String, Object> event) {
-        log.info("Received event order number update: {}", event);
-
-        String eventId = (String) event.get("eventId");
-        Integer lastOrderNo = (Integer) event.get("lastOrderNo");
-
-        log.info("Event {} order number updated to: {}", eventId, lastOrderNo);
+            // Future: Could trigger order processing or notifications
+        } catch (Exception e) {
+            log.error("Failed to process registration validated event: {}", e.getMessage(), e);
+        }
     }
 }

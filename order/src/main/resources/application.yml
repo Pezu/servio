@@ -3,9 +3,9 @@ spring:
     name: order-service
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/orderdb}
-    username: ${DATABASE_USERNAME:orderuser}
-    password: ${DATABASE_PASSWORD:orderpass}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/servio?currentSchema=orders}
+    username: ${DATABASE_USERNAME:servio}
+    password: ${DATABASE_PASSWORD:serviopass}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -16,46 +16,39 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        default_schema: orders
 
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    schemas: orders
 
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      acks: all
-      retries: 3
-      properties:
-        linger.ms: 10
-        batch.size: 32768
-    consumer:
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      auto-offset-reset: earliest
-      group-id: order-service
-      properties:
-        spring.json.trusted.packages: com.servio.order.event,com.servio.event.event
+  # AWS SQS configuration
+  cloud:
+    aws:
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:local}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:local}
+      region:
+        static: ${AWS_REGION:us-east-1}
+      sqs:
+        endpoint: ${SQS_ENDPOINT:http://localhost:9324}
 
 server:
   port: ${SERVER_PORT:8082}
   address: 0.0.0.0
 
-# Kafka topics
-kafka:
-  topics:
-    # Events this service publishes
-    order-created: order.created
-    order-status-changed: order.status.changed
-    order-item-status-changed: order.item.status.changed
-    payment-required: payment.required
-    payment-completed: payment.completed
-    # Events this service consumes
-    registration-validated: registration.validated
-    event-order-number: event.order.number
+# SQS Queue names
+sqs:
+  queues:
+    # Queues this service publishes to
+    order-created: order-created
+    order-status-changed: order-status-changed
+    order-item-status-changed: order-item-status-changed
+    payment-completed: payment-completed
+    # Queues this service consumes from
+    registration-validated: registration-validated
 
 # External services
 services:
@@ -85,4 +78,4 @@ management:
 logging:
   level:
     com.servio.order: DEBUG
-    org.springframework.kafka: INFO
+    io.awspring.cloud.sqs: DEBUG

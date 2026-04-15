@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { environment } from '../../../../environments/environment';
@@ -25,7 +24,7 @@ interface PageResponse<T> {
 @Component({
   selector: 'app-my-events',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [CommonModule, TranslateModule],
   styles: [`
     .section {
       margin-bottom: 2rem;

@@ -1,4 +1,4 @@
-package com.servio.gateway.websocket.dto.kafka;
+package com.servio.gateway.websocket.dto.sqs;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,5 +14,6 @@ import java.util.UUID;
 public class PaymentCompletedEvent {
     private UUID eventId;
     private UUID orderPointId;
+    private UUID orderId;
     private Integer itemsMarkedPaid;
 }

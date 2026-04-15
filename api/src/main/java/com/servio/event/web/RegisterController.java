@@ -78,10 +78,13 @@ public class RegisterController {
     @GetMapping("/order-points/{orderPointId}/info")
     public ResponseEntity<Map<String, Object>> getOrderPointInfo(@PathVariable UUID orderPointId) {
         var orderPoint = orderPointService.getOrderPointById(orderPointId);
-        return ResponseEntity.ok(Map.of(
-            "id", orderPoint.getId(),
-            "name", orderPoint.getName(),
-            "payLater", orderPoint.isPayLater()
-        ));
+        var result = new java.util.HashMap<String, Object>();
+        result.put("id", orderPoint.getId().toString());
+        result.put("name", orderPoint.getName());
+        result.put("payLater", orderPoint.isPayLater());
+        if (orderPoint.getMenuId() != null) {
+            result.put("menuId", orderPoint.getMenuId().toString());
+        }
+        return ResponseEntity.ok(result);
     }
 }

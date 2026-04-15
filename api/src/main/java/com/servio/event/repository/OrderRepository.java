@@ -49,4 +49,7 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
 
     @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.orderPointId = :orderPointId AND o.nickname = :nickname ORDER BY o.orderNo ASC")
     List<OrderEntity> findByOrderPointIdAndNicknameWithItems(@Param("orderPointId") UUID orderPointId, @Param("nickname") String nickname);
+
+    @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.orderPointId = :orderPointId AND o.needsPayment = true ORDER BY o.orderNo ASC")
+    List<OrderEntity> findByOrderPointIdAndNeedsPaymentTrue(@Param("orderPointId") UUID orderPointId);
 }

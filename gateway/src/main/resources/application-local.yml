@@ -1,10 +1,6 @@
 # Local development profile
 # Start with: mvn spring-boot:run -Dspring-boot.run.profiles=local
 
-spring:
-  kafka:
-    bootstrap-servers: localhost:9092
-
 # Backend services
 services:
   event-api:
@@ -18,7 +14,7 @@ jwt:
 
 # CORS configuration
 cors:
-  allowed-origins: http://localhost:4200,http://localhost:3000,http://192.168.1.213:4200,http://localhost,capacitor://localhost,*
+  allowed-origins: http://localhost:4200,http://localhost:3000,http://192.168.0.249:4200,http://localhost,capacitor://localhost,*
 
 logging:
   level:

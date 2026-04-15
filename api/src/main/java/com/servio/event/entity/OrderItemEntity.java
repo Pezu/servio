@@ -45,4 +45,7 @@ public class OrderItemEntity {
 
     @Column(name = "paid", nullable = false)
     private boolean paid = false;
+
+    @Column(name = "vat_rate", nullable = false)
+    private BigDecimal vatRate = BigDecimal.ZERO;
 }

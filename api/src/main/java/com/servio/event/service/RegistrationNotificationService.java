@@ -1,15 +1,17 @@
 package com.servio.event.service;
 
-import com.servio.event.dto.kafka.RegistrationApprovedEvent;
-import com.servio.event.dto.kafka.ValidationRequestedEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.servio.event.dto.sqs.ValidationRequestedEvent;
 import com.servio.event.entity.RegistrationEntity;
+import io.awspring.cloud.sqs.operations.SqsTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -18,10 +20,11 @@ import java.util.UUID;
 public class RegistrationNotificationService {
 
     private final SimpMessagingTemplate messagingTemplate;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final SqsTemplate sqsTemplate;
+    private final ObjectMapper objectMapper;
 
-    @Value("${kafka.topics.validation-requested:validation.requested}")
-    private String validationRequestedTopic;
+    @Value("${sqs.queues.validation-requested}")
+    private String validationRequestedQueue;
 
     public void notifyValidationRequested(RegistrationEntity registration) {
         UUID registrationId = registration.getId();
@@ -43,7 +46,7 @@ public class RegistrationNotificationService {
                 .orderPointName(orderPointName)
                 .build();
 
-        publishToKafka(validationRequestedTopic, event);
+        publishToSqs(validationRequestedQueue, event);
 
         String orderPointDestination = "/topic/orderpoint/" + orderPointId + "/validation-requests";
         messagingTemplate.convertAndSend(orderPointDestination, event);
@@ -57,12 +60,12 @@ public class RegistrationNotificationService {
         UUID eventId = registration.getEvent().getId();
         UUID orderPointId = registration.getOrderPoint() != null ? registration.getOrderPoint().getId() : null;
 
-        RegistrationApprovedEvent event = RegistrationApprovedEvent.builder()
-                .type("REGISTRATION_APPROVED")
-                .registrationId(registrationId)
-                .eventId(eventId)
-                .orderPointId(orderPointId)
-                .build();
+        Map<String, Object> event = Map.of(
+                "type", "REGISTRATION_APPROVED",
+                "registrationId", registrationId.toString(),
+                "eventId", eventId.toString(),
+                "orderPointId", orderPointId != null ? orderPointId.toString() : ""
+        );
 
         String eventDestination = "/topic/event/" + eventId + "/registrations";
         log.info("Sending registration approval to {}: {}", eventDestination, event);
@@ -74,19 +77,25 @@ public class RegistrationNotificationService {
             messagingTemplate.convertAndSend(orderPointDestination, event);
         }
 
-        RegistrationApprovedEvent directNotification = RegistrationApprovedEvent.builder()
-                .type("APPROVED")
-                .registrationId(registrationId)
-                .message("Your registration has been approved")
-                .build();
+        Map<String, Object> directNotification = Map.of(
+                "type", "APPROVED",
+                "registrationId", registrationId.toString(),
+                "message", "Your registration has been approved"
+        );
 
         String registrationDestination = "/topic/registration/" + registrationId;
         log.info("Sending approval notification to {}: {}", registrationDestination, directNotification);
         messagingTemplate.convertAndSend(registrationDestination, directNotification);
     }
 
-    private void publishToKafka(String topic, Object event) {
-        log.info("Publishing to Kafka topic {}: {}", topic, event);
-        kafkaTemplate.send(topic, event);
+    private void publishToSqs(String queueName, Object event) {
+        try {
+            String message = objectMapper.writeValueAsString(event);
+            log.info("Publishing to SQS queue {}: {}", queueName, message);
+            sqsTemplate.send(queueName, message);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize event for SQS queue {}: {}", queueName, e.getMessage());
+            throw new RuntimeException("Failed to serialize event", e);
+        }
     }
 }

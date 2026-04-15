@@ -14,6 +14,7 @@
     "MENU": "Meniu",
     "EVENTS": "Evenimente",
     "REPORTS": "Rapoarte",
+    "REVENUE": "Încasări",
     "LOGOUT": "Deconectare"
   },
   "COMMON": {
@@ -202,7 +203,10 @@
     "ITEM_STATUS_ORDERED": "Comandat",
     "ITEM_STATUS_PREPARING": "Se prepară",
     "ITEM_STATUS_READY": "Gata",
-    "ITEM_STATUS_CANCELLED": "Anulat"
+    "ITEM_STATUS_CANCELLED": "Anulat",
+    "PAID": "Plătit",
+    "PAID_STATUS": "Plătit",
+    "UNPAID": "Neplătit"
   },
   "ROLES": {
     "TITLE": "Roluri",
@@ -248,5 +252,22 @@
     "SELECT": "Limbă",
     "EN": "Engleză",
     "RO": "Română"
+  },
+  "REPORTS": {
+    "REVENUE": {
+      "TITLE": "Încasări",
+      "ALL_PAYMENTS": "Toate Plățile",
+      "PAID_STATUS": "Status Plată",
+      "PAYMENT_METHOD": "Metodă de Plată",
+      "OPERATOR": "Operator",
+      "DATE": "Data",
+      "NET_AMOUNT": "Net",
+      "VAT": "TVA",
+      "ORDER_AMOUNT": "Comandă",
+      "TIP": "Bacșiș",
+      "TOTAL": "Total",
+      "TOTALS": "Totaluri",
+      "NO_RECORDS": "Nu s-au găsit înregistrări de plată"
+    }
   }
 }

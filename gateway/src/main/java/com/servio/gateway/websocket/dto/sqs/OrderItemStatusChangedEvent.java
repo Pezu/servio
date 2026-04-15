@@ -1,4 +1,4 @@
-package com.servio.event.dto.kafka;
+package com.servio.gateway.websocket.dto.sqs;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

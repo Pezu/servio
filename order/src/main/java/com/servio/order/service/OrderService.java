@@ -34,7 +34,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final EventApiClient eventApiClient;
-    private final KafkaProducerService kafkaProducerService;
+    private final SqsProducerService sqsProducerService;
     private final OrderMapper orderMapper;
 
     @Transactional
@@ -73,7 +73,7 @@ public class OrderService {
 
         OrderEntity savedOrder = orderRepository.save(order);
 
-        // Publish Kafka event
+        // Publish SQS event
         publishOrderCreatedEvent(savedOrder);
 
         return savedOrder;
@@ -108,7 +108,7 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .build();
 
-        kafkaProducerService.publishOrderCreated(event);
+        sqsProducerService.publishOrderCreated(event);
     }
 
     public List<OrderEntity> getOrdersByEventId(UUID eventId) {
@@ -140,10 +140,10 @@ public class OrderService {
         OrderStatus previousStatus = order.getStatus();
         order.setStatus(OrderStatus.ACTIVE);
 
-        // Mark all items as paid since this is a "pay now" order that has been paid
-        order.getItems().stream()
-                .filter(item -> item.getStatus() != OrderItemStatus.CANCELLED)
-                .forEach(item -> item.setPaid(true));
+        // Don't mark items as paid here - that will be done by the IPN callback
+        // when Netopia confirms the payment. Set needsPayment flag so the order
+        // is tracked as unpaid until IPN confirms.
+        order.setNeedsPayment(true);
 
         OrderEntity savedOrder = orderRepository.save(order);
 
@@ -185,7 +185,7 @@ public class OrderService {
                 .changedAt(LocalDateTime.now())
                 .build();
 
-        kafkaProducerService.publishOrderItemStatusChanged(event);
+        sqsProducerService.publishOrderItemStatusChanged(event);
     }
 
     private void updateOrderStatusBasedOnItems(OrderEntity order) {
@@ -273,6 +273,6 @@ public class OrderService {
                 .changedAt(LocalDateTime.now())
                 .build();
 
-        kafkaProducerService.publishOrderStatusChanged(event);
+        sqsProducerService.publishOrderStatusChanged(event);
     }
 }

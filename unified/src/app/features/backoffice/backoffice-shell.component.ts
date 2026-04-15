@@ -326,15 +326,23 @@ import { Subscription, filter } from 'rxjs';
               <span class="nxl-mtext">{{ 'NAV.MY_EVENTS' | translate }}</span>
             </a>
           </li>
-          <li class="nxl-item" *ngIf="canAccessClientMenu">
-            <a routerLink="/backoffice/reports" routerLinkActive="active" class="nxl-link" [attr.data-tooltip]="'NAV.REPORTS' | translate">
+          <li class="nxl-item nxl-hasmenu" [class.nxl-trigger]="reportsExpanded" *ngIf="canAccessClientMenu">
+            <a href="javascript:void(0)" class="nxl-link" (click)="toggleReportsMenu()" [attr.data-tooltip]="'NAV.REPORTS' | translate">
               <span class="nxl-micon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </span>
               <span class="nxl-mtext">{{ 'NAV.REPORTS' | translate }}</span>
+              <span class="nxl-arrow">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
             </a>
+            <ul class="nxl-submenu">
+              <li class="nxl-item"><a routerLink="/backoffice/reports/revenue" routerLinkActive="active" class="nxl-link">{{ 'NAV.REVENUE' | translate }}</a></li>
+            </ul>
           </li>
           <li class="nxl-item nxl-hasmenu" [class.nxl-trigger]="configExpanded" *ngIf="hasRoleSuper">
             <a href="javascript:void(0)" class="nxl-link" (click)="toggleConfigMenu()" [attr.data-tooltip]="'NAV.CONFIGURATION' | translate">
@@ -420,6 +428,7 @@ import { Subscription, filter } from 'rxjs';
 export class BackofficeShellComponent implements OnInit {
   clientsExpanded = false;
   configExpanded = false;
+  reportsExpanded = false;
   userInitials = '';
   currentLang = 'en';
   langMenuOpen = false;
@@ -471,6 +480,7 @@ export class BackofficeShellComponent implements OnInit {
     if (this.sidebarCollapsed) {
       this.clientsExpanded = false;
       this.configExpanded = false;
+      this.reportsExpanded = false;
     }
   }
 
@@ -489,6 +499,15 @@ export class BackofficeShellComponent implements OnInit {
       this.router.navigate(['/backoffice/configuration/roles']);
     } else {
       this.configExpanded = !this.configExpanded;
+    }
+  }
+
+  toggleReportsMenu(): void {
+    if (this.sidebarCollapsed) {
+      // Navigate to first submenu item when collapsed
+      this.router.navigate(['/backoffice/reports/revenue']);
+    } else {
+      this.reportsExpanded = !this.reportsExpanded;
     }
   }
 

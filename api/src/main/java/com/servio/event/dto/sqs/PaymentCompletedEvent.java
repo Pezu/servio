@@ -1,4 +1,4 @@
-package com.servio.gateway.websocket.dto.kafka;
+package com.servio.event.dto.sqs;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,11 +11,9 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ValidationRequestedEvent {
-    private String type;
-    private UUID registrationId;
+public class PaymentCompletedEvent {
     private UUID eventId;
-    private String nickname;
     private UUID orderPointId;
-    private String orderPointName;
+    private UUID orderId;
+    private Integer itemsMarkedPaid;
 }

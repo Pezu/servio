@@ -2,12 +2,6 @@
 # Start with: mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 spring:
-  kafka:
-    bootstrap-servers: localhost:9092
-  datasource:
-    url: jdbc:postgresql://localhost:5433/orderdb
-    username: orderuser
-    password: orderpass
   jpa:
     show-sql: true
     properties:
@@ -20,12 +14,16 @@ services:
     url: http://localhost:8081
 
 # Netopia sandbox (local testing)
+# IMPORTANT: For IPN callback to work locally, use ngrok:
+#   1. Run: ngrok http 8080
+#   2. Set NGROK_URL environment variable to your ngrok URL
+#   3. Restart the order service
 netopia:
   api-key: GMaWOObfdYQBlUWcuZFVnEqw-5DOTm6s7iOz5FFbdh0TYH23CJPEeKFx284g
   pos-signature: 37ZT-B3X1-VZOC-GOIK-2RXP
   base-url: https://secure.sandbox.netopia-payments.com
-  notify-url: http://localhost:8080/api/payments/netopia/notify
-  redirect-url: http://localhost:4200/payment/confirmed
+  notify-url: https://overprominently-hemodynamic-veronica.ngrok-free.dev/api/payments/netopia/notify
+  redirect-url: http://192.168.0.249:4200/payment/confirmed
 
 logging:
   level:

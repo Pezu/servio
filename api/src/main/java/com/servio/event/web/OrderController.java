@@ -1,5 +1,6 @@
 package com.servio.event.web;
 
+import com.servio.event.dto.MarkPaidRequest;
 import com.servio.event.dto.Order;
 import com.servio.event.dto.OrderItem;
 import com.servio.event.dto.ReceiveOrderRequest;
@@ -11,6 +12,7 @@ import com.servio.event.service.OrderDtoEnricher;
 import com.servio.event.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -124,5 +127,21 @@ public class OrderController {
         Order orderDto = orderDtoEnricher.enrich(orderMapper.toDto(order), order);
         messagingTemplate.convertAndSend("/topic/orders", orderDto);
         return ResponseEntity.ok(orderDto);
+    }
+
+    /**
+     * Manually mark an order as paid.
+     * Used by backoffice staff when receiving cash payment.
+     */
+    @PatchMapping("/{orderId}/paid")
+    public ResponseEntity<Order> markOrderPaid(
+            @PathVariable UUID orderId,
+            @RequestBody(required = false) MarkPaidRequest request) {
+        String paymentMethod = request != null ? request.getPaymentMethod() : null;
+        String paidBy = request != null ? request.getPaidBy() : null;
+        int itemsMarked = orderService.handlePaymentComplete(orderId, paymentMethod, paidBy);
+        log.info("Marked {} items as paid for order {} via {} by {}", itemsMarked, orderId, paymentMethod, paidBy);
+        var order = orderService.getOrderById(orderId);
+        return ResponseEntity.ok(orderDtoEnricher.enrich(orderMapper.toDto(order), order));
     }
 }

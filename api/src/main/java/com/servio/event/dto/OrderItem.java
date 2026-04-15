@@ -13,10 +13,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class OrderItem {
     private UUID id;
+    private UUID menuItemId;
     private String name;
     private BigDecimal price;
     private Integer quantity;
     private OrderItemStatus status;
     private String note;
     private boolean paid;
+    private BigDecimal vatRate;
 }

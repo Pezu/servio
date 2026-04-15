@@ -4,10 +4,12 @@ import com.servio.event.dto.CreateOrderPointRequest;
 import com.servio.event.dto.OrderPoint;
 import com.servio.event.dto.UpdateOrderPointRequest;
 import com.servio.event.entity.LocationEntity;
+import com.servio.event.entity.MenuEntity;
 import com.servio.event.entity.OrderPointEntity;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.OrderPointMapper;
 import com.servio.event.repository.LocationRepository;
+import com.servio.event.repository.MenuRepository;
 import com.servio.event.repository.OrderPointRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,7 @@ public class OrderPointService {
 
     private final OrderPointRepository orderPointRepository;
     private final LocationRepository locationRepository;
+    private final MenuRepository menuRepository;
     private final OrderPointMapper orderPointMapper;
 
     public OrderPoint createOrderPoint(UUID locationId, CreateOrderPointRequest request) {
@@ -32,6 +35,12 @@ public class OrderPointService {
         orderPointEntity.setName(request.getName());
         orderPointEntity.setPayLater(request.isPayLater());
         orderPointEntity.setLocation(location);
+
+        if (request.getMenuId() != null) {
+            MenuEntity menu = menuRepository.findById(request.getMenuId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Menu", request.getMenuId()));
+            orderPointEntity.setMenu(menu);
+        }
 
         OrderPointEntity savedOrderPoint = orderPointRepository.save(orderPointEntity);
         return orderPointMapper.toDto(savedOrderPoint);
@@ -63,6 +72,14 @@ public class OrderPointService {
         orderPointEntity.setName(request.getName());
         orderPointEntity.setPayLater(request.isPayLater());
         orderPointEntity.setLocation(location);
+
+        if (request.getMenuId() != null) {
+            MenuEntity menu = menuRepository.findById(request.getMenuId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Menu", request.getMenuId()));
+            orderPointEntity.setMenu(menu);
+        } else {
+            orderPointEntity.setMenu(null);
+        }
 
         OrderPointEntity updatedOrderPoint = orderPointRepository.save(orderPointEntity);
         return orderPointMapper.toDto(updatedOrderPoint);

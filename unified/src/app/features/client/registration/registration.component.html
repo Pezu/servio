@@ -182,12 +182,10 @@
       </button>
       <div class="menu-nav" [class.expanded]="categoryNavExpanded">
         <ng-container *ngFor="let category of menuItems">
-          <button class="menu-nav-item" (click)="scrollToSection('category-' + category.id)">
-            {{ category.name }}
+          <button class="menu-nav-item" (click)="scrollToSection('category-' + category.id)" [innerHTML]="sanitizeHtml(category.name)">
           </button>
           <ng-container *ngFor="let child of category.children">
-            <button *ngIf="!child.orderable" class="menu-nav-item menu-nav-sub" (click)="scrollToSection('subcategory-' + child.id)">
-              {{ child.name }}
+            <button *ngIf="!child.orderable" class="menu-nav-item menu-nav-sub" (click)="scrollToSection('subcategory-' + child.id)" [innerHTML]="sanitizeHtml(child.name)">
             </button>
           </ng-container>
         </ng-container>
@@ -198,7 +196,7 @@
       <ng-container *ngFor="let category of menuItems">
         <div class="menu-category" [id]="'category-' + category.id">
           <div class="category-header">
-            <span class="category-name">{{ category.name }}</span>
+            <span class="category-name" [innerHTML]="sanitizeHtml(category.name)"></span>
           </div>
 
           <div class="category-children">
@@ -206,7 +204,7 @@
               <!-- Subcategory -->
               <div *ngIf="!child.orderable" class="menu-subcategory" [id]="'subcategory-' + child.id">
                 <div class="subcategory-header">
-                  <span class="subcategory-name">{{ child.name }}</span>
+                  <span class="subcategory-name" [innerHTML]="sanitizeHtml(child.name)"></span>
                 </div>
 
                 <div class="subcategory-items">
@@ -217,10 +215,10 @@
                     </div>
                     <div class="item-content">
                       <div class="item-details">
-                        <span class="item-name">{{ item.name }}</span>
+                        <span class="item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                         <span class="item-price" *ngIf="item.price">{{ item.price | number:'1.0-2' }} RON</span>
                       </div>
-                      <span class="item-description" *ngIf="item.description">{{ item.description }}</span>
+                      <span class="item-description" *ngIf="item.description" [innerHTML]="sanitizeHtml(item.description)"></span>
                       <div class="item-bottom-row">
                         <span class="item-allergens" *ngIf="item.allergenIds?.length">
                           <svg class="allergen-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -249,10 +247,10 @@
                 </div>
                 <div class="item-content">
                   <div class="item-details">
-                    <span class="item-name">{{ child.name }}</span>
+                    <span class="item-name" [innerHTML]="sanitizeHtml(child.name)"></span>
                     <span class="item-price" *ngIf="child.price">{{ child.price | number:'1.0-2' }} RON</span>
                   </div>
-                  <span class="item-description" *ngIf="child.description">{{ child.description }}</span>
+                  <span class="item-description" *ngIf="child.description" [innerHTML]="sanitizeHtml(child.description)"></span>
                   <div class="item-bottom-row">
                     <span class="item-allergens" *ngIf="child.allergenIds?.length">
                       <svg class="allergen-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -316,7 +314,7 @@
       <div *ngFor="let item of getSelectedItems()" class="checkout-item">
         <div class="checkout-item-info">
           <span class="checkout-item-qty">{{ item.quantity }}x</span>
-          <span class="checkout-item-name">{{ item.menuItem.name }}</span>
+          <span class="checkout-item-name" [innerHTML]="sanitizeHtml(item.menuItem.name)"></span>
         </div>
         <span class="checkout-item-price">{{ (item.menuItem.price || 0) * item.quantity | number:'1.2-2' }} RON</span>
       </div>
@@ -359,7 +357,7 @@
             <div class="order-status-items">
               <div *ngFor="let item of order.items" class="order-status-item" [class.item-cancelled]="item.status === 'CANCELLED'">
                 <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name">{{ item.name }}</span>
+                <span class="item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
               </div>
             </div>
           </div>
@@ -383,7 +381,7 @@
             <div class="order-status-items">
               <div *ngFor="let item of order.items" class="order-status-item" [class.item-done]="item.status === 'DONE'" [class.item-cancelled]="item.status === 'CANCELLED'">
                 <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name">{{ item.name }}</span>
+                <span class="item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                 <svg *ngIf="item.status === 'DONE'" class="item-status-icon done" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                 </svg>
@@ -410,7 +408,7 @@
             <div class="order-status-items">
               <div *ngFor="let item of order.items" class="order-status-item" [class.item-cancelled]="item.status === 'CANCELLED'">
                 <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name">{{ item.name }}</span>
+                <span class="item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
               </div>
             </div>
           </div>
@@ -437,7 +435,7 @@
             <div class="order-status-items">
               <div *ngFor="let item of order.items" class="order-status-item" [class.item-cancelled]="item.status === 'CANCELLED'">
                 <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name">{{ item.name }}</span>
+                <span class="item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
               </div>
             </div>
           </div>
@@ -531,12 +529,8 @@
       <!-- Toggle Controls -->
       <div class="orders-toggle-row">
         <div class="toggle-group">
-          <button class="toggle-btn" [class.active]="ordersGroupMode === 'all'" (click)="setOrdersGroupMode('all')">All</button>
+          <button class="toggle-btn" [class.active]="ordersGroupMode === 'table'" (click)="setOrdersGroupMode('table')">Table</button>
           <button class="toggle-btn" [class.active]="ordersGroupMode === 'guest'" (click)="setOrdersGroupMode('guest')">Guest</button>
-        </div>
-        <div class="toggle-group">
-          <button class="toggle-btn" [class.active]="ordersViewMode === 'total'" (click)="setOrdersViewMode('total')">Total</button>
-          <button class="toggle-btn" [class.active]="ordersViewMode === 'order'" (click)="setOrdersViewMode('order')">/Order</button>
         </div>
       </div>
 
@@ -548,13 +542,12 @@
         <span>All orders are paid</span>
       </div>
 
-      <!-- All Mode -->
-      <div *ngIf="ordersGroupMode === 'all'" class="order-point-content">
-        <!-- Total View - Aggregated Items (only active/unpaid items) -->
-        <div *ngIf="ordersViewMode === 'total'" class="aggregated-items">
+      <!-- Table Mode - Shows table total -->
+      <div *ngIf="ordersGroupMode === 'table'" class="order-point-content">
+        <div class="aggregated-items">
           <div class="aggregated-card">
             <div class="aggregated-header">
-              <span class="aggregated-label">Total</span>
+              <span class="aggregated-label">Table Total</span>
               <button class="pay-btn-inline" *ngIf="hasAnyUnpaidItems()" (click)="payAllOrders()" [disabled]="processingPayment">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -567,92 +560,51 @@
               <div *ngFor="let item of getAggregatedActiveItems(orderPointOrders)" class="aggregated-item">
                 <div class="aggregated-item-info">
                   <span class="aggregated-item-qty">{{ item.quantity }}x</span>
-                  <span class="aggregated-item-name">{{ item.name }}</span>
+                  <span class="aggregated-item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                 </div>
                 <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Order View - Individual Orders -->
-        <div *ngIf="ordersViewMode === 'order'" class="individual-orders">
-          <div *ngFor="let order of orderPointOrders" class="order-card">
-            <div class="order-header">
-              <div class="order-header-left">
-                <span class="order-number">#{{ order.orderNo }}</span>
-                <span class="order-guest-name" *ngIf="order.nickname">{{ order.nickname }}</span>
-              </div>
-              <button class="pay-btn-inline" *ngIf="hasUnpaidItems(order)" (click)="payOrder(order)" [disabled]="processingPayment">
+      <!-- Guest Mode - Table as parent, guests as children -->
+      <div *ngIf="ordersGroupMode === 'guest'" class="order-point-content">
+        <div class="aggregated-items">
+          <div class="aggregated-card table-parent-card">
+            <div class="aggregated-header">
+              <span class="aggregated-label">Table</span>
+              <button class="pay-btn-inline" *ngIf="hasAnyUnpaidItems()" (click)="payAllOrders()" [disabled]="processingPayment">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                 </svg>
-                {{ getOrderUnpaidTotal(order) | number:'1.0-2' }} RON
+                {{ getUnpaidOrderPointTotal() | number:'1.0-2' }} RON
               </button>
-              <span class="order-total" *ngIf="!hasUnpaidItems(order)">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
+              <span class="aggregated-total" *ngIf="!hasAnyUnpaidItems()">{{ getOrderPointOrdersTotal() | number:'1.0-2' }} RON</span>
             </div>
-            <div class="order-items">
-              <div *ngFor="let item of order.items" class="order-item">
-                <div class="order-item-info">
-                  <span class="order-item-qty">{{ item.quantity }}x</span>
-                  <span class="order-item-name">{{ item.name }}</span>
+
+            <!-- Guest children cards -->
+            <div class="guest-children">
+              <div *ngFor="let guest of getOrderPointOrdersByGuest()" class="guest-child-card">
+                <div class="guest-child-header">
+                  <span class="guest-child-name">{{ guest.nickname }}</span>
+                  <button class="pay-btn-inline small" *ngIf="guestHasUnpaidItems(guest)" (click)="payGuestOrders(guest)" [disabled]="processingPayment">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    {{ getGuestUnpaidTotal(guest) | number:'1.0-2' }} RON
+                  </button>
+                  <span class="guest-child-total" *ngIf="!guestHasUnpaidItems(guest)">{{ guest.total | number:'1.0-2' }} RON</span>
                 </div>
-                <svg *ngIf="item.paid" class="item-icon paid" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <svg *ngIf="item.status === 'CANCELLED'" class="item-icon cancelled" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Guest Mode -->
-      <div *ngIf="ordersGroupMode === 'guest'" class="order-point-guests">
-        <div *ngFor="let guest of getOrderPointOrdersByGuest()" class="guest-group">
-          <div class="guest-header">
-            <span class="guest-name">{{ guest.nickname }}</span>
-            <button class="pay-btn-inline" *ngIf="guestHasUnpaidItems(guest)" (click)="payGuestOrders(guest)" [disabled]="processingPayment">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              {{ getGuestUnpaidTotal(guest) | number:'1.0-2' }} RON
-            </button>
-            <span class="guest-total" *ngIf="!guestHasUnpaidItems(guest)">{{ guest.total | number:'1.0-2' }} RON</span>
-          </div>
-
-          <!-- Total View - Aggregated Items per Guest (only active/unpaid items) -->
-          <div *ngIf="ordersViewMode === 'total'" class="aggregated-items-list">
-            <div *ngFor="let item of getAggregatedActiveItems(guest.orders)" class="aggregated-item">
-              <div class="aggregated-item-info">
-                <span class="aggregated-item-qty">{{ item.quantity }}x</span>
-                <span class="aggregated-item-name">{{ item.name }}</span>
-              </div>
-              <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
-            </div>
-          </div>
-
-          <!-- Order View - Individual Orders per Guest -->
-          <div *ngIf="ordersViewMode === 'order'" class="guest-orders">
-            <div *ngFor="let order of guest.orders" class="order-card mini">
-              <div class="order-header">
-                <span class="order-number">#{{ order.orderNo }}</span>
-                <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
-              </div>
-              <div class="order-items">
-                <div *ngFor="let item of order.items" class="order-item">
-                  <div class="order-item-info">
-                    <span class="order-item-qty">{{ item.quantity }}x</span>
-                    <span class="order-item-name">{{ item.name }}</span>
+                <div class="aggregated-items-list">
+                  <div *ngFor="let item of getAggregatedActiveItems(guest.orders)" class="aggregated-item">
+                    <div class="aggregated-item-info">
+                      <span class="aggregated-item-qty">{{ item.quantity }}x</span>
+                      <span class="aggregated-item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
+                    </div>
+                    <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
                   </div>
-                  <svg *ngIf="item.paid" class="item-icon paid" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <svg *ngIf="item.status === 'CANCELLED'" class="item-icon cancelled" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
                 </div>
               </div>
             </div>
@@ -702,6 +654,41 @@
         <span>{{ notification.message }}</span>
       </div>
       <button class="dismiss-btn" (click)="dismissNotification(i)">×</button>
+    </div>
+  </div>
+
+  <!-- Tip Modal -->
+  <div class="tip-modal-overlay" *ngIf="showTipModal" (click)="closeTipModal()"></div>
+  <div class="tip-modal" *ngIf="showTipModal">
+    <h3 class="tip-modal-title">Are you satisfied with our service?</h3>
+    <p class="tip-modal-subtitle">You can leave a tip:</p>
+    <div class="tip-modal-amount">
+      <span class="tip-modal-order-label">Order amount:</span>
+      <span class="tip-modal-order-value">{{ tipOrderAmount | number:'1.2-2' }} RON</span>
+    </div>
+    <div class="tip-options">
+      <button class="tip-option-btn" [class.selected]="selectedTipPercent === 0" (click)="selectTipPercent(0)">No tip</button>
+      <button class="tip-option-btn" [class.selected]="selectedTipPercent === 10" (click)="selectTipPercent(10)">10%</button>
+      <button class="tip-option-btn" [class.selected]="selectedTipPercent === 15" (click)="selectTipPercent(15)">15%</button>
+      <button class="tip-option-btn" [class.selected]="selectedTipPercent === 20" (click)="selectTipPercent(20)">20%</button>
+      <button class="tip-option-btn" [class.selected]="selectedTipPercent === -1" (click)="selectTipPercent(-1)">Custom</button>
+    </div>
+    <div class="tip-custom-input" *ngIf="selectedTipPercent === -1">
+      <input type="number" [(ngModel)]="customTipAmount" placeholder="Enter tip amount" min="0" step="0.01" class="tip-input">
+      <span class="tip-input-currency">RON</span>
+    </div>
+    <div class="tip-modal-total">
+      <span class="tip-modal-total-label">Total to pay:</span>
+      <span class="tip-modal-total-value">{{ getTipTotal() | number:'1.2-2' }} RON</span>
+    </div>
+    <div class="tip-modal-breakdown" *ngIf="getTipAmount() > 0">
+      <span class="tip-breakdown-item">({{ tipOrderAmount | number:'1.2-2' }} + {{ getTipAmount() | number:'1.2-2' }} tip)</span>
+    </div>
+    <div class="tip-modal-actions">
+      <button class="tip-cancel-btn" (click)="closeTipModal()">Cancel</button>
+      <button class="tip-confirm-btn" (click)="confirmTipAndPay()" [disabled]="processingPayment || !isTipValid()">
+        {{ processingPayment ? 'Processing...' : 'Pay ' + (getTipTotal() | number:'1.2-2') + ' RON' }}
+      </button>
     </div>
   </div>
 

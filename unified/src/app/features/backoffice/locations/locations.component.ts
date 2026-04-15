@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
 import { OrderPointService, OrderPoint } from '../clients/order-point.service';
+import { MenuService, Menu } from '../clients/menu.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 @Component({
@@ -158,7 +159,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           <div class="card stretch">
             <div class="card-header">
               <h6 class="card-title">{{ 'ORDER_POINTS.TITLE' | translate }} @if (selectedLocation) { <span class="text-muted fw-normal">- {{ selectedLocation.name }}</span> }</h6>
-              <button class="btn-icon-action btn-icon-add" (click)="openOrderPointModal()" [disabled]="!selectedLocation" [title]="'ORDER_POINTS.ADD_ORDER_POINT' | translate">
+              <button class="btn-icon-action btn-icon-add" (click)="addOrderPoint()" [disabled]="!selectedLocation" [title]="'ORDER_POINTS.ADD_ORDER_POINT' | translate">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -170,8 +171,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <thead>
                     <tr>
                       <th>{{ 'COMMON.NAME' | translate }}</th>
+                      <th class="col-menu">Menu</th>
                       <th class="text-center col-pay-later">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</th>
-                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -192,21 +193,26 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                   <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13 0h3v2h-3v-2zm-5-2h2v2h-2v-2zm2 4h2v2h-2v-2zm2-4h5v2h-5v-2zm3 4h2v5h-2v-5zm-3 2h2v3h-2v-3zm-2 3h2v2h-2v-2z"/>
                                 </svg>
                               </div>
-                              <div><a href="javascript:void(0);" class="d-block fw-semibold">{{ orderPoint.name }}</a></div>
+                              <input type="text"
+                                     class="inline-name-input"
+                                     [value]="orderPoint.name"
+                                     (blur)="onNameChange(orderPoint, $event)"
+                                     (keydown.enter)="$any($event.target).blur()">
                             </div>
+                          </td>
+                          <td class="col-menu">
+                            <select class="menu-select" [ngModel]="orderPoint.menuId || ''" (ngModelChange)="onMenuChange(orderPoint, $event)">
+                              <option value="">-</option>
+                              @for (menu of menus; track menu.id) {
+                                <option [value]="menu.id">{{ menu.name }}</option>
+                              }
+                            </select>
                           </td>
                           <td class="text-center col-pay-later">
                             <input type="checkbox"
                                    class="table-checkbox"
                                    [checked]="orderPoint.payLater"
                                    (change)="togglePayLater(orderPoint)">
-                          </td>
-                          <td class="text-end">
-                            <button class="btn-icon-action btn-icon-action-sm" (click)="editOrderPoint(orderPoint)" [title]="'ORDER_POINTS.EDIT_ORDER_POINT' | translate">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
                           </td>
                         </tr>
                       }
@@ -264,35 +270,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       </div>
     }
 
-    <!-- Order Point Modal -->
-    @if (showOrderPointModal) {
-      <div class="modal-overlay" (mousedown)="closeOrderPointModal()">
-        <div class="modal" (mousedown)="$event.stopPropagation()">
-          <div class="modal-header">
-            <h3>{{ editingOrderPoint ? ('ORDER_POINTS.EDIT_ORDER_POINT' | translate) : ('ORDER_POINTS.ADD_ORDER_POINT' | translate) }}</h3>
-            <button class="close-btn" (click)="closeOrderPointModal()" title="Close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="form-group">
-              <label for="orderPointName">{{ 'COMMON.NAME' | translate }}</label>
-              <input type="text" id="orderPointName" class="form-control" [(ngModel)]="orderPointForm.name" [placeholder]="'ORDER_POINTS.ENTER_NAME' | translate">
-            </div>
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" [(ngModel)]="orderPointForm.payLater">
-                <span class="checkbox-text">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</span>
-              </label>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" (click)="closeOrderPointModal()">{{ 'COMMON.CANCEL' | translate }}</button>
-            <button class="btn btn-primary" (click)="saveOrderPoint()" [disabled]="!orderPointForm.name || savingOrderPoint">
-              {{ savingOrderPoint ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
-            </button>
-          </div>
-        </div>
-      </div>
-    }
   `,
   styles: [`
     :host {
@@ -892,6 +869,61 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .col-pay-later {
       width: 100px;
     }
+
+    /* Menu Column */
+    .col-menu {
+      width: 180px;
+    }
+    .menu-select {
+      width: 100%;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #64748b;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      background-size: 14px;
+      padding-right: 24px;
+    }
+    .menu-select:hover {
+      background-color: rgba(0, 0, 0, 0.04);
+      color: #374151;
+    }
+    .menu-select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-light);
+    }
+
+    /* Inline Name Input */
+    .inline-name-input {
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+      width: 100%;
+      transition: all 0.15s ease;
+    }
+    .inline-name-input:hover {
+      border-color: rgba(0, 0, 0, 0.08);
+      background: rgba(0, 0, 0, 0.02);
+    }
+    .inline-name-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: white;
+      box-shadow: 0 0 0 2px var(--primary-light);
+    }
   `]
 })
 export class LocationsComponent implements OnInit {
@@ -920,6 +952,9 @@ export class LocationsComponent implements OnInit {
   orderPointTotalPages = 0;
   orderPointPageSize = 20;
 
+  // Menus for selected location
+  menus: Menu[] = [];
+
   // Location Modal
   showLocationModal = false;
   editingLocation: Location | null = null;
@@ -927,11 +962,6 @@ export class LocationsComponent implements OnInit {
   locationForm = { name: '' };
   savingLocation = false;
 
-  // Order Point Modal
-  showOrderPointModal = false;
-  editingOrderPoint: OrderPoint | null = null;
-  orderPointForm = { name: '', payLater: false };
-  savingOrderPoint = false;
 
   private searchSubject = new Subject<string>();
 
@@ -939,6 +969,7 @@ export class LocationsComponent implements OnInit {
     private clientService: ClientService,
     private locationService: LocationService,
     private orderPointService: OrderPointService,
+    private menuService: MenuService,
     private elementRef: ElementRef
   ) {}
 
@@ -1080,6 +1111,7 @@ export class LocationsComponent implements OnInit {
   selectLocation(location: Location): void {
     this.selectedLocation = location;
     this.orderPointCurrentPage = 0;
+    this.loadMenus();
     this.loadOrderPoints();
   }
 
@@ -1106,6 +1138,59 @@ export class LocationsComponent implements OnInit {
     if (page < 0 || page >= this.orderPointTotalPages) return;
     this.orderPointCurrentPage = page;
     this.loadOrderPoints();
+  }
+
+  loadMenus(): void {
+    if (!this.selectedLocation?.id) return;
+    this.menuService.getMenusByLocation(this.selectedLocation.id).subscribe({
+      next: (menus) => {
+        this.menus = menus;
+      },
+      error: () => {
+        this.menus = [];
+      }
+    });
+  }
+
+  onMenuChange(orderPoint: OrderPoint, menuId: string): void {
+    if (!orderPoint.id || !this.selectedLocation?.id) return;
+    const newMenuId = menuId || undefined;
+    this.orderPointService.updateOrderPoint(
+      orderPoint.id,
+      orderPoint.name,
+      this.selectedLocation.id,
+      orderPoint.payLater,
+      newMenuId
+    ).subscribe({
+      next: () => {
+        orderPoint.menuId = newMenuId;
+      },
+      error: (err) => {
+        console.error('Error updating menu:', err);
+      }
+    });
+  }
+
+  onNameChange(orderPoint: OrderPoint, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const newName = input.value.trim();
+    if (!orderPoint.id || !this.selectedLocation?.id || !newName || newName === orderPoint.name) return;
+
+    this.orderPointService.updateOrderPoint(
+      orderPoint.id,
+      newName,
+      this.selectedLocation.id,
+      orderPoint.payLater,
+      orderPoint.menuId
+    ).subscribe({
+      next: () => {
+        orderPoint.name = newName;
+      },
+      error: (err) => {
+        console.error('Error updating name:', err);
+        input.value = orderPoint.name; // Revert on error
+      }
+    });
   }
 
   // Pagination helper
@@ -1202,7 +1287,8 @@ export class LocationsComponent implements OnInit {
       orderPoint.id,
       orderPoint.name,
       this.selectedLocation.id,
-      !orderPoint.payLater
+      !orderPoint.payLater,
+      orderPoint.menuId
     ).subscribe({
       next: () => {
         orderPoint.payLater = !orderPoint.payLater;
@@ -1213,64 +1299,21 @@ export class LocationsComponent implements OnInit {
     });
   }
 
-  // Order Point Modal Methods
-  openOrderPointModal(): void {
-    if (!this.selectedLocation) return;
-    this.editingOrderPoint = null;
-    this.orderPointForm = { name: '', payLater: false };
-    this.showOrderPointModal = true;
-  }
+  // Add Order Point
+  addOrderPoint(): void {
+    if (!this.selectedLocation?.id) return;
 
-  editOrderPoint(orderPoint: OrderPoint): void {
-    this.editingOrderPoint = orderPoint;
-    this.orderPointForm = { name: orderPoint.name, payLater: orderPoint.payLater };
-    this.showOrderPointModal = true;
-  }
-
-  closeOrderPointModal(): void {
-    this.showOrderPointModal = false;
-    this.editingOrderPoint = null;
-    this.orderPointForm = { name: '', payLater: false };
-  }
-
-  saveOrderPoint(): void {
-    if (!this.orderPointForm.name || !this.selectedLocation?.id) return;
-
-    this.savingOrderPoint = true;
-
-    if (this.editingOrderPoint) {
-      this.orderPointService.updateOrderPoint(
-        this.editingOrderPoint.id!,
-        this.orderPointForm.name,
-        this.selectedLocation.id,
-        this.orderPointForm.payLater
-      ).subscribe({
-        next: () => {
-          this.savingOrderPoint = false;
-          this.closeOrderPointModal();
-          this.loadOrderPoints();
-        },
-        error: (err) => {
-          console.error('Error updating order point:', err);
-          this.savingOrderPoint = false;
-        }
-      });
-    } else {
-      this.orderPointService.createOrderPoint(
-        this.selectedLocation.id,
-        this.orderPointForm.name,
-        this.orderPointForm.payLater
-      ).subscribe({
-        next: () => {
-          this.savingOrderPoint = false;
-          this.closeOrderPointModal();
-          this.loadOrderPoints();
-        },
-        error: (err) => {
-          console.error('Error creating order point:', err);
-          this.savingOrderPoint = false;
-        }
-      });
-    }
+    this.orderPointService.createOrderPoint(
+      this.selectedLocation.id,
+      'New Order Point',
+      false
+    ).subscribe({
+      next: () => {
+        this.loadOrderPoints();
+      },
+      error: (err) => {
+        console.error('Error creating order point:', err);
+      }
+    });
   }
 }

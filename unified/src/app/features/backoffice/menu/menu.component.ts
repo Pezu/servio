@@ -1,10 +1,11 @@
-import { Component, OnInit, HostListener, ElementRef } from '@angular/core';
+import { Component, OnInit, HostListener, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ClientService, Client } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
-import { MenuService, MenuItem, Allergen, VatType } from '../clients/menu.service';
+import { MenuService, MenuItem, Allergen, VatType, Menu } from '../clients/menu.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
 @Component({
@@ -115,6 +116,53 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             </div>
           </div>
         }
+
+        <!-- Menu Selector -->
+        @if (selectedLocationId) {
+          <div class="menu-selector-container">
+            <label class="selector-label">Menu</label>
+            <div class="selector-wrapper menu-wrapper" [class.open]="menuDropdownOpen">
+              <div class="selector-input" (click)="toggleMenuDropdown()">
+                <div class="selected-menu" *ngIf="selectedMenuId">
+                  <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <span class="menu-name">{{ selectedMenuName }}</span>
+                </div>
+                <div class="placeholder" *ngIf="!selectedMenuId">
+                  Select menu
+                </div>
+                <span class="dropdown-arrow">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              </div>
+
+              <div class="selector-dropdown" *ngIf="menuDropdownOpen">
+                <div class="menu-list">
+                  <div *ngIf="menus.length === 0" class="empty-state">No menus found</div>
+                  <div *ngFor="let menu of menus" class="menu-option"
+                       [class.selected]="selectedMenuId === menu.id"
+                       (click)="selectMenu(menu)">
+                    <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span class="menu-name">{{ menu.name }}</span>
+                  </div>
+                </div>
+                <div class="dropdown-footer">
+                  <button class="btn btn-sm btn-primary w-full" (click)="openCreateMenuModal(); $event.stopPropagation()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create Menu
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
       </div>
 
       <!-- Menu Editor -->
@@ -174,7 +222,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
                           </span>
-                          <span class="menu-name category-name">{{ item.name }}</span>
+                          <span class="menu-name category-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                           <span class="item-count">({{ item.children?.length || 0 }})</span>
                         </div>
                         <div class="menu-row-actions">
@@ -219,9 +267,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                             </div>
                           }
                           <div class="item-info">
-                            <span class="menu-name">{{ item.name }}</span>
+                            <span class="menu-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                             @if (item.description) {
-                              <span class="item-description">{{ item.description }}</span>
+                              <span class="item-description" [innerHTML]="sanitizeHtml(item.description)"></span>
                             }
                             @if (item.allergenIds?.length) {
                               <span class="item-allergens">{{ getAllergenNames(item.allergenIds) }}</span>
@@ -294,7 +342,23 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           <div class="modal-body">
             <div class="form-group">
               <label>{{ 'COMMON.NAME' | translate }}</label>
-              <input type="text" class="form-control" [(ngModel)]="formData.name" [placeholder]="'COMMON.NAME' | translate">
+              <div class="rich-text-toolbar">
+                <button type="button" class="toolbar-btn" (click)="execCommand('bold')" title="Bold"><b>B</b></button>
+                <button type="button" class="toolbar-btn" (click)="execCommand('italic')" title="Italic"><i>I</i></button>
+                <button type="button" class="toolbar-btn" (click)="execCommand('underline')" title="Underline"><u>U</u></button>
+                <span class="toolbar-separator"></span>
+                <select class="toolbar-select" (change)="execCommandWithArg('fontSize', $event)">
+                  <option value="">Size</option>
+                  <option value="1">Small</option>
+                  <option value="3">Normal</option>
+                  <option value="5">Large</option>
+                  <option value="7">X-Large</option>
+                </select>
+                <input type="color" class="toolbar-color" (input)="execCommandWithArg('foreColor', $event)" title="Text Color" value="#000000">
+              </div>
+              <div #nameEditor class="rich-text-editor" contenteditable="true"
+                   (input)="onNameInput($event)"
+                   (paste)="onPaste($event)"></div>
             </div>
             @if (formData.orderable) {
               <div class="form-group">
@@ -303,7 +367,23 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
               </div>
               <div class="form-group">
                 <label>{{ 'COMMON.DESCRIPTION' | translate }}</label>
-                <textarea class="form-control" [(ngModel)]="formData.description" rows="3"></textarea>
+                <div class="rich-text-toolbar">
+                  <button type="button" class="toolbar-btn" (click)="execCommand('bold', 'desc')" title="Bold"><b>B</b></button>
+                  <button type="button" class="toolbar-btn" (click)="execCommand('italic', 'desc')" title="Italic"><i>I</i></button>
+                  <button type="button" class="toolbar-btn" (click)="execCommand('underline', 'desc')" title="Underline"><u>U</u></button>
+                  <span class="toolbar-separator"></span>
+                  <select class="toolbar-select" (change)="execCommandWithArg('fontSize', $event, 'desc')">
+                    <option value="">Size</option>
+                    <option value="1">Small</option>
+                    <option value="3">Normal</option>
+                    <option value="5">Large</option>
+                    <option value="7">X-Large</option>
+                  </select>
+                  <input type="color" class="toolbar-color" (input)="execCommandWithArg('foreColor', $event, 'desc')" title="Text Color" value="#000000">
+                </div>
+                <div #descEditor class="rich-text-editor rich-text-editor-multiline" contenteditable="true"
+                     (input)="onDescInput($event)"
+                     (paste)="onPaste($event)"></div>
               </div>
               <div class="form-group">
                 <label>{{ 'MENU.ALLERGENS' | translate }}</label>
@@ -335,6 +415,30 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <button class="btn btn-secondary" (click)="closeModal()">{{ 'COMMON.CANCEL' | translate }}</button>
             <button class="btn btn-primary" (click)="saveItem()" [disabled]="!formData.name.trim()">
               {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Create Menu Modal -->
+    @if (showCreateMenuModal) {
+      <div class="modal-overlay" (mousedown)="closeCreateMenuModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>Create Menu</h3>
+            <button class="close-btn" (click)="closeCreateMenuModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Menu Name</label>
+              <input type="text" class="form-control" [(ngModel)]="newMenuName" placeholder="Enter menu name">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeCreateMenuModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button class="btn btn-primary" (click)="createMenu()" [disabled]="!newMenuName.trim()">
+              Create
             </button>
           </div>
         </div>
@@ -405,6 +509,19 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .location-selector { display: flex; align-items: center; gap: 12px; }
     .form-select { padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); background: white; min-width: 200px; }
     .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+    /* Menu Selector Container */
+    .menu-selector-container { display: flex; align-items: center; gap: 12px; }
+    .menu-wrapper { min-width: 240px; }
+    .menu-list { overflow-y: auto; max-height: 280px; }
+    .menu-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.15s ease; }
+    .menu-option:hover { background: #f8fafc; }
+    .menu-option.selected { background: #eff6ff; }
+    .menu-icon { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
+    .selected-menu { display: flex; align-items: center; gap: 8px; }
+    .menu-name { font-size: 14px; font-weight: 500; color: #1e293b; }
+    .dropdown-footer { padding: 12px; border-top: 1px solid #e2e8f0; }
+    .w-full { width: 100%; }
 
     /* Menu Panel */
     .menu-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -522,6 +639,21 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .allergen-number { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: var(--bg-light); border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--text-muted); }
     .allergen-chip.selected .allergen-number { background: rgba(255, 255, 255, 0.2); color: white; }
     .allergen-name { font-size: 13px; font-weight: 500; }
+
+    /* Rich Text Editor */
+    .rich-text-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #f8fafc; border: 1px solid var(--border-color); border-bottom: none; border-radius: 8px 8px 0 0; }
+    .toolbar-btn { width: 28px; height: 28px; border: 1px solid transparent; background: transparent; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #64748b; transition: all 0.15s ease; }
+    .toolbar-btn:hover { background: white; border-color: var(--border-color); color: #374151; }
+    .toolbar-separator { width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; }
+    .toolbar-select { height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; color: #64748b; background: transparent; cursor: pointer; }
+    .toolbar-select:hover { background: white; border-color: var(--border-color); }
+    .toolbar-select:focus { outline: none; border-color: var(--primary); }
+    .toolbar-color { width: 28px; height: 28px; padding: 2px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; background: transparent; }
+    .toolbar-color:hover { border-color: var(--border-color); }
+    .rich-text-editor { min-height: 38px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0 0 8px 8px; font-size: 14px; color: var(--text-dark); background: white; outline: none; overflow-wrap: break-word; word-wrap: break-word; }
+    .rich-text-editor:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+    .rich-text-editor:empty:before { content: attr(data-placeholder); color: #94a3b8; }
+    .rich-text-editor-multiline { min-height: 80px; }
   `]
 })
 export class ClientMenuComponent implements OnInit {
@@ -540,6 +672,13 @@ export class ClientMenuComponent implements OnInit {
   locationDropdownOpen = false;
   locationSearchTerm = '';
 
+  // Menu selection
+  menus: Menu[] = [];
+  selectedMenuId = '';
+  menuDropdownOpen = false;
+  showCreateMenuModal = false;
+  newMenuName = '';
+
   menuItems: MenuItem[] = [];
   loadingMenu = false;
   savingMenu = false;
@@ -556,13 +695,17 @@ export class ClientMenuComponent implements OnInit {
   allergens: Allergen[] = [];
   vatTypes: VatType[] = [];
 
+  @ViewChild('nameEditor') nameEditor!: ElementRef<HTMLDivElement>;
+  @ViewChild('descEditor') descEditor!: ElementRef<HTMLDivElement>;
+
   private searchSubject = new Subject<string>();
 
   constructor(
     private clientService: ClientService,
     private locationService: LocationService,
     private menuService: MenuService,
-    private elementRef: ElementRef
+    private elementRef: ElementRef,
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
@@ -611,6 +754,10 @@ export class ClientMenuComponent implements OnInit {
     const locationSelector = this.elementRef.nativeElement.querySelector('.location-selector-container .selector-wrapper');
     if (locationSelector && !locationSelector.contains(event.target)) {
       this.locationDropdownOpen = false;
+    }
+    const menuSelector = this.elementRef.nativeElement.querySelector('.menu-selector-container .selector-wrapper');
+    if (menuSelector && !menuSelector.contains(event.target)) {
+      this.menuDropdownOpen = false;
     }
   }
 
@@ -691,7 +838,9 @@ export class ClientMenuComponent implements OnInit {
     this.locationDropdownOpen = false;
     this.menuItems = [];
     this.hasChanges = false;
-    this.loadMenu();
+    this.selectedMenuId = '';
+    this.menus = [];
+    this.loadMenus();
   }
 
   onLocationChange(): void {
@@ -701,7 +850,7 @@ export class ClientMenuComponent implements OnInit {
   }
 
   get canShowMenu(): boolean {
-    return !!this.selectedClient && !!this.selectedLocationId;
+    return !!this.selectedClient && !!this.selectedLocationId && !!this.selectedMenuId;
   }
 
   get selectedLocationName(): string {
@@ -718,9 +867,69 @@ export class ClientMenuComponent implements OnInit {
     // Filtering is handled reactively by the getter
   }
 
+  // Menu selector methods
+  toggleMenuDropdown(): void {
+    this.menuDropdownOpen = !this.menuDropdownOpen;
+  }
+
+  selectMenu(menu: Menu): void {
+    this.selectedMenuId = menu.id!;
+    this.menuDropdownOpen = false;
+    this.menuItems = [];
+    this.hasChanges = false;
+    this.loadMenu();
+  }
+
+  get selectedMenuName(): string {
+    return this.menus.find(m => m.id === this.selectedMenuId)?.name || '';
+  }
+
+  openCreateMenuModal(): void {
+    this.menuDropdownOpen = false;
+    this.newMenuName = '';
+    this.showCreateMenuModal = true;
+  }
+
+  closeCreateMenuModal(): void {
+    this.showCreateMenuModal = false;
+    this.newMenuName = '';
+  }
+
+  createMenu(): void {
+    if (!this.newMenuName.trim() || !this.selectedLocationId) return;
+    this.menuService.createMenu(this.selectedLocationId, this.newMenuName.trim()).subscribe({
+      next: (menu) => {
+        this.menus.push(menu);
+        this.selectedMenuId = menu.id!;
+        this.closeCreateMenuModal();
+        this.menuItems = [];
+        this.hasChanges = false;
+      },
+      error: (err) => console.error('Error creating menu:', err)
+    });
+  }
+
+  loadMenus(): void {
+    if (!this.selectedLocationId) return;
+    this.menuService.getMenusByLocation(this.selectedLocationId).subscribe({
+      next: (menus) => {
+        this.menus = menus;
+        // Auto-select first menu if available
+        if (menus.length > 0 && !this.selectedMenuId) {
+          this.selectedMenuId = menus[0].id!;
+          this.loadMenu();
+        } else if (menus.length === 0) {
+          this.menuItems = [];
+        }
+      },
+      error: () => { this.menus = []; }
+    });
+  }
+
   loadMenu(): void {
+    if (!this.selectedMenuId) return;
     this.loadingMenu = true;
-    this.menuService.getMenuTree(this.selectedLocationId).subscribe({
+    this.menuService.getMenuTreeByMenuId(this.selectedMenuId).subscribe({
       next: (items) => {
         this.menuItems = items;
         this.loadingMenu = false;
@@ -771,6 +980,7 @@ export class ClientMenuComponent implements OnInit {
     this.editingParent = null;
     this.formData = { name: '', orderable: false, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
+    this.setEditorContent();
   }
 
   addSubcategory(parent: MenuItem): void {
@@ -778,6 +988,7 @@ export class ClientMenuComponent implements OnInit {
     this.editingParent = parent;
     this.formData = { name: '', orderable: false, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
+    this.setEditorContent();
   }
 
   addItem(parent: MenuItem): void {
@@ -785,6 +996,7 @@ export class ClientMenuComponent implements OnInit {
     this.editingParent = parent;
     this.formData = { name: '', orderable: true, price: 0, description: '', allergenIds: [], vatTypeId: '' };
     this.showModal = true;
+    this.setEditorContent();
   }
 
   editItem(item: MenuItem, parent?: MenuItem): void {
@@ -792,6 +1004,7 @@ export class ClientMenuComponent implements OnInit {
     this.editingParent = parent || null;
     this.formData = { name: item.name, orderable: item.orderable, price: item.price || 0, description: item.description || '', allergenIds: [...(item.allergenIds || [])], vatTypeId: item.vatTypeId || '' };
     this.showModal = true;
+    this.setEditorContent();
   }
 
   isAllergenSelected(allergenId: string): boolean {
@@ -860,8 +1073,9 @@ export class ClientMenuComponent implements OnInit {
   }
 
   saveMenu(): void {
+    if (!this.selectedMenuId) return;
     this.savingMenu = true;
-    this.menuService.saveMenuTree(this.selectedLocationId, this.menuItems).subscribe({
+    this.menuService.saveMenuTreeByMenuId(this.selectedMenuId, this.menuItems).subscribe({
       next: (items) => { this.menuItems = items; this.savingMenu = false; this.hasChanges = false; },
       error: () => { this.savingMenu = false; }
     });
@@ -898,5 +1112,59 @@ export class ClientMenuComponent implements OnInit {
       next: () => { item.imagePath = undefined; },
       error: (err) => console.error('Error deleting image:', err)
     });
+  }
+
+  // Rich text editor methods
+  private setEditorContent(): void {
+    // Use setTimeout to wait for the modal to render
+    setTimeout(() => {
+      if (this.nameEditor?.nativeElement) {
+        this.nameEditor.nativeElement.innerHTML = this.formData.name || '';
+      }
+      if (this.descEditor?.nativeElement) {
+        this.descEditor.nativeElement.innerHTML = this.formData.description || '';
+      }
+    }, 0);
+  }
+
+  execCommand(command: string, target: string = 'name'): void {
+    document.execCommand(command, false);
+    if (target === 'name') {
+      this.nameEditor?.nativeElement?.focus();
+    } else {
+      this.descEditor?.nativeElement?.focus();
+    }
+  }
+
+  execCommandWithArg(command: string, event: Event, target: string = 'name'): void {
+    const value = (event.target as HTMLInputElement | HTMLSelectElement).value;
+    if (value) {
+      document.execCommand(command, false, value);
+    }
+    if (target === 'name') {
+      this.nameEditor?.nativeElement?.focus();
+    } else {
+      this.descEditor?.nativeElement?.focus();
+    }
+  }
+
+  onNameInput(event: Event): void {
+    const element = event.target as HTMLDivElement;
+    this.formData.name = element.innerHTML;
+  }
+
+  onDescInput(event: Event): void {
+    const element = event.target as HTMLDivElement;
+    this.formData.description = element.innerHTML;
+  }
+
+  onPaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    const text = event.clipboardData?.getData('text/plain') || '';
+    document.execCommand('insertText', false, text);
+  }
+
+  sanitizeHtml(html: string): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(html || '');
   }
 }

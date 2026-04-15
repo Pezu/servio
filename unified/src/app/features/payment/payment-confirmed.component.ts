@@ -11,15 +11,18 @@ import { environment } from '../../../environments/environment';
   template: `
     <div class="loading-container">
       <div class="spinner"></div>
+      <p class="message">Processing your order...</p>
     </div>
   `,
   styles: [`
     .loading-container {
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: #f5f5f5;
+      gap: 16px;
     }
     .spinner {
       width: 40px;
@@ -28,6 +31,10 @@ import { environment } from '../../../environments/environment';
       border-top-color: #4CAF50;
       border-radius: 50%;
       animation: spin 1s linear infinite;
+    }
+    .message {
+      color: #666;
+      font-size: 14px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -77,6 +84,7 @@ export class PaymentConfirmedComponent implements OnInit {
     // Extract valid UUID from orderId (handles array case from duplicate params)
     const pendingOrderId = extractValidUuid(rawOrderId) || uuidsInUrl[2] || null;
     const pendingPaymentReference = this.getCookie('pendingPaymentReference');
+    const tableOrderPayment = localStorage.getItem('tableOrderPayment');
 
     console.log('[PaymentConfirmed] eventId:', eventId);
     console.log('[PaymentConfirmed] orderPointId:', orderPointId);
@@ -84,8 +92,16 @@ export class PaymentConfirmedComponent implements OnInit {
     console.log('[PaymentConfirmed] pendingOrderId (validated):', pendingOrderId);
     console.log('[PaymentConfirmed] type:', paymentType);
     console.log('[PaymentConfirmed] pendingPaymentReference:', pendingPaymentReference);
+    console.log('[PaymentConfirmed] tableOrderPayment:', tableOrderPayment);
 
-    if (pendingOrderId) {
+    // For table order payments, prioritize the payment reference flow
+    if (tableOrderPayment === 'true' && pendingPaymentReference) {
+      // Table order payment flow - payment completion is handled by Netopia IPN callback
+      console.log('[PaymentConfirmed] Table order payment detected, using payment reference flow');
+      this.deleteCookie('pendingPaymentReference');
+      localStorage.setItem('paymentSuccess', 'true');
+      this.redirect(eventId, orderPointId);
+    } else if (pendingOrderId && !tableOrderPayment) {
       // Confirm the order (non-payLater flow)
       console.log('[PaymentConfirmed] Confirming order:', pendingOrderId);
       this.http.post<any>(`${environment.apiUrl}/api/orders/${pendingOrderId}/confirm`, {})
@@ -105,24 +121,17 @@ export class PaymentConfirmedComponent implements OnInit {
           }
         });
     } else if (pendingPaymentReference) {
-      // Complete the payment (payLater table order flow)
-      console.log('[PaymentConfirmed] Completing payment with reference:', pendingPaymentReference);
-      this.http.post<any>(`${environment.apiUrl}/api/payments/complete`, {
-        reference: pendingPaymentReference
-      }).subscribe({
-          next: (response) => {
-            console.log('[PaymentConfirmed] Payment complete response:', response);
-            this.deleteCookie('pendingPaymentReference');
-            localStorage.setItem('paymentSuccess', 'true');
-            this.redirect(eventId, orderPointId);
-          },
-          error: (err) => {
-            console.error('[PaymentConfirmed] Payment complete error:', err);
-            this.deleteCookie('pendingPaymentReference');
-            localStorage.setItem('paymentError', 'true');
-            this.redirect(eventId, orderPointId);
-          }
-        });
+      // Table order payment flow - payment completion is handled by Netopia IPN callback
+      // Just clean up and redirect back with success
+      console.log('[PaymentConfirmed] Table order payment completed via IPN, redirecting. Reference:', pendingPaymentReference);
+      this.deleteCookie('pendingPaymentReference');
+      localStorage.setItem('paymentSuccess', 'true');
+      this.redirect(eventId, orderPointId);
+    } else if (tableOrderPayment === 'true') {
+      // Table order payment but reference already cleared - payment was likely completed via IPN
+      console.log('[PaymentConfirmed] Table order payment without reference, assuming IPN completed');
+      localStorage.setItem('paymentSuccess', 'true');
+      this.redirect(eventId, orderPointId);
     } else {
       console.log('[PaymentConfirmed] No pending order or payment reference, redirecting');
       this.redirect(eventId, orderPointId);
@@ -141,18 +150,21 @@ export class PaymentConfirmedComponent implements OnInit {
   }
 
   private getCookie(name: string): string | null {
-    const nameEQ = name + '=';
-    const ca = document.cookie.split(';');
-    for (let c of ca) {
-      c = c.trim();
-      if (c.indexOf(nameEQ) === 0) {
-        return decodeURIComponent(c.substring(nameEQ.length));
-      }
+    // Use localStorage (matching registration.component.ts)
+    try {
+      return localStorage.getItem(name);
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+      return null;
     }
-    return null;
   }
 
   private deleteCookie(name: string): void {
-    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    // Use localStorage (matching registration.component.ts)
+    try {
+      localStorage.removeItem(name);
+    } catch (e) {
+      console.error('Error removing from localStorage:', e);
+    }
   }
 }

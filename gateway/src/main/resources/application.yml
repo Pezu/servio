@@ -9,33 +9,26 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
 
-  # Kafka for consuming events (WebSocket notifications)
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      auto-offset-reset: earliest
-      group-id: gateway-websocket
-      properties:
-        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: "*"
-        spring.json.type.mapping: >
-          com.servio.event.dto.kafka.OrderCreatedEvent:com.servio.gateway.websocket.dto.kafka.OrderCreatedEvent,
-          com.servio.event.dto.kafka.OrderStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderStatusChangedEvent,
-          com.servio.event.dto.kafka.OrderItemStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderItemStatusChangedEvent,
-          com.servio.event.dto.kafka.PaymentCompletedEvent:com.servio.gateway.websocket.dto.kafka.PaymentCompletedEvent,
-          com.servio.event.dto.kafka.ValidationRequestedEvent:com.servio.gateway.websocket.dto.kafka.ValidationRequestedEvent,
-          com.servio.event.dto.kafka.RegistrationValidatedEvent:com.servio.gateway.websocket.dto.kafka.RegistrationValidatedEvent,
-          com.servio.order.dto.kafka.OrderCreatedEvent:com.servio.gateway.websocket.dto.kafka.OrderCreatedEvent,
-          com.servio.order.dto.kafka.OrderStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderStatusChangedEvent,
-          com.servio.order.dto.kafka.OrderItemStatusChangedEvent:com.servio.gateway.websocket.dto.kafka.OrderItemStatusChangedEvent,
-          com.servio.order.dto.kafka.PaymentCompletedEvent:com.servio.gateway.websocket.dto.kafka.PaymentCompletedEvent
+  # AWS SQS for consuming events (WebSocket notifications)
+  cloud:
+    aws:
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:local}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:local}
+      region:
+        static: ${AWS_REGION:us-east-1}
+      sqs:
+        endpoint: ${SQS_ENDPOINT:http://localhost:9324}
 
 server:
   port: ${SERVER_PORT:8080}
   address: 0.0.0.0
+  tomcat:
+    connection-timeout: 60000
+    max-swallow-size: -1
+
+spring.servlet.multipart:
+  enabled: false
 
 # Actuator
 management:
@@ -58,15 +51,15 @@ services:
 jwt:
   secret: ${JWT_SECRET:your-development-secret-key-at-least-32-chars}
 
-# Kafka topics for WebSocket notifications
-kafka:
-  topics:
-    order-created: order.created
-    order-status-changed: order.status.changed
-    order-item-status-changed: order.item.status.changed
-    payment-completed: payment.completed
-    registration-validated: registration.validated
-    validation-requested: validation.requested
+# SQS Queue names for WebSocket notifications
+sqs:
+  queues:
+    order-created: order-created
+    order-status-changed: order-status-changed
+    order-item-status-changed: order-item-status-changed
+    payment-completed: payment-completed
+    registration-validated: registration-validated
+    validation-requested: validation-requested
 
 # CORS for WebSocket endpoints
 cors:
@@ -75,4 +68,4 @@ cors:
 logging:
   level:
     com.servio.gateway: DEBUG
-    org.springframework.kafka: INFO
+    io.awspring.cloud.sqs: DEBUG

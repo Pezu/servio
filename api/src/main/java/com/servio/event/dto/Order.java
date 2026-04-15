@@ -27,6 +27,12 @@ public class Order {
     private String note;
     private boolean needsPayment;
     private String nickname;
+    private String paymentMethod;
+    private String paidBy;
+    private LocalDateTime paidAt;
+    private BigDecimal tip;
     private List<OrderItem> items;
     private BigDecimal totalAmount;
+    private BigDecimal netAmount;
+    private BigDecimal vatAmount;
 }

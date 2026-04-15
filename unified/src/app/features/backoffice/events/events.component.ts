@@ -46,7 +46,6 @@ import { ClientService, Client, PageResponse } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
 import { EventService, Event } from '../clients/event.service';
 import { UserService, User } from '../clients/user.service';
-import { PaymentTypeService, PaymentType } from '../configuration/payment-types/payment-type.service';
 import { MenuService, MenuItem } from '../clients/menu.service';
 import { EventOrderPointService, EventOrderPoint } from '../clients/event-order-point.service';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
@@ -345,29 +344,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 </div>
               </div>
 
-              <!-- Payment Types Selection -->
-              <div class="form-group">
-                <label>{{ 'EVENTS.PAYMENT_TYPES' | translate }}</label>
-                <div class="multi-select-wrapper payment-types-dropdown" [class.open]="paymentTypesDropdownOpen">
-                  <div class="multi-select-input" (click)="togglePaymentTypesDropdown(); $event.stopPropagation()">
-                    <span class="selected-text" *ngIf="getSelectedPaymentTypesText()">{{ getSelectedPaymentTypesText() }}</span>
-                    <span class="placeholder" *ngIf="!getSelectedPaymentTypesText()">{{ 'EVENTS.SELECT_PAYMENT_TYPES' | translate }}</span>
-                    <span class="dropdown-arrow">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div class="multi-select-dropdown open-upward" *ngIf="paymentTypesDropdownOpen" (click)="$event.stopPropagation()">
-                    <div *ngIf="loadingPaymentTypes" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                    <div *ngIf="!loadingPaymentTypes && paymentTypes.length === 0" class="empty-state">{{ 'PAYMENT_TYPES.NO_PAYMENT_TYPES' | translate }}</div>
-                    <label *ngFor="let pt of paymentTypes" class="checkbox-option">
-                      <input type="checkbox" [checked]="eventFormData.paymentTypeIds.includes(pt.id!)" (change)="togglePaymentType(pt.id!, $event)">
-                      <span class="checkbox-label-text">{{ pt.name }}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
             }
 
             <!-- Tables Tab -->
@@ -387,7 +363,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <thead>
                       <tr>
                         <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
-                        <th>{{ 'EVENTS.PREPAID' | translate }}</th>
                         <th>{{ 'EVENTS.CLIENT' | translate }}</th>
                         <th>{{ 'COMMON.EMAIL' | translate }}</th>
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
@@ -398,7 +373,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="7">
+                          <td colspan="6">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -412,13 +387,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                             <tr class="child-row">
                               <td class="location-cell">
                                 <span class="order-point-name">{{ table.orderPointName }}</span>
-                              </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'prepaid', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'prepaid') {
-                                  <input type="number" class="inline-input prepaid-input" [(ngModel)]="table.prepaid" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'clientName')" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.prepaid || '' }}</span>
-                                }
                               </td>
                               <td class="editable-cell" (click)="startEditing(table.orderPointId, 'clientName', $event)">
                                 @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'clientName') {
@@ -642,7 +610,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .editable-cell:hover .cell-value { background: rgba(59, 130, 246, 0.08); }
     .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--primary); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; box-shadow: 0 0 0 2px var(--primary-light); height: 32px; box-sizing: border-box; }
     .inline-input:focus { outline: none; }
-    .prepaid-input { text-align: right; }
     .credit-value-input { text-align: right; }
     .disabled-cell { cursor: not-allowed; opacity: 0.5; }
     .disabled-cell:hover { background: transparent; }
@@ -964,8 +931,8 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; paymentTypeIds: string[] } = {
-    name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: []
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[] } = {
+    name: '', startDate: '', endDate: '', userIds: []
   };
 
   // Users
@@ -973,10 +940,6 @@ export class EventsComponent implements OnInit {
   loadingUsers = false;
   usersDropdownOpen = false;
 
-  // Payment Types
-  paymentTypes: PaymentType[] = [];
-  loadingPaymentTypes = false;
-  paymentTypesDropdownOpen = false;
 
   // Menu Items for event
   eventMenuItems: MenuItem[] = [];
@@ -999,7 +962,6 @@ export class EventsComponent implements OnInit {
     private locationService: LocationService,
     public eventService: EventService,
     private userService: UserService,
-    private paymentTypeService: PaymentTypeService,
     private menuService: MenuService,
     private eventOrderPointService: EventOrderPointService,
     private elementRef: ElementRef
@@ -1041,24 +1003,10 @@ export class EventsComponent implements OnInit {
     if (usersDropdown && !usersDropdown.contains(event.target)) {
       this.usersDropdownOpen = false;
     }
-    const paymentTypesDropdown = this.elementRef.nativeElement.querySelector('.payment-types-dropdown');
-    if (paymentTypesDropdown && !paymentTypesDropdown.contains(event.target)) {
-      this.paymentTypesDropdownOpen = false;
-    }
   }
 
   toggleUsersDropdown(): void {
     this.usersDropdownOpen = !this.usersDropdownOpen;
-    if (this.usersDropdownOpen) {
-      this.paymentTypesDropdownOpen = false;
-    }
-  }
-
-  togglePaymentTypesDropdown(): void {
-    this.paymentTypesDropdownOpen = !this.paymentTypesDropdownOpen;
-    if (this.paymentTypesDropdownOpen) {
-      this.usersDropdownOpen = false;
-    }
   }
 
   // Client Methods
@@ -1232,14 +1180,11 @@ export class EventsComponent implements OnInit {
   openEventModal(): void {
     this.editingEvent = null;
     this.eventModalTab = 'details';
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], paymentTypeIds: [] };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [] };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
       this.loadUsers();
-    }
-    if (this.paymentTypes.length === 0) {
-      this.loadPaymentTypes();
     }
     this.loadEventMenuItems();
     this.showEventModal = true;
@@ -1252,17 +1197,13 @@ export class EventsComponent implements OnInit {
       name: event.name,
       startDate: '',
       endDate: '',
-      userIds: event.userIds || [],
-      paymentTypeIds: event.paymentTypeIds || []
+      userIds: event.userIds || []
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
     this.endDate = event.endDate ? new Date(event.endDate + 'T00:00:00') : null;
     if (this.users.length === 0 && this.selectedClient) {
       this.loadUsers();
-    }
-    if (this.paymentTypes.length === 0) {
-      this.loadPaymentTypes();
     }
     this.loadEventMenuItems();
     this.loadEventTables();
@@ -1273,7 +1214,6 @@ export class EventsComponent implements OnInit {
     this.showEventModal = false;
     this.editingEvent = null;
     this.usersDropdownOpen = false;
-    this.paymentTypesDropdownOpen = false;
   }
 
   saveEvent(): void {
@@ -1290,7 +1230,6 @@ export class EventsComponent implements OnInit {
       startDate: this.dateToApiFormat(this.startDate),
       endDate: this.dateToApiFormat(this.endDate),
       userIds: this.eventFormData.userIds,
-      paymentTypeIds: this.eventFormData.paymentTypeIds,
       menuItemIds
     };
     const operation = this.editingEvent
@@ -1374,33 +1313,6 @@ export class EventsComponent implements OnInit {
       }
     } else {
       this.eventFormData.userIds = this.eventFormData.userIds.filter(id => id !== userId);
-    }
-  }
-
-  // Payment Type Methods
-  loadPaymentTypes(): void {
-    this.loadingPaymentTypes = true;
-    this.paymentTypeService.getPaymentTypes(0, 100).subscribe({
-      next: (response) => { this.paymentTypes = response.content; this.loadingPaymentTypes = false; },
-      error: (err) => { console.error('Error loading payment types:', err); this.loadingPaymentTypes = false; }
-    });
-  }
-
-  getSelectedPaymentTypesText(): string {
-    const selectedPts = this.paymentTypes.filter(pt => this.eventFormData.paymentTypeIds.includes(pt.id!));
-    if (selectedPts.length === 0) return '';
-    if (selectedPts.length <= 2) return selectedPts.map(pt => pt.name).join(', ');
-    return `${selectedPts.length} payment types selected`;
-  }
-
-  togglePaymentType(paymentTypeId: string, event: globalThis.Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-      if (!this.eventFormData.paymentTypeIds.includes(paymentTypeId)) {
-        this.eventFormData.paymentTypeIds.push(paymentTypeId);
-      }
-    } else {
-      this.eventFormData.paymentTypeIds = this.eventFormData.paymentTypeIds.filter(id => id !== paymentTypeId);
     }
   }
 

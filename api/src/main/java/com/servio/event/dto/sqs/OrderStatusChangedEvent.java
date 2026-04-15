@@ -1,4 +1,4 @@
-package com.servio.gateway.websocket.dto.kafka;
+package com.servio.event.dto.sqs;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,10 +11,12 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderCreatedEvent {
+public class OrderStatusChangedEvent {
     private UUID orderId;
     private Integer orderNo;
+    private UUID registrationId;
     private UUID eventId;
     private UUID orderPointId;
-    private UUID registrationId;
+    private String previousStatus;
+    private String newStatus;
 }

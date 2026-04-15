@@ -1,18 +1,20 @@
 package com.servio.event.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.servio.event.dto.OrderNotification;
-import com.servio.event.dto.kafka.OrderCreatedEvent;
-import com.servio.event.dto.kafka.OrderItemStatusChangedEvent;
-import com.servio.event.dto.kafka.OrderStatusChangedEvent;
-import com.servio.event.dto.kafka.PaymentCompletedEvent;
+import com.servio.event.dto.sqs.OrderCreatedEvent;
+import com.servio.event.dto.sqs.OrderItemStatusChangedEvent;
+import com.servio.event.dto.sqs.OrderStatusChangedEvent;
+import com.servio.event.dto.sqs.PaymentCompletedEvent;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
+import io.awspring.cloud.sqs.operations.SqsTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,19 +26,20 @@ import java.util.UUID;
 public class OrderNotificationService {
 
     private final SimpMessagingTemplate messagingTemplate;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final SqsTemplate sqsTemplate;
+    private final ObjectMapper objectMapper;
 
-    @Value("${kafka.topics.order-status-changed:order.status.changed}")
-    private String orderStatusChangedTopic;
+    @Value("${sqs.queues.order-status-changed}")
+    private String orderStatusChangedQueue;
 
-    @Value("${kafka.topics.order-item-status-changed:order.item.status.changed}")
-    private String orderItemStatusChangedTopic;
+    @Value("${sqs.queues.order-item-status-changed}")
+    private String orderItemStatusChangedQueue;
 
-    @Value("${kafka.topics.payment-completed:payment.completed}")
-    private String paymentCompletedTopic;
+    @Value("${sqs.queues.payment-completed}")
+    private String paymentCompletedQueue;
 
-    @Value("${kafka.topics.order-created:order.created}")
-    private String orderCreatedTopic;
+    @Value("${sqs.queues.order-created}")
+    private String orderCreatedQueue;
 
     public void notifyOrderStatusChange(OrderEntity order, OrderStatus previousStatus, OrderStatus newStatus) {
         UUID registrationId = order.getRegistrationId();
@@ -51,7 +54,7 @@ public class OrderNotificationService {
                 .newStatus(newStatus.name())
                 .build();
 
-        publishToKafka(orderStatusChangedTopic, event);
+        publishToSqs(orderStatusChangedQueue, event);
 
         OrderNotification notification = OrderNotification.builder()
                 .orderId(order.getId())
@@ -108,7 +111,7 @@ public class OrderNotificationService {
                 .newStatus(newStatus.name())
                 .build();
 
-        publishToKafka(orderItemStatusChangedTopic, event);
+        publishToSqs(orderItemStatusChangedQueue, event);
 
         OrderNotification notification = OrderNotification.builder()
                 .orderId(order.getId())
@@ -140,21 +143,32 @@ public class OrderNotificationService {
     }
 
     public void notifyPaymentComplete(UUID eventId, UUID orderPointId, int itemsMarkedPaid) {
+        notifyPaymentCompletedInternal(eventId, orderPointId, null, itemsMarkedPaid);
+    }
+
+    public void notifyPaymentCompleted(OrderEntity order, int itemsMarkedPaid) {
+        notifyPaymentCompletedInternal(order.getEventId(), order.getOrderPointId(), order.getId(), itemsMarkedPaid);
+    }
+
+    private void notifyPaymentCompletedInternal(UUID eventId, UUID orderPointId, UUID orderId, int itemsMarkedPaid) {
         PaymentCompletedEvent event = PaymentCompletedEvent.builder()
                 .eventId(eventId)
                 .orderPointId(orderPointId)
+                .orderId(orderId)
                 .itemsMarkedPaid(itemsMarkedPaid)
                 .build();
 
-        publishToKafka(paymentCompletedTopic, event);
+        publishToSqs(paymentCompletedQueue, event);
 
         OrderNotification notification = OrderNotification.builder()
                 .type("PAYMENT_COMPLETE")
                 .message("Payment completed, " + itemsMarkedPaid + " items marked as paid")
                 .build();
 
-        String orderPointDestination = "/topic/orderpoint/" + orderPointId + "/payments";
-        messagingTemplate.convertAndSend(orderPointDestination, notification);
+        if (orderPointId != null) {
+            String orderPointDestination = "/topic/orderpoint/" + orderPointId + "/payments";
+            messagingTemplate.convertAndSend(orderPointDestination, notification);
+        }
 
         if (eventId != null) {
             String eventDestination = "/topic/event/" + eventId + "/payments";
@@ -171,11 +185,17 @@ public class OrderNotificationService {
                 .registrationId(order.getRegistrationId())
                 .build();
 
-        publishToKafka(orderCreatedTopic, event);
+        publishToSqs(orderCreatedQueue, event);
     }
 
-    private void publishToKafka(String topic, Object event) {
-        log.info("Publishing to Kafka topic {}: {}", topic, event);
-        kafkaTemplate.send(topic, event);
+    private void publishToSqs(String queueName, Object event) {
+        try {
+            String message = objectMapper.writeValueAsString(event);
+            log.info("Publishing to SQS queue {}: {}", queueName, message);
+            sqsTemplate.send(queueName, message);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize event for SQS queue {}: {}", queueName, e.getMessage());
+            throw new RuntimeException("Failed to serialize event", e);
+        }
     }
 }

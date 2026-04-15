@@ -2,9 +2,9 @@ package com.servio.event.listener;
 
 import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.repository.OrderItemRepository;
+import io.awspring.cloud.sqs.annotation.SqsListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -16,10 +16,7 @@ public class OrderItemCancelListener {
 
     private final OrderItemRepository orderItemRepository;
 
-    @KafkaListener(
-            topics = "${kafka.order.item.cancel.topic}",
-            groupId = "${kafka.order.item.cancel.group}"
-    )
+    @SqsListener("${sqs.queues.order-item-cancel}")
     public void handleOrderItemCancel(String orderItemId) {
         OrderItemEntity orderItem = orderItemRepository.findById(UUID.fromString(orderItemId))
                 .orElse(null);

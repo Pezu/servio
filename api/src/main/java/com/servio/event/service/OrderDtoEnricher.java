@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -130,12 +131,32 @@ public class OrderDtoEnricher {
 
     private void calculateTotalAmount(Order dto, OrderEntity entity) {
         if (entity.getItems() != null && !entity.getItems().isEmpty()) {
-            BigDecimal total = entity.getItems().stream()
-                    .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal total = BigDecimal.ZERO;
+            BigDecimal netTotal = BigDecimal.ZERO;
+
+            for (var item : entity.getItems()) {
+                BigDecimal itemTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+                total = total.add(itemTotal);
+
+                // Calculate net from inclusive price: netAmount = itemTotal / (1 + vatRate/100)
+                BigDecimal vatRate = item.getVatRate() != null ? item.getVatRate() : BigDecimal.ZERO;
+                if (vatRate.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal divisor = BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
+                    BigDecimal itemNet = itemTotal.divide(divisor, 2, RoundingMode.HALF_UP);
+                    netTotal = netTotal.add(itemNet);
+                } else {
+                    // No VAT - net equals total
+                    netTotal = netTotal.add(itemTotal);
+                }
+            }
+
             dto.setTotalAmount(total);
+            dto.setNetAmount(netTotal);
+            dto.setVatAmount(total.subtract(netTotal));
         } else {
             dto.setTotalAmount(BigDecimal.ZERO);
+            dto.setVatAmount(BigDecimal.ZERO);
+            dto.setNetAmount(BigDecimal.ZERO);
         }
     }
 }

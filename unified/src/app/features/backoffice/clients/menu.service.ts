@@ -30,6 +30,12 @@ export interface VatType {
   active: boolean;
 }
 
+export interface Menu {
+  id?: string;
+  locationId: string;
+  name: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -37,6 +43,32 @@ export class MenuService {
   private apiUrl = `${environment.apiUrl}/api/menu`;
 
   constructor(private http: HttpClient) {}
+
+  // ==================== Menu CRUD Operations ====================
+
+  getMenusByLocation(locationId: string): Observable<Menu[]> {
+    return this.http.get<Menu[]>(`${this.apiUrl}/menus/location/${locationId}`);
+  }
+
+  createMenu(locationId: string, name: string): Observable<Menu> {
+    return this.http.post<Menu>(`${this.apiUrl}/menus`, { locationId, name });
+  }
+
+  deleteMenu(menuId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/menus/${menuId}`);
+  }
+
+  // ==================== Menu Tree Operations (by Menu ID) ====================
+
+  getMenuTreeByMenuId(menuId: string): Observable<MenuItem[]> {
+    return this.http.get<MenuItem[]>(`${this.apiUrl}/menus/${menuId}/tree`);
+  }
+
+  saveMenuTreeByMenuId(menuId: string, menuItems: MenuItem[]): Observable<MenuItem[]> {
+    return this.http.put<MenuItem[]>(`${this.apiUrl}/menus/${menuId}/tree`, menuItems);
+  }
+
+  // ==================== Legacy Location-based Operations ====================
 
   getMenuTree(locationId: string): Observable<MenuItem[]> {
     return this.http.get<MenuItem[]>(`${this.apiUrl}/location/${locationId}`);

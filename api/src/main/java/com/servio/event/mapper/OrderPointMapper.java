@@ -9,5 +9,6 @@ import org.mapstruct.MappingConstants;
 @Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface OrderPointMapper {
     @Mapping(source = "location.id", target = "locationId")
+    @Mapping(source = "menu.id", target = "menuId")
     OrderPoint toDto(OrderPointEntity entity);
 }

@@ -45,111 +45,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Allow CORS preflight requests
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+        // All security is handled at the gateway level.
+        // This filter only extracts user info from headers set by the gateway.
 
-        String path = request.getRequestURI();
+        String userId = request.getHeader("X-User-Id");
+        String username = request.getHeader("X-Username");
+        String role = request.getHeader("X-User-Role");
+        String clientId = request.getHeader("X-Client-Id");
 
-        // Skip authentication for public paths
-        if (isPublicPath(path)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Skip authentication for customer-facing event endpoints (event details and menu) - GET only
-        // Use UUID pattern to avoid matching other endpoints like /api/events/active
-        String uuidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
-        if ("GET".equalsIgnoreCase(request.getMethod()) &&
-                (path.matches("/api/events/" + uuidPattern + "$") || path.matches("/api/events/" + uuidPattern + "/menu"))) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Skip authentication for customer-facing order endpoints
-        // - POST /api/orders (create order)
-        // - GET /api/orders/registrations/{id} (view orders by registration)
-        // - POST /api/orders/{id}/confirm (confirm order after payment)
-        // - POST /api/payments/netopia/start-batch (batch payment)
-        if (path.equals("/api/orders") && "POST".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        if (path.equals("/api/payments/netopia/start-batch") && "POST".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        if (path.matches("/api/orders/registrations/[^/]+")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        if (path.matches("/api/orders/[^/]+/confirm")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        // GET /api/orders/order-points/{id} (view orders at order point - for payLater)
-        if (path.matches("/api/orders/order-points/[^/]+") && "GET".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        // GET /api/orders/events/{id}/needs-payment (check if event requires payment - customer-facing)
-        if (path.matches("/api/orders/events/" + uuidPattern + "/needs-payment") && "GET".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Skip authentication for non-backoffice paths
-        if (!path.startsWith("/api/")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendUnauthorizedResponse(request, response, "Missing or invalid Authorization header");
-            return;
-        }
-
-        String token = authHeader.substring(7);
-
-        try {
-            SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-            Claims claims = Jwts.parser()
-                    .verifyWith(key)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
-            String username = claims.getSubject();
-            @SuppressWarnings("unchecked")
-            List<String> roles = claims.get("roles", List.class);
-
-            // Get clientId from token
-            String clientId = claims.get("clientId", String.class);
-
-            // Set request attributes for backward compatibility
+        // Set request attributes for backward compatibility
+        if (username != null) {
             request.setAttribute("username", username);
-            request.setAttribute("roles", roles);
-            request.setAttribute("clientId", clientId);
-
-            // Set Spring Security context for @PreAuthorize support
-            if (roles != null) {
-                List<SimpleGrantedAuthority> authorities = roles.stream()
-                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                        .toList();
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(username, null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            }
-
-            filterChain.doFilter(request, response);
-        } catch (Exception e) {
-            sendUnauthorizedResponse(request, response, "Invalid or expired token");
         }
+        if (role != null) {
+            request.setAttribute("roles", List.of(role));
+        }
+        if (clientId != null) {
+            request.setAttribute("clientId", clientId);
+        }
+
+        // Set Spring Security context if user info is present
+        if (userId != null && role != null) {
+            List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        filterChain.doFilter(request, response);
     }
 
     private void sendUnauthorizedResponse(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {

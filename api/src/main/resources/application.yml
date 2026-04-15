@@ -1,22 +1,19 @@
 spring:
   application:
     name: event
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-    consumer:
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      auto-offset-reset: earliest
-      group-id: event-api
-      properties:
-        spring.json.trusted.packages: com.servio.event.dto.kafka
+  cloud:
+    aws:
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:minioadmin}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:minioadmin}
+      region:
+        static: ${AWS_REGION:us-east-1}
+      sqs:
+        endpoint: ${SQS_ENDPOINT:http://localhost:9324}
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/eventdb}
-    username: ${DATABASE_USERNAME:eventuser}
-    password: ${DATABASE_PASSWORD:eventpass}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/servio?currentSchema=event}
+    username: ${DATABASE_USERNAME:servio}
+    password: ${DATABASE_PASSWORD:serviopass}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -26,10 +23,12 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        default_schema: event
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    schemas: event
   cache:
     type: caffeine
     caffeine:
@@ -38,6 +37,14 @@ spring:
 server:
   port: ${SERVER_PORT:8081}
   address: 0.0.0.0
+  tomcat:
+    connection-timeout: 60000
+    max-swallow-size: -1
+
+spring.servlet.multipart:
+  enabled: true
+  max-file-size: 10MB
+  max-request-size: 10MB
 
 # Actuator endpoints
 management:
@@ -50,10 +57,6 @@ management:
     health:
       show-details: always
 
-logging:
-  level:
-    org.apache.kafka.clients.producer.ProducerConfig: WARN
-
 application:
   base-url: ${APPLICATION_BASE_URL:http://localhost:4200}
 
@@ -65,28 +68,27 @@ jwt:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:3000}
 
-kafka:
-  order:
-    item:
-      cancel:
-        topic: cancel.order.item
-        group: cancel.order.item
-  # Topics consumed from Order microservice
-  topics:
-    order-created: order.created
-    order-status-changed: order.status.changed
-    order-item-status-changed: order.item.status.changed
-    payment-completed: payment.completed
-    validation-requested: validation.requested
+# SQS Queue names
+sqs:
+  queues:
+    order-created: order-created
+    order-status-changed: order-status-changed
+    order-item-status-changed: order-item-status-changed
+    payment-completed: payment-completed
+    validation-requested: validation-requested
+    registration-validated: registration-validated
+    order-item-cancel: order-item-cancel
 
 elasticsearch:
   host: ${ELASTICSEARCH_HOST:localhost}
 
-minio:
-  url: ${MINIO_URL:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY}
-  secret-key: ${MINIO_SECRET_KEY}
-  bucket: ${MINIO_BUCKET:images}
+aws:
+  s3:
+    endpoint: ${AWS_S3_ENDPOINT:http://localhost:9000}
+    access-key: ${AWS_ACCESS_KEY_ID:minioadmin}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:minioadmin}
+    bucket: ${AWS_S3_BUCKET:images}
+    region: ${AWS_REGION:us-east-1}
 
 netopia:
   api-key: ${NETOPIA_API_KEY:GMaWOObfdYQBlUWcuZFVnEqw-5DOTm6s7iOz5FFbdh0TYH23CJPEeKFx284g}

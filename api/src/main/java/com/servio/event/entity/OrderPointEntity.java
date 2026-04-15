@@ -29,4 +29,8 @@ public class OrderPointEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "location_id", nullable = false)
     private LocationEntity location;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "menu_id")
+    private MenuEntity menu;
 }

@@ -2,8 +2,10 @@ package com.servio.gateway.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
@@ -16,6 +18,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Enumeration;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RestController
@@ -30,9 +33,18 @@ public class ProxyController {
     private final RestTemplate restTemplate;
 
     public ProxyController() {
-        // Use Apache HttpClient to support PATCH method
-        CloseableHttpClient httpClient = HttpClients.createDefault();
+        // Use Apache HttpClient with extended timeouts for file uploads
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectionRequestTimeout(Timeout.of(60, TimeUnit.SECONDS))
+                .setResponseTimeout(Timeout.of(60, TimeUnit.SECONDS))
+                .build();
+
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .build();
+
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory(httpClient);
+        requestFactory.setConnectTimeout(60000);
         this.restTemplate = new RestTemplate(requestFactory);
     }
 
@@ -72,17 +84,26 @@ public class ProxyController {
 
         log.debug("Proxying {} {} to {}", request.getMethod(), requestUri, targetUrl);
 
+        // Read request body first
+        byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
+
         // Build headers
         HttpHeaders headers = new HttpHeaders();
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
-            // Skip hop-by-hop headers
+            // Skip hop-by-hop headers and Content-Length (we'll set it ourselves)
             if (!headerName.equalsIgnoreCase("Host") &&
                 !headerName.equalsIgnoreCase("Connection") &&
-                !headerName.equalsIgnoreCase("Transfer-Encoding")) {
+                !headerName.equalsIgnoreCase("Transfer-Encoding") &&
+                !headerName.equalsIgnoreCase("Content-Length")) {
                 headers.add(headerName, request.getHeader(headerName));
             }
+        }
+
+        // Set correct Content-Length based on actual body size
+        if (body.length > 0) {
+            headers.setContentLength(body.length);
         }
 
         // Add user info from JWT (if authenticated)
@@ -95,9 +116,6 @@ public class ProxyController {
         if (username != null) headers.set("X-Username", username.toString());
         if (role != null) headers.set("X-User-Role", role.toString());
         if (clientId != null) headers.set("X-Client-Id", clientId.toString());
-
-        // Read request body
-        byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
 
         HttpEntity<byte[]> entity = new HttpEntity<>(body, headers);
 

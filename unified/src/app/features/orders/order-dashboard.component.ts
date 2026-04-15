@@ -4,7 +4,9 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Client } from '@stomp/stompjs';
 import * as SockJS from 'sockjs-client';
+import { forkJoin } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 
 interface OrderItem {
   id: string;
@@ -39,10 +41,24 @@ interface PendingRegistration {
   nickname?: string;
 }
 
+interface EventOrderPoint {
+  id?: string;
+  eventId: string;
+  orderPointId: string;
+  orderPointName: string;
+  sublocationName: string;
+  prepaid: number;
+  clientName?: string;
+  email?: string;
+  phone?: string;
+  credit: boolean;
+  creditValue?: number;
+}
+
 @Component({
   selector: 'app-order-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, DragDropModule],
   template: `
     <!-- Header -->
     <header class="dashboard-header">
@@ -104,8 +120,15 @@ interface PendingRegistration {
             <div class="column-header column-ordered">
               <h3>Ordered<span class="column-count" *ngIf="orderedOrders.length > 0">{{ orderedOrders.length }}</span></h3>
             </div>
-            <div class="column-content">
-              <div *ngFor="let order of orderedOrders" class="order-card">
+            <div class="column-content"
+                 cdkDropList
+                 #orderedList="cdkDropList"
+                 [cdkDropListData]="orderedOrders"
+                 [cdkDropListConnectedTo]="[inProgressList]"
+                 [cdkDropListSortingDisabled]="true"
+                 (cdkDropListDropped)="onOrderDrop($event, 'ACTIVE')">
+              <div *ngFor="let order of orderedOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order">
+                <div class="drag-placeholder" *cdkDragPlaceholder></div>
                 <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
               </div>
               <div *ngIf="orderedOrders.length === 0" class="column-empty">No orders</div>
@@ -117,8 +140,15 @@ interface PendingRegistration {
             <div class="column-header column-in-progress">
               <h3>In Progress<span class="column-count" *ngIf="inProgressOrders.length > 0">{{ inProgressOrders.length }}</span></h3>
             </div>
-            <div class="column-content">
-              <div *ngFor="let order of inProgressOrders" class="order-card">
+            <div class="column-content"
+                 cdkDropList
+                 #inProgressList="cdkDropList"
+                 [cdkDropListData]="inProgressOrders"
+                 [cdkDropListConnectedTo]="[orderedList, readyList]"
+                 [cdkDropListSortingDisabled]="true"
+                 (cdkDropListDropped)="onOrderDrop($event, 'IN_PROGRESS')">
+              <div *ngFor="let order of inProgressOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
+                <div class="drag-placeholder" *cdkDragPlaceholder></div>
                 <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
               </div>
               <div *ngIf="inProgressOrders.length === 0" class="column-empty">No orders</div>
@@ -130,8 +160,15 @@ interface PendingRegistration {
             <div class="column-header column-ready">
               <h3>Ready<span class="column-count" *ngIf="readyOrders.length > 0">{{ readyOrders.length }}</span></h3>
             </div>
-            <div class="column-content">
-              <div *ngFor="let order of readyOrders" class="order-card">
+            <div class="column-content"
+                 cdkDropList
+                 #readyList="cdkDropList"
+                 [cdkDropListData]="readyOrders"
+                 [cdkDropListConnectedTo]="[inProgressList]"
+                 [cdkDropListSortingDisabled]="true"
+                 (cdkDropListDropped)="onOrderDrop($event, 'READY')">
+              <div *ngFor="let order of readyOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
+                <div class="drag-placeholder" *cdkDragPlaceholder></div>
                 <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
               </div>
               <div *ngIf="readyOrders.length === 0" class="column-empty">No orders</div>
@@ -180,7 +217,7 @@ interface PendingRegistration {
             <div *ngFor="let item of order.items" class="item-row" [class.item-done]="item.status === 'DONE'" [class.item-cancelled]="item.status === 'CANCELLED'">
               <div class="item-info">
                 <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name">{{ item.name }}</span>
+                <span class="item-name" [innerHTML]="item.name"></span>
                 <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
               </div>
               <div class="item-note" *ngIf="item.note">{{ item.note }}</div>
@@ -332,97 +369,78 @@ interface PendingRegistration {
         <div *ngIf="!loadingNeedsPayment && needsPaymentOrders.length > 0" class="payments-container">
           <!-- Controls Bar -->
           <div class="payments-controls">
-            <div class="controls-left">
-              <div class="view-toggle-bar">
-                <button class="toggle-btn" [class.active]="paymentMode === 'all'" (click)="paymentMode = 'all'">All</button>
-                <button class="toggle-btn" [class.active]="paymentMode === 'guest'" (click)="paymentMode = 'guest'">By Guest</button>
-              </div>
-            </div>
-            <div class="controls-right">
-              <span class="payments-total-badge">{{ getTotalPayments().toFixed(2) }} RON</span>
+            <div class="view-toggle-bar">
+              <button class="toggle-btn" [class.active]="paymentMode === 'table'" (click)="paymentMode = 'table'">Table</button>
+              <button class="toggle-btn" [class.active]="paymentMode === 'guest'" (click)="paymentMode = 'guest'">Guest</button>
             </div>
           </div>
 
-          <!-- ALL MODE - Grid of Order Cards -->
-          <div *ngIf="paymentMode === 'all'" class="payments-grid">
-            <div *ngFor="let order of needsPaymentOrders" class="payment-order-card">
-              <div class="card-header">
-                <span class="order-number">#{{ order.orderNo }}</span>
-                <div class="header-center">
-                  <span class="order-point-name">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {{ order.orderPointName }}
-                  </span>
-                  <span class="order-nickname" *ngIf="order.nickname">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    {{ order.nickname }}
-                  </span>
+          <!-- TABLE MODE - Grouped by Table (Order Point) -->
+          <div *ngIf="paymentMode === 'table'" class="payments-by-table">
+            <div *ngFor="let table of groupedPaymentOrders" class="table-section">
+              <div class="table-section-header">
+                <div class="table-info">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span class="table-name">{{ table.orderPointName }}</span>
+                  <span *ngIf="table.creditValue" class="credit-badge">Credit: {{ table.creditValue.toFixed(2) }} RON</span>
                 </div>
-                <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
+                <span class="table-total-badge">{{ getGroupTotal(table.orders).toFixed(2) }} RON</span>
               </div>
-              <div class="items-list">
-                <div *ngFor="let item of order.items" class="item-row">
-                  <div class="item-info">
-                    <span class="item-qty">{{ item.quantity }}x</span>
-                    <span class="item-name">{{ item.name }}</span>
-                    <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
-                  </div>
+              <div class="table-items-list">
+                <div *ngFor="let item of getAggregatedItems(table.orders)" class="aggregated-item-row">
+                  <span class="item-qty">{{ item.quantity }}x</span>
+                  <span class="item-name" [innerHTML]="item.name"></span>
+                  <span class="item-price">{{ item.totalPrice.toFixed(2) }} RON</span>
                 </div>
               </div>
-              <div class="card-footer">
-                <button class="btn-mark-paid" (click)="markOrderPaid(order.id)">
+              <div class="table-orders-footer">
+                <button class="btn-mark-all-paid" (click)="markTablePaid(table.orders)">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                   </svg>
-                  Mark Paid
+                  Mark Table Paid
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- GUEST MODE - Grouped by Guest -->
+          <!-- GUEST MODE - Tables as parents, Guests as children -->
           <div *ngIf="paymentMode === 'guest'" class="payments-by-guest">
-            <div *ngFor="let guest of getOrdersByGuestAll()" class="guest-section">
-              <div class="guest-section-header">
-                <div class="guest-info">
+            <div *ngFor="let table of groupedPaymentOrders" class="table-parent-card">
+              <div class="table-parent-header">
+                <div class="table-info">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <span class="guest-nickname">{{ guest.nickname }}</span>
+                  <span class="table-name">{{ table.orderPointName }}</span>
+                  <span *ngIf="table.creditValue" class="credit-badge">Credit: {{ table.creditValue.toFixed(2) }} RON</span>
                 </div>
-                <span class="guest-total-badge">{{ guest.total.toFixed(2) }} RON</span>
+                <span class="table-total-badge">{{ getGroupTotal(table.orders).toFixed(2) }} RON</span>
               </div>
-              <div class="guest-orders-grid">
-                <div *ngFor="let order of guest.orders" class="payment-order-card">
-                  <div class="card-header">
-                    <span class="order-number">#{{ order.orderNo }}</span>
-                    <div class="header-center">
-                      <span class="order-point-name">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {{ order.orderPointName }}
-                      </span>
+              <div class="guest-children">
+                <div *ngFor="let guest of getOrdersByGuest(table.orders)" class="guest-child-card">
+                  <div class="guest-child-header">
+                    <div class="guest-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <span class="guest-nickname">{{ guest.nickname }}</span>
                     </div>
-                    <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
+                    <span class="guest-total-badge">{{ guest.total.toFixed(2) }} RON</span>
                   </div>
-                  <div class="items-list">
-                    <div *ngFor="let item of order.items" class="item-row">
-                      <div class="item-info">
-                        <span class="item-qty">{{ item.quantity }}x</span>
-                        <span class="item-name">{{ item.name }}</span>
-                        <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
-                      </div>
+                  <div class="guest-items-list">
+                    <div *ngFor="let item of getAggregatedItems(guest.orders)" class="aggregated-item-row">
+                      <span class="item-qty">{{ item.quantity }}x</span>
+                      <span class="item-name" [innerHTML]="item.name"></span>
+                      <span class="item-price">{{ item.totalPrice.toFixed(2) }} RON</span>
                     </div>
                   </div>
-                  <div class="card-footer">
-                    <button class="btn-mark-paid" (click)="markOrderPaid(order.id)">
+                  <div class="guest-footer">
+                    <button class="btn-mark-paid small" (click)="markGuestPaid(guest.orders)">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                       </svg>
@@ -435,6 +453,30 @@ interface PendingRegistration {
           </div>
         </div>
       </ng-container>
+    </div>
+
+    <!-- Payment Method Modal -->
+    <div *ngIf="showPaymentModal" class="payment-modal-overlay" (click)="closePaymentModal()">
+      <div class="payment-modal" (click)="$event.stopPropagation()">
+        <div class="payment-modal-header">
+          <h3>Select Payment Method</h3>
+          <button class="modal-close-btn" (click)="closePaymentModal()">&times;</button>
+        </div>
+        <div class="payment-modal-body">
+          <button class="payment-method-btn cash" (click)="confirmPayment('CASH')">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            Cash
+          </button>
+          <button class="payment-method-btn card" (click)="confirmPayment('CARD')">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+            Card
+          </button>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -703,15 +745,45 @@ interface PendingRegistration {
       background: white;
       border-radius: 16px;
       border: 1px solid #d1d5db;
-      transition: all 0.3s ease;
       height: auto;
       flex-shrink: 0;
       width: 85%;
       margin: 0 auto;
       overflow: hidden;
+      cursor: grab;
     }
-    .order-card:hover {
-      transform: translateY(-2px);
+    .order-card:active {
+      cursor: grabbing;
+    }
+
+    /* Drag and Drop Styles */
+    .cdk-drag-preview {
+      box-sizing: border-box;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      background: white;
+      border: 2px solid #667eea;
+    }
+    .cdk-drag-placeholder {
+      opacity: 0;
+    }
+    .drag-placeholder {
+      background: #e0e7ff;
+      border: 2px dashed #667eea;
+      border-radius: 16px;
+      min-height: 80px;
+      width: 85%;
+      margin: 0 auto;
+    }
+    .cdk-drag-animating {
+      transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+    }
+    .cdk-drop-list-dragging .cdk-drag {
+      transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+    }
+    .order-card[ng-reflect-cdk-drag-disabled="true"] {
+      cursor: default;
+      opacity: 0.8;
     }
 
     /* Status Colors on Card */
@@ -1522,19 +1594,19 @@ interface PendingRegistration {
       height: 16px;
     }
 
-    /* Payments By Guest */
-    .payments-by-guest {
+    /* Payments By Table */
+    .payments-by-table {
       display: flex;
       flex-direction: column;
       gap: 24px;
     }
-    .guest-section {
+    .table-section {
       background: #f8f9fa;
       border-radius: 16px;
       padding: 16px;
       border: 1px solid #e8ecf1;
     }
-    .guest-section-header {
+    .table-section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1542,22 +1614,31 @@ interface PendingRegistration {
       padding-bottom: 12px;
       border-bottom: 1px solid #e8ecf1;
     }
-    .guest-info {
+    .table-info {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .guest-info svg {
+    .table-info svg {
       width: 22px;
       height: 22px;
       color: #64748b;
     }
-    .guest-nickname {
+    .table-name {
       font-size: 18px;
       font-weight: 600;
       color: #1e293b;
     }
-    .guest-total-badge {
+    .credit-badge {
+      font-size: 13px;
+      font-weight: 500;
+      color: #059669;
+      background: #d1fae5;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-left: 8px;
+    }
+    .table-total-badge {
       font-size: 16px;
       font-weight: 700;
       color: #1e293b;
@@ -1566,20 +1647,156 @@ interface PendingRegistration {
       border-radius: 8px;
       border: 1px solid #e8ecf1;
     }
-    .guest-orders-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+    .table-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .aggregated-item-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e8ecf1;
+    }
+    .aggregated-item-row .item-qty {
+      font-weight: 600;
+      color: #64748b;
+      min-width: 30px;
+    }
+    .aggregated-item-row .item-name {
+      flex: 1;
+      font-weight: 500;
+      color: #1e293b;
+    }
+    .aggregated-item-row .item-price {
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .table-orders-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-mark-all-paid {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      background: #22c55e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-mark-all-paid:hover {
+      background: #16a34a;
+    }
+    .btn-mark-all-paid svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Payments By Guest (Table as parent, Guests as children) */
+    .payments-by-guest {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .table-parent-card {
+      background: #f8f9fa;
+      border-radius: 16px;
+      padding: 16px;
+      border: 1px solid #e8ecf1;
+    }
+    .table-parent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .guest-children {
+      display: flex;
+      flex-direction: column;
       gap: 12px;
     }
-    @media (max-width: 1200px) {
-      .guest-orders-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+    .guest-child-card {
+      background: white;
+      border-radius: 12px;
+      padding: 12px 16px;
+      border: 1px solid #e8ecf1;
     }
-    @media (max-width: 768px) {
-      .guest-orders-grid {
-        grid-template-columns: 1fr;
-      }
+    .guest-child-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .guest-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .guest-info svg {
+      width: 20px;
+      height: 20px;
+      color: #64748b;
+    }
+    .guest-nickname {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .guest-total-badge {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+      background: #f1f5f9;
+      padding: 4px 12px;
+      border-radius: 6px;
+    }
+    .guest-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .guest-items-list .aggregated-item-row {
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+    .guest-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-mark-paid.small {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: #22c55e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+    }
+    .btn-mark-paid.small:hover {
+      background: #16a34a;
+    }
+    .btn-mark-paid.small svg {
+      width: 14px;
+      height: 14px;
     }
 
     /* Responsive */
@@ -1598,6 +1815,93 @@ interface PendingRegistration {
       .card-actions { justify-content: stretch; }
       .btn { flex: 1; justify-content: center; }
     }
+
+    /* Payment Modal */
+    .payment-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .payment-modal {
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+    .payment-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #e8ecf1;
+    }
+    .payment-modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .modal-close-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-size: 20px;
+      color: #64748b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-close-btn:hover {
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .payment-modal-body {
+      padding: 24px;
+      display: flex;
+      gap: 16px;
+    }
+    .payment-method-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 24px 16px;
+      border: 2px solid #e8ecf1;
+      border-radius: 12px;
+      background: white;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+      transition: all 0.2s ease;
+    }
+    .payment-method-btn svg {
+      width: 40px;
+      height: 40px;
+    }
+    .payment-method-btn.cash:hover {
+      border-color: #22c55e;
+      background: #f0fdf4;
+      color: #15803d;
+    }
+    .payment-method-btn.card:hover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
   `]
 })
 export class OrderDashboardComponent implements OnInit, OnDestroy {
@@ -1614,37 +1918,45 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   loadingPending = false;
   needsPaymentOrders: Order[] = [];
   loadingNeedsPayment = false;
+  creditValueMap: Map<string, number> = new Map(); // orderPointId -> creditValue
   paymentGroupMode: Map<string, 'all' | 'guest'> = new Map();
   paymentViewMode: Map<string, 'total' | 'order'> = new Map();
-  paymentMode: 'all' | 'guest' = 'all';
+  paymentMode: 'table' | 'guest' = 'table';
   private visibilityHandler: (() => void) | null = null;
   private onlineHandler: (() => void) | null = null;
 
-  // Getters for kanban columns
-  get orderedOrders(): Order[] {
-    return this.orders.filter(o => o.status === 'ACTIVE');
+  // Payment modal
+  showPaymentModal = false;
+  pendingPaymentOrders: Order[] = [];
+
+  // Cached arrays for kanban columns (avoids getter re-computation on every change detection)
+  orderedOrders: Order[] = [];
+  inProgressOrders: Order[] = [];
+  readyOrders: Order[] = [];
+
+  // Track by function for drag-drop performance
+  trackByOrderId = (index: number, order: Order): string => order.id;
+
+  private updateKanbanColumns(): void {
+    this.orderedOrders = this.orders.filter(o => o.status === 'ACTIVE');
+    this.inProgressOrders = this.orders.filter(o => o.status === 'IN_PROGRESS');
+    this.readyOrders = this.orders.filter(o => o.status === 'READY');
   }
 
-  get inProgressOrders(): Order[] {
-    return this.orders.filter(o => o.status === 'IN_PROGRESS');
-  }
-
-  get readyOrders(): Order[] {
-    return this.orders.filter(o => o.status === 'READY');
-  }
-
-  get groupedPaymentOrders(): { orderPointName: string; orders: Order[] }[] {
-    const groups = new Map<string, Order[]>();
+  get groupedPaymentOrders(): { orderPointId: string; orderPointName: string; orders: Order[]; creditValue?: number }[] {
+    const groups = new Map<string, { orderPointName: string; orders: Order[] }>();
     for (const order of this.needsPaymentOrders) {
-      const key = order.orderPointName || 'Unknown';
+      const key = order.orderPointId || 'unknown';
       if (!groups.has(key)) {
-        groups.set(key, []);
+        groups.set(key, { orderPointName: order.orderPointName || 'Unknown', orders: [] });
       }
-      groups.get(key)!.push(order);
+      groups.get(key)!.orders.push(order);
     }
-    return Array.from(groups.entries()).map(([orderPointName, orders]) => ({
-      orderPointName,
-      orders
+    return Array.from(groups.entries()).map(([orderPointId, data]) => ({
+      orderPointId,
+      orderPointName: data.orderPointName,
+      orders: data.orders,
+      creditValue: this.creditValueMap.get(orderPointId)
     }));
   }
 
@@ -1719,17 +2031,26 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
 
   loadNeedsPaymentOrders(): void {
     this.loadingNeedsPayment = true;
-    this.http.get<Order[]>(`${environment.apiUrl}/api/orders/events/${this.eventId}/needs-payment`)
-      .subscribe({
-        next: (orders) => {
-          this.needsPaymentOrders = orders;
-          this.loadingNeedsPayment = false;
-        },
-        error: (err) => {
-          console.error('Failed to load orders needing payment:', err);
-          this.loadingNeedsPayment = false;
+    forkJoin({
+      orders: this.http.get<Order[]>(`${environment.apiUrl}/api/orders/events/${this.eventId}/needs-payment`),
+      eventOrderPoints: this.http.get<EventOrderPoint[]>(`${environment.apiUrl}/api/events/${this.eventId}/order-points`)
+    }).subscribe({
+      next: ({ orders, eventOrderPoints }) => {
+        this.needsPaymentOrders = orders;
+        // Build creditValueMap from eventOrderPoints
+        this.creditValueMap.clear();
+        for (const eop of eventOrderPoints) {
+          if (eop.credit && eop.creditValue != null && eop.creditValue > 0) {
+            this.creditValueMap.set(eop.orderPointId, eop.creditValue);
+          }
         }
-      });
+        this.loadingNeedsPayment = false;
+      },
+      error: (err) => {
+        console.error('Failed to load orders needing payment:', err);
+        this.loadingNeedsPayment = false;
+      }
+    });
   }
 
   loadPendingRegistrations(): void {
@@ -1832,6 +2153,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (orders) => {
           this.orders = orders;
+          this.updateKanbanColumns();
         },
         error: (err) => {
           console.error('Failed to load orders:', err);
@@ -1894,7 +2216,8 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
         // Subscribe to payment updates for this event
         this.stompClient?.subscribe(`/topic/event/${this.eventId}/payments`, (message) => {
           console.log('Received payment update via WebSocket:', message.body);
-          // Reload the needs payment orders when a payment is processed
+          // Reload orders when a payment is processed
+          this.loadOrders();
           this.loadNeedsPaymentOrders();
         });
       },
@@ -2096,6 +2419,145 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
           console.error('Failed to mark order as paid:', err);
         }
       });
+  }
+
+  markTablePaid(orders: Order[]): void {
+    this.pendingPaymentOrders = orders;
+    this.showPaymentModal = true;
+  }
+
+  markGuestPaid(orders: Order[]): void {
+    this.pendingPaymentOrders = orders;
+    this.showPaymentModal = true;
+  }
+
+  closePaymentModal(): void {
+    this.showPaymentModal = false;
+    this.pendingPaymentOrders = [];
+  }
+
+  confirmPayment(paymentMethod: 'CASH' | 'CARD'): void {
+    const orders = this.pendingPaymentOrders;
+    this.closePaymentModal();
+
+    orders.forEach(order => {
+      this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/paid`, {
+        paymentMethod: paymentMethod,
+        paidBy: this.currentUser
+      }).subscribe({
+        next: () => {
+          this.needsPaymentOrders = this.needsPaymentOrders.filter(o => o.id !== order.id);
+        },
+        error: (err) => {
+          console.error('Failed to mark order as paid:', err);
+        }
+      });
+    });
+  }
+
+  onOrderDrop(event: CdkDragDrop<Order[]>, targetColumn: string): void {
+    const order = event.item.data as Order;
+    const previousContainer = event.previousContainer;
+    const currentContainer = event.container;
+
+    // If dropped in the same container, do nothing
+    if (previousContainer === currentContainer) {
+      return;
+    }
+
+    const previousStatus = order.status;
+    const previousAssignedUser = order.assignedUser;
+    const previousIndex = event.previousIndex;
+    const currentIndex = event.currentIndex;
+
+    // Helper to optimistically move the item
+    const optimisticMove = (newStatus: string, newAssignedUser?: string | null) => {
+      // Remove from previous array
+      const prevIndex = previousContainer.data.findIndex(o => o.id === order.id);
+      if (prevIndex > -1) {
+        previousContainer.data.splice(prevIndex, 1);
+      }
+      // Update order status
+      order.status = newStatus;
+      if (newAssignedUser !== undefined) {
+        (order as any).assignedUser = newAssignedUser;
+      }
+      // Add to new array
+      currentContainer.data.splice(currentIndex, 0, order);
+    };
+
+    // Helper to revert the move on error
+    const revertMove = () => {
+      // Remove from current array
+      const currIndex = currentContainer.data.findIndex(o => o.id === order.id);
+      if (currIndex > -1) {
+        currentContainer.data.splice(currIndex, 1);
+      }
+      // Restore order status and assigned user
+      order.status = previousStatus;
+      order.assignedUser = previousAssignedUser;
+      // Add back to previous array
+      previousContainer.data.splice(previousIndex, 0, order);
+    };
+
+    // Determine action based on source and target columns
+    if (order.status === 'ACTIVE' && targetColumn === 'IN_PROGRESS') {
+      // Ordered -> In Progress: Start the order
+      optimisticMove('IN_PROGRESS', this.currentUser);
+      this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=IN_PROGRESS&user=${encodeURIComponent(this.currentUser)}`, {})
+        .subscribe({
+          next: () => {},
+          error: (err) => {
+            console.error('Failed to start order:', err);
+            revertMove();
+          }
+        });
+    } else if (order.status === 'IN_PROGRESS' && targetColumn === 'ACTIVE') {
+      // In Progress -> Ordered: Return the order
+      if (order.assignedUser === this.currentUser) {
+        optimisticMove('ACTIVE', null);
+        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=ACTIVE`, {})
+          .subscribe({
+            next: () => {},
+            error: (err) => {
+              console.error('Failed to return order:', err);
+              revertMove();
+            }
+          });
+      }
+    } else if (order.status === 'IN_PROGRESS' && targetColumn === 'READY') {
+      // In Progress -> Ready: Complete the order
+      if (order.assignedUser === this.currentUser) {
+        optimisticMove('READY');
+        // Mark all items as DONE
+        order.items.forEach(item => {
+          if (item.status !== 'CANCELLED') {
+            item.status = 'DONE';
+          }
+        });
+        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/complete`, {})
+          .subscribe({
+            next: () => {},
+            error: (err) => {
+              console.error('Failed to complete order:', err);
+              revertMove();
+            }
+          });
+      }
+    } else if (order.status === 'READY' && targetColumn === 'IN_PROGRESS') {
+      // Ready -> In Progress: Move back (not a common action, but handle it)
+      if (order.assignedUser === this.currentUser) {
+        optimisticMove('IN_PROGRESS');
+        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=IN_PROGRESS`, {})
+          .subscribe({
+            next: () => {},
+            error: (err) => {
+              console.error('Failed to move order back to in progress:', err);
+              revertMove();
+            }
+          });
+      }
+    }
   }
 
   ngOnDestroy(): void {

@@ -2,24 +2,25 @@
 # Start with: mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 spring:
-  kafka:
-    bootstrap-servers: localhost:9092
   jpa:
     show-sql: false
 
 application:
-  base-url: http://192.168.1.213:4200
+  base-url: http://192.168.0.249:4200
 
 cors:
-  allowed-origins: http://localhost:4200,http://localhost:3000,http://192.168.1.213:4200,http://localhost,capacitor://localhost,*
+  allowed-origins: http://localhost:4200,http://localhost:3000,http://192.168.0.249:4200,http://localhost,capacitor://localhost,*
 
 jwt:
   secret: phpauf1PhcHOqocdXY9O0Z6Bjn3jrsGu7kWG2yEqMbNkbPZxM0RFaFEG8NAReW6+
 
-# MinIO local defaults
-minio:
-  access-key: minioadmin
-  secret-key: minioadmin
+# S3/MinIO local defaults (MinIO for local dev)
+aws:
+  s3:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    region: us-east-1
 
 # Netopia sandbox (local testing)
 netopia:
@@ -27,7 +28,7 @@ netopia:
   pos-signature: 37ZT-B3X1-VZOC-GOIK-2RXP
   base-url: https://secure.sandbox.netopia-payments.com
   notify-url: http://localhost:8080/api/payments/netopia/notify
-  redirect-url: http://localhost:4200/payment/confirmed
+  redirect-url: http://192.168.0.249:4200/payment/confirmed
 
 logging:
   level:

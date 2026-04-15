@@ -10,6 +10,7 @@ export interface OrderItem {
   quantity: number;
   status: string;
   note?: string;
+  paid?: boolean;
 }
 
 export interface Order {
@@ -20,11 +21,19 @@ export interface Order {
   eventId: string;
   eventName?: string;
   orderPointId: string;
+  orderPointName?: string;
   status: string;
   assignedUser?: string;
   note?: string;
+  needsPayment?: boolean;
+  paymentMethod?: string;
+  paidBy?: string;
+  paidAt?: string;
+  tip?: number;
   items: OrderItem[];
   totalAmount: number;
+  netAmount?: number;
+  vatAmount?: number;
 }
 
 export interface PageResponse<T> {

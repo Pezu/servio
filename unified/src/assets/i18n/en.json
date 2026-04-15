@@ -14,6 +14,7 @@
     "MENU": "Menu",
     "EVENTS": "Events",
     "REPORTS": "Reports",
+    "REVENUE": "Revenue",
     "LOGOUT": "Logout"
   },
   "COMMON": {
@@ -202,7 +203,10 @@
     "ITEM_STATUS_ORDERED": "Ordered",
     "ITEM_STATUS_PREPARING": "Preparing",
     "ITEM_STATUS_READY": "Ready",
-    "ITEM_STATUS_CANCELLED": "Cancelled"
+    "ITEM_STATUS_CANCELLED": "Cancelled",
+    "PAID": "Paid",
+    "PAID_STATUS": "Paid",
+    "UNPAID": "Unpaid"
   },
   "ROLES": {
     "TITLE": "Roles",
@@ -248,5 +252,22 @@
     "SELECT": "Language",
     "EN": "English",
     "RO": "Romanian"
+  },
+  "REPORTS": {
+    "REVENUE": {
+      "TITLE": "Revenue",
+      "ALL_PAYMENTS": "All Payments",
+      "PAID_STATUS": "Paid Status",
+      "PAYMENT_METHOD": "Payment Method",
+      "OPERATOR": "Operator",
+      "DATE": "Date",
+      "NET_AMOUNT": "Net",
+      "VAT": "VAT",
+      "ORDER_AMOUNT": "Order",
+      "TIP": "Tip",
+      "TOTAL": "Total",
+      "TOTALS": "Totals",
+      "NO_RECORDS": "No payment records found"
+    }
   }
 }

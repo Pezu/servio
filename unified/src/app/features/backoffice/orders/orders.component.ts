@@ -274,6 +274,16 @@ const CUSTOM_DATE_FORMATS = {
     .status-badge.status-delivered { background: rgba(156, 39, 176, 0.1); color: #7B1FA2; }
     .status-badge.status-cancelled { background: rgba(244, 67, 54, 0.1); color: #D32F2F; }
 
+    .paid-badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .paid-badge.paid { background: rgba(76, 175, 80, 0.1); color: #388E3C; }
+    .paid-badge.unpaid { background: rgba(255, 152, 0, 0.1); color: #F57C00; }
+
+    .payment-info { display: flex; flex-direction: column; gap: 4px; }
+    .payment-method-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+    .payment-method-badge.cash { background: rgba(76, 175, 80, 0.15); color: #2E7D32; }
+    .payment-method-badge.card { background: rgba(33, 150, 243, 0.15); color: #1565C0; }
+    .paid-by-text { font-size: 11px; color: var(--text-muted); }
+
     .pagination-list { list-style: none; display: flex; align-items: center; gap: 4px; margin: 0; padding: 0; }
     .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); text-decoration: none; background: var(--bg-light); transition: all 0.15s ease; }
     .pagination-list li a:hover:not(.disabled) { background: var(--primary-light); color: var(--primary); }

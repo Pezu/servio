@@ -3,6 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Client } from '@stomp/stompjs';
 import * as SockJS from 'sockjs-client';
 import { environment } from '../../../../environments/environment';
@@ -100,6 +101,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   menuOpen: boolean = false;
   activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' = 'menu';
   orderPointPayLater: boolean = false;
+  orderPointMenuId: string | null = null;
   categoryNavExpanded: boolean = false;
 
   // Validation polling
@@ -117,8 +119,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   orders: ApiOrder[] = [];
   orderPointOrders: ApiOrder[] = []; // All orders at the order point (for payLater)
   loadingOrders: boolean = false;
-  ordersGroupMode: 'all' | 'guest' = 'all';
-  ordersViewMode: 'total' | 'order' = 'order';
+  ordersGroupMode: 'table' | 'guest' = 'table';
+  ordersViewMode: 'total' | 'order' = 'total';
 
   // Event data
   eventData: EventData | null = null;
@@ -142,6 +144,15 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   nickname: string = '';
   processingPayment: boolean = false;
 
+  // Tip modal
+  showTipModal: boolean = false;
+  tipOrderAmount: number = 0;
+  selectedTipPercent: number = 0;
+  customTipAmount: number = 0;
+  pendingTipPaymentType: 'order' | 'guest' | 'orderpoint' | null = null;
+  pendingTipPaymentId: string | null = null;
+  pendingTipGuest: GuestOrders | null = null;
+
   // Team
   teamPendingRegistrations: PendingTeamRegistration[] = [];
   loadingTeam: boolean = false;
@@ -157,7 +168,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
-    private http: HttpClient
+    private http: HttpClient,
+    private sanitizer: DomSanitizer
   ) {}
 
   ngOnInit(): void {
@@ -191,6 +203,24 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       if (existingRegistration && storedEventId === this.eventId && orderPointMatches) {
         this.registrationResponse = JSON.parse(existingRegistration);
         console.log('[Init] Using existing registration:', this.registrationResponse?.id);
+
+        // Fetch order point info to get menuId before loading menu
+        if (this.orderPointId) {
+          this.http.get<any>(`${environment.apiUrl}/api/register/order-points/${this.orderPointId}/info`)
+            .subscribe({
+              next: (orderPoint) => {
+                this.orderPointMenuId = orderPoint.menuId || null;
+                console.log('[Init] Order point info loaded, menuId:', this.orderPointMenuId);
+                this.loadMenuItems();
+              },
+              error: () => {
+                // Fall back to event menu if order point info fails
+                this.loadMenuItems();
+              }
+            });
+        } else {
+          this.loadMenuItems();
+        }
 
         // Re-check validation status from server (in case it was approved)
         this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}`)
@@ -230,7 +260,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         this.checkOrderPointAndRegister();
       }
 
-      this.loadMenuItems();
       this.loadAllergens();
       this.loadEventData();
       this.checkPaymentResult();
@@ -258,9 +287,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
       // Check if this was a table order payment
       if (tableOrderPayment === 'true') {
-        console.log('[Payment] Table order payment completed, showing orders view');
+        console.log('[Payment] Table order payment processing, showing orders view');
         this.activeView = 'orders';
-        this.showToast('Payment completed successfully!', 'success');
+        this.showToast('Order placed! Payment is being processed.', 'success');
         this.loadOrders();
         return;
       }
@@ -272,11 +301,13 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         this.activeOrderIds.add(confirmedOrderId);
         this.saveActiveOrders();
         this.connectWebSocket();
+        this.showToast('Order placed! Payment is being processed.', 'success');
       }
     } else if (paymentError) {
       localStorage.removeItem('paymentError');
       localStorage.removeItem('confirmedOrderId');
       localStorage.removeItem('tableOrderPayment');
+      this.showToast('There was an issue processing your order. Please try again.', 'error');
     }
   }
 
@@ -456,7 +487,11 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         next: (orderPoint) => {
           console.log('[CheckOP] Order point info received:', orderPoint);
           this.orderPointPayLater = orderPoint.payLater;
+          this.orderPointMenuId = orderPoint.menuId || null;
           this.loading = false;
+
+          // Load menu items now that we have the order point info
+          this.loadMenuItems();
 
           if (orderPoint.payLater) {
             // Show nickname form before registering
@@ -540,14 +575,49 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   // Menu methods
   loadMenuItems(): void {
     this.loadingMenu = true;
-    this.http.get<MenuItem[]>(`${environment.apiUrl}/api/events/${this.eventId}/menu`)
+
+    // If order point has a specific menu assigned, try to load that menu first
+    if (this.orderPointMenuId) {
+      const menuUrl = `${environment.apiUrl}/api/menu/menus/${this.orderPointMenuId}/tree`;
+      console.log('[Menu] Loading menu by menuId:', this.orderPointMenuId);
+
+      this.http.get<MenuItem[]>(menuUrl)
+        .subscribe({
+          next: (items) => {
+            if (items && items.length > 0) {
+              console.log('[Menu] Loaded menu items by menuId:', items.length);
+              this.menuItems = items;
+              this.loadingMenu = false;
+            } else {
+              // Menu exists but has no items, fall back to event menu
+              console.log('[Menu] Menu by menuId is empty, falling back to event menu');
+              this.loadEventMenu();
+            }
+          },
+          error: (err) => {
+            console.error('[Menu] Error loading menu by menuId, falling back to event menu:', err);
+            this.loadEventMenu();
+          }
+        });
+    } else {
+      // No specific menu assigned, load event's default menu
+      this.loadEventMenu();
+    }
+  }
+
+  private loadEventMenu(): void {
+    const eventMenuUrl = `${environment.apiUrl}/api/events/${this.eventId}/menu`;
+    console.log('[Menu] Loading event menu');
+
+    this.http.get<MenuItem[]>(eventMenuUrl)
       .subscribe({
         next: (items) => {
+          console.log('[Menu] Loaded event menu items:', items.length);
           this.menuItems = items;
           this.loadingMenu = false;
         },
         error: (err) => {
-          console.error('Error loading menu:', err);
+          console.error('[Menu] Error loading event menu:', err);
           this.loadingMenu = false;
         }
       });
@@ -670,6 +740,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
     const registration = JSON.parse(registrationResponse);
     const orderItems = selectedItems.map(item => ({
+      menuItemId: item.menuItem.id,
       name: item.menuItem.name,
       price: item.menuItem.price || 0,
       quantity: item.quantity
@@ -862,7 +933,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   // Order point orders methods (for payLater)
-  setOrdersGroupMode(mode: 'all' | 'guest'): void {
+  setOrdersGroupMode(mode: 'table' | 'guest'): void {
     this.ordersGroupMode = mode;
   }
 
@@ -993,6 +1064,18 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   payOrder(order: ApiOrder): void {
     if (this.processingPayment) return;
+
+    // Show tip modal first
+    this.tipOrderAmount = this.getOrderUnpaidTotal(order);
+    this.selectedTipPercent = 0;
+    this.customTipAmount = 0;
+    this.pendingTipPaymentType = 'order';
+    this.pendingTipPaymentId = order.id;
+    this.pendingTipGuest = null;
+    this.showTipModal = true;
+  }
+
+  private executeOrderPayment(orderId: string, tip: number): void {
     this.processingPayment = true;
 
     // Store payment info for redirect back
@@ -1001,7 +1084,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=order`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${order.id}/start`, { returnUrl }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderId}/start`, { returnUrl, tip }).subscribe({
       next: (paymentResponse) => {
         if (paymentResponse.payment?.paymentURL) {
           // Store the payment reference for completion after redirect
@@ -1016,6 +1099,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         console.error('Payment error:', err);
         this.showToast('Failed to start payment', 'error');
         this.processingPayment = false;
+        this.showTipModal = false;
       }
     });
   }
@@ -1024,6 +1108,17 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     if (this.processingPayment) return;
     if (!this.hasAnyUnpaidItems()) return;
 
+    // Show tip modal first
+    this.tipOrderAmount = this.getUnpaidOrderPointTotal();
+    this.selectedTipPercent = 0;
+    this.customTipAmount = 0;
+    this.pendingTipPaymentType = 'orderpoint';
+    this.pendingTipPaymentId = this.orderPointId;
+    this.pendingTipGuest = null;
+    this.showTipModal = true;
+  }
+
+  private executeOrderPointPayment(orderPointId: string, tip: number): void {
     this.processingPayment = true;
 
     // Store payment info for redirect back
@@ -1032,7 +1127,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=orderpoint`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/order-points/${this.orderPointId}/start`, { returnUrl }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/order-points/${orderPointId}/start`, { returnUrl, tip }).subscribe({
       next: (paymentResponse) => {
         if (paymentResponse.payment?.paymentURL) {
           // Store the payment reference for completion after redirect
@@ -1047,6 +1142,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         console.error('Payment error:', err);
         this.showToast('Failed to start payment', 'error');
         this.processingPayment = false;
+        this.showTipModal = false;
       }
     });
   }
@@ -1055,6 +1151,17 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     if (this.processingPayment) return;
     if (!this.guestHasUnpaidItems(guest)) return;
 
+    // Show tip modal first
+    this.tipOrderAmount = this.getGuestUnpaidTotal(guest);
+    this.selectedTipPercent = 0;
+    this.customTipAmount = 0;
+    this.pendingTipPaymentType = 'guest';
+    this.pendingTipPaymentId = guest.registrationId;
+    this.pendingTipGuest = guest;
+    this.showTipModal = true;
+  }
+
+  private executeGuestPayment(registrationId: string, tip: number): void {
     this.processingPayment = true;
 
     // Store payment info for redirect back
@@ -1063,7 +1170,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=guest`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/registrations/${guest.registrationId}/start`, { returnUrl }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/registrations/${registrationId}/start`, { returnUrl, tip }).subscribe({
       next: (paymentResponse) => {
         console.log('[Payment] Guest payment response:', paymentResponse);
         if (paymentResponse.payment?.paymentURL) {
@@ -1081,8 +1188,69 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         console.error('Payment error:', err);
         this.showToast('Failed to start payment', 'error');
         this.processingPayment = false;
+        this.showTipModal = false;
       }
     });
+  }
+
+  // Tip modal methods
+  selectTipPercent(percent: number): void {
+    this.selectedTipPercent = percent;
+    if (percent !== -1) {
+      this.customTipAmount = 0;
+    }
+  }
+
+  getTipAmount(): number {
+    if (this.selectedTipPercent === -1) {
+      return this.customTipAmount || 0;
+    }
+    return (this.tipOrderAmount * this.selectedTipPercent) / 100;
+  }
+
+  getTipTotal(): number {
+    return this.tipOrderAmount + this.getTipAmount();
+  }
+
+  isTipValid(): boolean {
+    if (this.selectedTipPercent === -1) {
+      return this.customTipAmount >= 0;
+    }
+    return true;
+  }
+
+  closeTipModal(): void {
+    this.showTipModal = false;
+    this.pendingTipPaymentType = null;
+    this.pendingTipPaymentId = null;
+    this.pendingTipGuest = null;
+  }
+
+  confirmTipAndPay(): void {
+    if (!this.isTipValid()) return;
+
+    const tip = this.getTipAmount();
+    // Keep modal open and show processing state until redirect
+    this.processingPayment = true;
+
+    switch (this.pendingTipPaymentType) {
+      case 'order':
+        if (this.pendingTipPaymentId) {
+          this.executeOrderPayment(this.pendingTipPaymentId, tip);
+        }
+        break;
+      case 'guest':
+        if (this.pendingTipPaymentId) {
+          this.executeGuestPayment(this.pendingTipPaymentId, tip);
+        }
+        break;
+      case 'orderpoint':
+        if (this.pendingTipPaymentId) {
+          this.executeOrderPointPayment(this.pendingTipPaymentId, tip);
+        }
+        break;
+    }
+    // Don't close modal - page will redirect to Netopia
   }
 
   // Team methods
@@ -1409,5 +1577,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   toggleCategoryNav(): void {
     this.categoryNavExpanded = !this.categoryNavExpanded;
+  }
+
+  sanitizeHtml(html: string): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(html || '');
   }
 }

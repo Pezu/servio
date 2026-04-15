@@ -92,7 +92,7 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
                       </button>
                     </div>
                   </div>
-                  @if (!item.orderable && isExpanded(item) && item.children?.length) {
+                  @if (!item.orderable && isExpanded(item) && item.children.length) {
                     <div class="menu-children">
                       @for (child of item.children; track child.id || child.tempId) {
                         <div class="menu-item-row child-item">

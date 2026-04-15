@@ -1,6 +1,7 @@
 package com.servio.event.web;
 
 import com.servio.event.dto.Location;
+import com.servio.event.dto.Menu;
 import com.servio.event.dto.MenuItem;
 import com.servio.event.service.LocationService;
 import com.servio.event.service.MenuService;
@@ -24,6 +25,57 @@ public class MenuController {
 
     private final MenuService menuService;
     private final LocationService locationService;
+
+    // ==================== Menu CRUD Endpoints ====================
+
+    @GetMapping("/menus/location/{locationId}")
+    public ResponseEntity<List<Menu>> getMenusByLocation(@PathVariable UUID locationId) {
+        List<Menu> menus = menuService.getMenusByLocationId(locationId);
+        return ResponseEntity.ok(menus);
+    }
+
+    @PostMapping("/menus")
+    public ResponseEntity<Menu> createMenu(
+            @RequestBody Menu menuRequest,
+            HttpServletRequest httpRequest) {
+        Location location = locationService.getLocationById(menuRequest.getLocationId());
+        checkClientAccess(location.getClientId(), httpRequest);
+        Menu createdMenu = menuService.createMenu(menuRequest.getLocationId(), menuRequest.getName());
+        return ResponseEntity.ok(createdMenu);
+    }
+
+    @DeleteMapping("/menus/{menuId}")
+    public ResponseEntity<Void> deleteMenu(
+            @PathVariable UUID menuId,
+            HttpServletRequest httpRequest) {
+        Menu menu = menuService.getMenuById(menuId);
+        Location location = locationService.getLocationById(menu.getLocationId());
+        checkClientAccess(location.getClientId(), httpRequest);
+        menuService.deleteMenu(menuId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ==================== Menu Tree Endpoints (by Menu ID) ====================
+
+    @GetMapping("/menus/{menuId}/tree")
+    public ResponseEntity<List<MenuItem>> getMenuTreeByMenuId(@PathVariable UUID menuId) {
+        List<MenuItem> menuTree = menuService.getMenuTreeByMenuId(menuId);
+        return ResponseEntity.ok(menuTree);
+    }
+
+    @PutMapping("/menus/{menuId}/tree")
+    public ResponseEntity<List<MenuItem>> updateMenuTreeByMenuId(
+            @PathVariable UUID menuId,
+            @RequestBody List<MenuItem> menuItems,
+            HttpServletRequest httpRequest) {
+        Menu menu = menuService.getMenuById(menuId);
+        Location location = locationService.getLocationById(menu.getLocationId());
+        checkClientAccess(location.getClientId(), httpRequest);
+        List<MenuItem> updatedTree = menuService.saveMenuTreeByMenuId(menuId, menuItems);
+        return ResponseEntity.ok(updatedTree);
+    }
+
+    // ==================== Legacy Location-based Endpoints ====================
 
     @GetMapping("/location/{locationId}")
     public ResponseEntity<List<MenuItem>> getMenuTree(@PathVariable UUID locationId) {

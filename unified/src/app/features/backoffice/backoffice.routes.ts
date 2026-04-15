@@ -50,8 +50,18 @@ export const BACKOFFICE_ROUTES: Routes = [
       },
       {
         path: 'reports',
-        loadComponent: () => import('./reports/reports.component')
-          .then(m => m.ReportsComponent)
+        children: [
+          {
+            path: 'revenue',
+            loadComponent: () => import('./reports/revenue/revenue.component')
+              .then(m => m.RevenueComponent)
+          },
+          {
+            path: '',
+            redirectTo: 'revenue',
+            pathMatch: 'full'
+          }
+        ]
       },
       {
         path: 'configuration',
