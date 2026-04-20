@@ -142,6 +142,241 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   // Payment choice dialog
   showPaymentChoice: boolean = false;
   nickname: string = '';
+  firstName: string = '';
+  lastName: string = '';
+  customerPhone: string = '';
+
+  countries = [
+    { name: 'Romania', code: '+40', flag: '🇷🇴', placeholder: '7XX XXX XXX' },
+    { name: 'Afghanistan', code: '+93', flag: '🇦🇫', placeholder: '7X XXX XXXX' },
+    { name: 'Albania', code: '+355', flag: '🇦🇱', placeholder: '6X XXX XXXX' },
+    { name: 'Algeria', code: '+213', flag: '🇩🇿', placeholder: '5XX XX XX XX' },
+    { name: 'American Samoa', code: '+1684', flag: '🇦🇸', placeholder: 'XXX XXXX' },
+    { name: 'Andorra', code: '+376', flag: '🇦🇩', placeholder: 'XXX XXX' },
+    { name: 'Angola', code: '+244', flag: '🇦🇴', placeholder: '9XX XXX XXX' },
+    { name: 'Anguilla', code: '+1264', flag: '🇦🇮', placeholder: 'XXX XXXX' },
+    { name: 'Antigua and Barbuda', code: '+1268', flag: '🇦🇬', placeholder: 'XXX XXXX' },
+    { name: 'Argentina', code: '+54', flag: '🇦🇷', placeholder: 'XX XXXX XXXX' },
+    { name: 'Armenia', code: '+374', flag: '🇦🇲', placeholder: 'XX XXX XXX' },
+    { name: 'Aruba', code: '+297', flag: '🇦🇼', placeholder: 'XXX XXXX' },
+    { name: 'Australia', code: '+61', flag: '🇦🇺', placeholder: '4XX XXX XXX' },
+    { name: 'Austria', code: '+43', flag: '🇦🇹', placeholder: '6XX XXX XXXX' },
+    { name: 'Azerbaijan', code: '+994', flag: '🇦🇿', placeholder: 'XX XXX XX XX' },
+    { name: 'Bahamas', code: '+1242', flag: '🇧🇸', placeholder: 'XXX XXXX' },
+    { name: 'Bahrain', code: '+973', flag: '🇧🇭', placeholder: 'XXXX XXXX' },
+    { name: 'Bangladesh', code: '+880', flag: '🇧🇩', placeholder: '1XXX XXXXXX' },
+    { name: 'Barbados', code: '+1246', flag: '🇧🇧', placeholder: 'XXX XXXX' },
+    { name: 'Belarus', code: '+375', flag: '🇧🇾', placeholder: 'XX XXX XX XX' },
+    { name: 'Belgium', code: '+32', flag: '🇧🇪', placeholder: '4XX XX XX XX' },
+    { name: 'Belize', code: '+501', flag: '🇧🇿', placeholder: 'XXX XXXX' },
+    { name: 'Benin', code: '+229', flag: '🇧🇯', placeholder: 'XX XX XX XX' },
+    { name: 'Bermuda', code: '+1441', flag: '🇧🇲', placeholder: 'XXX XXXX' },
+    { name: 'Bhutan', code: '+975', flag: '🇧🇹', placeholder: '17 XXX XXX' },
+    { name: 'Bolivia', code: '+591', flag: '🇧🇴', placeholder: 'X XXX XXXX' },
+    { name: 'Bosnia and Herzegovina', code: '+387', flag: '🇧🇦', placeholder: '6X XXX XXX' },
+    { name: 'Botswana', code: '+267', flag: '🇧🇼', placeholder: '7X XXX XXX' },
+    { name: 'Brazil', code: '+55', flag: '🇧🇷', placeholder: 'XX XXXXX XXXX' },
+    { name: 'Brunei', code: '+673', flag: '🇧🇳', placeholder: 'XXX XXXX' },
+    { name: 'Bulgaria', code: '+359', flag: '🇧🇬', placeholder: '8X XXX XXXX' },
+    { name: 'Burkina Faso', code: '+226', flag: '🇧🇫', placeholder: 'XX XX XX XX' },
+    { name: 'Burundi', code: '+257', flag: '🇧🇮', placeholder: 'XX XX XXXX' },
+    { name: 'Cabo Verde', code: '+238', flag: '🇨🇻', placeholder: 'XXX XX XX' },
+    { name: 'Cambodia', code: '+855', flag: '🇰🇭', placeholder: 'XX XXX XXX' },
+    { name: 'Cameroon', code: '+237', flag: '🇨🇲', placeholder: 'X XXXX XXXX' },
+    { name: 'Canada', code: '+1', flag: '🇨🇦', placeholder: 'XXX XXX XXXX' },
+    { name: 'Cayman Islands', code: '+1345', flag: '🇰🇾', placeholder: 'XXX XXXX' },
+    { name: 'Central African Republic', code: '+236', flag: '🇨🇫', placeholder: 'XX XX XX XX' },
+    { name: 'Chad', code: '+235', flag: '🇹🇩', placeholder: 'XX XX XX XX' },
+    { name: 'Chile', code: '+56', flag: '🇨🇱', placeholder: '9 XXXX XXXX' },
+    { name: 'China', code: '+86', flag: '🇨🇳', placeholder: 'XXX XXXX XXXX' },
+    { name: 'Colombia', code: '+57', flag: '🇨🇴', placeholder: 'XXX XXX XXXX' },
+    { name: 'Comoros', code: '+269', flag: '🇰🇲', placeholder: 'XXX XX XX' },
+    { name: 'Congo (DRC)', code: '+243', flag: '🇨🇩', placeholder: 'XX XXX XXXX' },
+    { name: 'Congo (Republic)', code: '+242', flag: '🇨🇬', placeholder: 'XX XXX XXXX' },
+    { name: 'Cook Islands', code: '+682', flag: '🇨🇰', placeholder: 'XX XXX' },
+    { name: 'Costa Rica', code: '+506', flag: '🇨🇷', placeholder: 'XXXX XXXX' },
+    { name: 'Croatia', code: '+385', flag: '🇭🇷', placeholder: '9X XXX XXXX' },
+    { name: 'Cuba', code: '+53', flag: '🇨🇺', placeholder: 'X XXX XXXX' },
+    { name: 'Curacao', code: '+599', flag: '🇨🇼', placeholder: 'XXX XXXX' },
+    { name: 'Cyprus', code: '+357', flag: '🇨🇾', placeholder: '9X XXX XXX' },
+    { name: 'Czech Republic', code: '+420', flag: '🇨🇿', placeholder: 'XXX XXX XXX' },
+    { name: 'Denmark', code: '+45', flag: '🇩🇰', placeholder: 'XX XX XX XX' },
+    { name: 'Djibouti', code: '+253', flag: '🇩🇯', placeholder: 'XX XX XX XX' },
+    { name: 'Dominica', code: '+1767', flag: '🇩🇲', placeholder: 'XXX XXXX' },
+    { name: 'Dominican Republic', code: '+1809', flag: '🇩🇴', placeholder: 'XXX XXXX' },
+    { name: 'East Timor', code: '+670', flag: '🇹🇱', placeholder: 'XXXX XXXX' },
+    { name: 'Ecuador', code: '+593', flag: '🇪🇨', placeholder: '9X XXX XXXX' },
+    { name: 'Egypt', code: '+20', flag: '🇪🇬', placeholder: '1X XXXX XXXX' },
+    { name: 'El Salvador', code: '+503', flag: '🇸🇻', placeholder: 'XXXX XXXX' },
+    { name: 'Equatorial Guinea', code: '+240', flag: '🇬🇶', placeholder: 'XXX XXX XXX' },
+    { name: 'Eritrea', code: '+291', flag: '🇪🇷', placeholder: 'X XXX XXX' },
+    { name: 'Estonia', code: '+372', flag: '🇪🇪', placeholder: 'XXXX XXXX' },
+    { name: 'Eswatini', code: '+268', flag: '🇸🇿', placeholder: 'XXXX XXXX' },
+    { name: 'Ethiopia', code: '+251', flag: '🇪🇹', placeholder: '9X XXX XXXX' },
+    { name: 'Falkland Islands', code: '+500', flag: '🇫🇰', placeholder: 'XXXXX' },
+    { name: 'Faroe Islands', code: '+298', flag: '🇫🇴', placeholder: 'XXX XXX' },
+    { name: 'Fiji', code: '+679', flag: '🇫🇯', placeholder: 'XXX XXXX' },
+    { name: 'Finland', code: '+358', flag: '🇫🇮', placeholder: '4X XXX XXXX' },
+    { name: 'France', code: '+33', flag: '🇫🇷', placeholder: '6 XX XX XX XX' },
+    { name: 'French Guiana', code: '+594', flag: '🇬🇫', placeholder: 'XXX XX XX XX' },
+    { name: 'French Polynesia', code: '+689', flag: '🇵🇫', placeholder: 'XX XX XX' },
+    { name: 'Gabon', code: '+241', flag: '🇬🇦', placeholder: 'X XX XX XX' },
+    { name: 'Gambia', code: '+220', flag: '🇬🇲', placeholder: 'XXX XXXX' },
+    { name: 'Georgia', code: '+995', flag: '🇬🇪', placeholder: '5XX XX XX XX' },
+    { name: 'Germany', code: '+49', flag: '🇩🇪', placeholder: '1XX XXXXXXX' },
+    { name: 'Ghana', code: '+233', flag: '🇬🇭', placeholder: 'XX XXX XXXX' },
+    { name: 'Gibraltar', code: '+350', flag: '🇬🇮', placeholder: 'XXXX XXXX' },
+    { name: 'Greece', code: '+30', flag: '🇬🇷', placeholder: '6XX XXX XXXX' },
+    { name: 'Greenland', code: '+299', flag: '🇬🇱', placeholder: 'XX XX XX' },
+    { name: 'Grenada', code: '+1473', flag: '🇬🇩', placeholder: 'XXX XXXX' },
+    { name: 'Guadeloupe', code: '+590', flag: '🇬🇵', placeholder: 'XXX XX XX XX' },
+    { name: 'Guam', code: '+1671', flag: '🇬🇺', placeholder: 'XXX XXXX' },
+    { name: 'Guatemala', code: '+502', flag: '🇬🇹', placeholder: 'XXXX XXXX' },
+    { name: 'Guernsey', code: '+44', flag: '🇬🇬', placeholder: '7XXX XXXXXX' },
+    { name: 'Guinea', code: '+224', flag: '🇬🇳', placeholder: 'XXX XX XX XX' },
+    { name: 'Guinea-Bissau', code: '+245', flag: '🇬🇼', placeholder: 'XXX XXXX' },
+    { name: 'Guyana', code: '+592', flag: '🇬🇾', placeholder: 'XXX XXXX' },
+    { name: 'Haiti', code: '+509', flag: '🇭🇹', placeholder: 'XX XX XXXX' },
+    { name: 'Honduras', code: '+504', flag: '🇭🇳', placeholder: 'XXXX XXXX' },
+    { name: 'Hong Kong', code: '+852', flag: '🇭🇰', placeholder: 'XXXX XXXX' },
+    { name: 'Hungary', code: '+36', flag: '🇭🇺', placeholder: '30 XXX XXXX' },
+    { name: 'Iceland', code: '+354', flag: '🇮🇸', placeholder: 'XXX XXXX' },
+    { name: 'India', code: '+91', flag: '🇮🇳', placeholder: 'XXXXX XXXXX' },
+    { name: 'Indonesia', code: '+62', flag: '🇮🇩', placeholder: '8XX XXXX XXXX' },
+    { name: 'Iran', code: '+98', flag: '🇮🇷', placeholder: '9XX XXX XXXX' },
+    { name: 'Iraq', code: '+964', flag: '🇮🇶', placeholder: '7XX XXX XXXX' },
+    { name: 'Ireland', code: '+353', flag: '🇮🇪', placeholder: '8X XXX XXXX' },
+    { name: 'Isle of Man', code: '+44', flag: '🇮🇲', placeholder: '7XXX XXXXXX' },
+    { name: 'Israel', code: '+972', flag: '🇮🇱', placeholder: '5X XXX XXXX' },
+    { name: 'Italy', code: '+39', flag: '🇮🇹', placeholder: '3XX XXX XXXX' },
+    { name: 'Ivory Coast', code: '+225', flag: '🇨🇮', placeholder: 'XX XX XX XX XX' },
+    { name: 'Jamaica', code: '+1876', flag: '🇯🇲', placeholder: 'XXX XXXX' },
+    { name: 'Japan', code: '+81', flag: '🇯🇵', placeholder: '90 XXXX XXXX' },
+    { name: 'Jersey', code: '+44', flag: '🇯🇪', placeholder: '7XXX XXXXXX' },
+    { name: 'Jordan', code: '+962', flag: '🇯🇴', placeholder: '7X XXX XXXX' },
+    { name: 'Kazakhstan', code: '+7', flag: '🇰🇿', placeholder: '7XX XXX XX XX' },
+    { name: 'Kenya', code: '+254', flag: '🇰🇪', placeholder: '7XX XXX XXX' },
+    { name: 'Kiribati', code: '+686', flag: '🇰🇮', placeholder: 'XXXX XXXX' },
+    { name: 'Kosovo', code: '+383', flag: '🇽🇰', placeholder: '4X XXX XXX' },
+    { name: 'Kuwait', code: '+965', flag: '🇰🇼', placeholder: 'XXXX XXXX' },
+    { name: 'Kyrgyzstan', code: '+996', flag: '🇰🇬', placeholder: 'XXX XXX XXX' },
+    { name: 'Laos', code: '+856', flag: '🇱🇦', placeholder: '20 XX XXX XXX' },
+    { name: 'Latvia', code: '+371', flag: '🇱🇻', placeholder: '2X XXX XXX' },
+    { name: 'Lebanon', code: '+961', flag: '🇱🇧', placeholder: 'XX XXX XXX' },
+    { name: 'Lesotho', code: '+266', flag: '🇱🇸', placeholder: 'XX XXX XXX' },
+    { name: 'Liberia', code: '+231', flag: '🇱🇷', placeholder: 'XX XXX XXXX' },
+    { name: 'Libya', code: '+218', flag: '🇱🇾', placeholder: '9X XXX XXXX' },
+    { name: 'Liechtenstein', code: '+423', flag: '🇱🇮', placeholder: 'XXX XXX XXX' },
+    { name: 'Lithuania', code: '+370', flag: '🇱🇹', placeholder: '6XX XXXXX' },
+    { name: 'Luxembourg', code: '+352', flag: '🇱🇺', placeholder: '6XX XXX XXX' },
+    { name: 'Macao', code: '+853', flag: '🇲🇴', placeholder: '6XXX XXXX' },
+    { name: 'Madagascar', code: '+261', flag: '🇲🇬', placeholder: '3X XX XXX XX' },
+    { name: 'Malawi', code: '+265', flag: '🇲🇼', placeholder: '9XX XX XX XX' },
+    { name: 'Malaysia', code: '+60', flag: '🇲🇾', placeholder: '1X XXX XXXX' },
+    { name: 'Maldives', code: '+960', flag: '🇲🇻', placeholder: 'XXX XXXX' },
+    { name: 'Mali', code: '+223', flag: '🇲🇱', placeholder: 'XX XX XX XX' },
+    { name: 'Malta', code: '+356', flag: '🇲🇹', placeholder: 'XX XX XX XX' },
+    { name: 'Marshall Islands', code: '+692', flag: '🇲🇭', placeholder: 'XXX XXXX' },
+    { name: 'Martinique', code: '+596', flag: '🇲🇶', placeholder: 'XXX XX XX XX' },
+    { name: 'Mauritania', code: '+222', flag: '🇲🇷', placeholder: 'XX XX XX XX' },
+    { name: 'Mauritius', code: '+230', flag: '🇲🇺', placeholder: 'XXXX XXXX' },
+    { name: 'Mexico', code: '+52', flag: '🇲🇽', placeholder: 'XX XXXX XXXX' },
+    { name: 'Micronesia', code: '+691', flag: '🇫🇲', placeholder: 'XXX XXXX' },
+    { name: 'Moldova', code: '+373', flag: '🇲🇩', placeholder: '6X XXX XXX' },
+    { name: 'Monaco', code: '+377', flag: '🇲🇨', placeholder: 'XX XX XX XX' },
+    { name: 'Mongolia', code: '+976', flag: '🇲🇳', placeholder: 'XX XX XXXX' },
+    { name: 'Montenegro', code: '+382', flag: '🇲🇪', placeholder: '6X XXX XXX' },
+    { name: 'Montserrat', code: '+1664', flag: '🇲🇸', placeholder: 'XXX XXXX' },
+    { name: 'Morocco', code: '+212', flag: '🇲🇦', placeholder: '6XX XXX XXX' },
+    { name: 'Mozambique', code: '+258', flag: '🇲🇿', placeholder: '8X XXX XXXX' },
+    { name: 'Myanmar', code: '+95', flag: '🇲🇲', placeholder: '9 XXX XXXX' },
+    { name: 'Namibia', code: '+264', flag: '🇳🇦', placeholder: '8X XXX XXXX' },
+    { name: 'Nauru', code: '+674', flag: '🇳🇷', placeholder: 'XXX XXXX' },
+    { name: 'Nepal', code: '+977', flag: '🇳🇵', placeholder: '98XX XXXXXX' },
+    { name: 'Netherlands', code: '+31', flag: '🇳🇱', placeholder: '6 XXXX XXXX' },
+    { name: 'New Caledonia', code: '+687', flag: '🇳🇨', placeholder: 'XX XX XX' },
+    { name: 'New Zealand', code: '+64', flag: '🇳🇿', placeholder: '2X XXX XXXX' },
+    { name: 'Nicaragua', code: '+505', flag: '🇳🇮', placeholder: 'XXXX XXXX' },
+    { name: 'Niger', code: '+227', flag: '🇳🇪', placeholder: 'XX XX XX XX' },
+    { name: 'Nigeria', code: '+234', flag: '🇳🇬', placeholder: '8XX XXX XXXX' },
+    { name: 'North Korea', code: '+850', flag: '🇰🇵', placeholder: 'XXX XXX XXXX' },
+    { name: 'North Macedonia', code: '+389', flag: '🇲🇰', placeholder: '7X XXX XXX' },
+    { name: 'Norway', code: '+47', flag: '🇳🇴', placeholder: 'XXX XX XXX' },
+    { name: 'Oman', code: '+968', flag: '🇴🇲', placeholder: 'XXXX XXXX' },
+    { name: 'Pakistan', code: '+92', flag: '🇵🇰', placeholder: '3XX XXX XXXX' },
+    { name: 'Palau', code: '+680', flag: '🇵🇼', placeholder: 'XXX XXXX' },
+    { name: 'Palestine', code: '+970', flag: '🇵🇸', placeholder: '5XX XX XXXX' },
+    { name: 'Panama', code: '+507', flag: '🇵🇦', placeholder: 'XXXX XXXX' },
+    { name: 'Papua New Guinea', code: '+675', flag: '🇵🇬', placeholder: 'XXX XXXX' },
+    { name: 'Paraguay', code: '+595', flag: '🇵🇾', placeholder: '9XX XXX XXX' },
+    { name: 'Peru', code: '+51', flag: '🇵🇪', placeholder: '9XX XXX XXX' },
+    { name: 'Philippines', code: '+63', flag: '🇵🇭', placeholder: '9XX XXX XXXX' },
+    { name: 'Poland', code: '+48', flag: '🇵🇱', placeholder: 'XXX XXX XXX' },
+    { name: 'Portugal', code: '+351', flag: '🇵🇹', placeholder: '9X XXX XXXX' },
+    { name: 'Puerto Rico', code: '+1787', flag: '🇵🇷', placeholder: 'XXX XXXX' },
+    { name: 'Qatar', code: '+974', flag: '🇶🇦', placeholder: 'XXXX XXXX' },
+    { name: 'Reunion', code: '+262', flag: '🇷🇪', placeholder: 'XXX XX XX XX' },
+    { name: 'Russia', code: '+7', flag: '🇷🇺', placeholder: '9XX XXX XX XX' },
+    { name: 'Rwanda', code: '+250', flag: '🇷🇼', placeholder: '7XX XXX XXX' },
+    { name: 'Saint Kitts and Nevis', code: '+1869', flag: '🇰🇳', placeholder: 'XXX XXXX' },
+    { name: 'Saint Lucia', code: '+1758', flag: '🇱🇨', placeholder: 'XXX XXXX' },
+    { name: 'Saint Vincent and the Grenadines', code: '+1784', flag: '🇻🇨', placeholder: 'XXX XXXX' },
+    { name: 'Samoa', code: '+685', flag: '🇼🇸', placeholder: 'XX XXXX' },
+    { name: 'San Marino', code: '+378', flag: '🇸🇲', placeholder: 'XXX XXX XXXX' },
+    { name: 'Sao Tome and Principe', code: '+239', flag: '🇸🇹', placeholder: 'XXX XXXX' },
+    { name: 'Saudi Arabia', code: '+966', flag: '🇸🇦', placeholder: '5X XXX XXXX' },
+    { name: 'Senegal', code: '+221', flag: '🇸🇳', placeholder: '7X XXX XX XX' },
+    { name: 'Serbia', code: '+381', flag: '🇷🇸', placeholder: '6X XXX XXXX' },
+    { name: 'Seychelles', code: '+248', flag: '🇸🇨', placeholder: 'X XX XX XX' },
+    { name: 'Sierra Leone', code: '+232', flag: '🇸🇱', placeholder: 'XX XXX XXX' },
+    { name: 'Singapore', code: '+65', flag: '🇸🇬', placeholder: 'XXXX XXXX' },
+    { name: 'Sint Maarten', code: '+1721', flag: '🇸🇽', placeholder: 'XXX XXXX' },
+    { name: 'Slovakia', code: '+421', flag: '🇸🇰', placeholder: '9XX XXX XXX' },
+    { name: 'Slovenia', code: '+386', flag: '🇸🇮', placeholder: 'XX XXX XXX' },
+    { name: 'Solomon Islands', code: '+677', flag: '🇸🇧', placeholder: 'XX XXXXX' },
+    { name: 'Somalia', code: '+252', flag: '🇸🇴', placeholder: 'XX XXX XXX' },
+    { name: 'South Africa', code: '+27', flag: '🇿🇦', placeholder: '7X XXX XXXX' },
+    { name: 'South Korea', code: '+82', flag: '🇰🇷', placeholder: '10 XXXX XXXX' },
+    { name: 'South Sudan', code: '+211', flag: '🇸🇸', placeholder: '9X XXX XXXX' },
+    { name: 'Spain', code: '+34', flag: '🇪🇸', placeholder: '6XX XXX XXX' },
+    { name: 'Sri Lanka', code: '+94', flag: '🇱🇰', placeholder: '7X XXX XXXX' },
+    { name: 'Sudan', code: '+249', flag: '🇸🇩', placeholder: '9X XXX XXXX' },
+    { name: 'Suriname', code: '+597', flag: '🇸🇷', placeholder: 'XXX XXXX' },
+    { name: 'Sweden', code: '+46', flag: '🇸🇪', placeholder: '7X XXX XX XX' },
+    { name: 'Switzerland', code: '+41', flag: '🇨🇭', placeholder: '7X XXX XX XX' },
+    { name: 'Syria', code: '+963', flag: '🇸🇾', placeholder: '9XX XXX XXX' },
+    { name: 'Taiwan', code: '+886', flag: '🇹🇼', placeholder: '9XX XXX XXX' },
+    { name: 'Tajikistan', code: '+992', flag: '🇹🇯', placeholder: 'XX XXX XXXX' },
+    { name: 'Tanzania', code: '+255', flag: '🇹🇿', placeholder: '7XX XXX XXX' },
+    { name: 'Thailand', code: '+66', flag: '🇹🇭', placeholder: '8X XXX XXXX' },
+    { name: 'Togo', code: '+228', flag: '🇹🇬', placeholder: '9X XX XX XX' },
+    { name: 'Tonga', code: '+676', flag: '🇹🇴', placeholder: 'XXX XXXX' },
+    { name: 'Trinidad and Tobago', code: '+1868', flag: '🇹🇹', placeholder: 'XXX XXXX' },
+    { name: 'Tunisia', code: '+216', flag: '🇹🇳', placeholder: 'XX XXX XXX' },
+    { name: 'Turkey', code: '+90', flag: '🇹🇷', placeholder: '5XX XXX XXXX' },
+    { name: 'Turkmenistan', code: '+993', flag: '🇹🇲', placeholder: '6X XXXXXX' },
+    { name: 'Turks and Caicos Islands', code: '+1649', flag: '🇹🇨', placeholder: 'XXX XXXX' },
+    { name: 'Tuvalu', code: '+688', flag: '🇹🇻', placeholder: 'XX XXXX' },
+    { name: 'Uganda', code: '+256', flag: '🇺🇬', placeholder: '7XX XXX XXX' },
+    { name: 'Ukraine', code: '+380', flag: '🇺🇦', placeholder: 'XX XXX XX XX' },
+    { name: 'United Arab Emirates', code: '+971', flag: '🇦🇪', placeholder: '5X XXX XXXX' },
+    { name: 'United Kingdom', code: '+44', flag: '🇬🇧', placeholder: '7XXX XXXXXX' },
+    { name: 'United States', code: '+1', flag: '🇺🇸', placeholder: 'XXX XXX XXXX' },
+    { name: 'Uruguay', code: '+598', flag: '🇺🇾', placeholder: '9X XXX XXX' },
+    { name: 'US Virgin Islands', code: '+1340', flag: '🇻🇮', placeholder: 'XXX XXXX' },
+    { name: 'Uzbekistan', code: '+998', flag: '🇺🇿', placeholder: '9X XXX XX XX' },
+    { name: 'Vanuatu', code: '+678', flag: '🇻🇺', placeholder: 'XX XXXXX' },
+    { name: 'Vatican City', code: '+379', flag: '🇻🇦', placeholder: 'XXX XXX XXXX' },
+    { name: 'Venezuela', code: '+58', flag: '🇻🇪', placeholder: '4XX XXX XXXX' },
+    { name: 'Vietnam', code: '+84', flag: '🇻🇳', placeholder: '9X XXX XX XX' },
+    { name: 'Wallis and Futuna', code: '+681', flag: '🇼🇫', placeholder: 'XX XX XX' },
+    { name: 'Yemen', code: '+967', flag: '🇾🇪', placeholder: '7XX XXX XXX' },
+    { name: 'Zambia', code: '+260', flag: '🇿🇲', placeholder: '9XX XXX XXX' },
+    { name: 'Zimbabwe', code: '+263', flag: '🇿🇼', placeholder: '7X XXX XXXX' },
+  ];
+  selectedCountry = this.countries[0];
+  countryDropdownOpen = false;
+  countrySearch = '';
   processingPayment: boolean = false;
 
   // Tip modal
@@ -176,6 +411,20 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     // Ensure activeView is menu at start
     this.activeView = 'menu';
     console.log('[Init] Starting, activeView:', this.activeView);
+
+    // Always restore customer data from localStorage
+    this.firstName = this.getCookie('customerFirstName') || '';
+    this.lastName = this.getCookie('customerLastName') || '';
+    const savedPhone = this.getCookie('customerPhone') || '';
+    if (savedPhone) {
+      const matched = this.countries.find(c => savedPhone.startsWith(c.code));
+      if (matched) {
+        this.selectedCountry = matched;
+        this.customerPhone = savedPhone.substring(matched.code.length);
+      } else {
+        this.customerPhone = savedPhone;
+      }
+    }
 
     this.route.params.subscribe(params => {
       this.eventId = params['eventId'];
@@ -494,7 +743,20 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           this.loadMenuItems();
 
           if (orderPoint.payLater) {
-            // Show nickname form before registering
+            // Prefill from saved customer data
+            this.firstName = this.getCookie('customerFirstName') || '';
+            this.lastName = this.getCookie('customerLastName') || '';
+            const savedPhone = this.getCookie('customerPhone') || '';
+            if (savedPhone) {
+              // Find matching country by prefix
+              const matched = this.countries.find(c => savedPhone.startsWith(c.code));
+              if (matched) {
+                this.selectedCountry = matched;
+                this.customerPhone = savedPhone.substring(matched.code.length);
+              } else {
+                this.customerPhone = savedPhone;
+              }
+            }
             console.log('[CheckOP] payLater=true, showing nickname view');
             this.activeView = 'nickname';
           } else {
@@ -513,7 +775,56 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       });
   }
 
+  toggleCountryDropdown(): void {
+    this.countryDropdownOpen = !this.countryDropdownOpen;
+    this.countrySearch = '';
+  }
+
+  closeCountryDropdown(): void {
+    this.countryDropdownOpen = false;
+    this.countrySearch = '';
+  }
+
+  selectCountry(country: any): void {
+    this.selectedCountry = country;
+    this.customerPhone = '';
+    this.countryDropdownOpen = false;
+    this.countrySearch = '';
+  }
+
+  get filteredCountries(): any[] {
+    if (!this.countrySearch.trim()) return this.countries;
+    const search = this.countrySearch.toLowerCase();
+    return this.countries.filter(c =>
+      c.name.toLowerCase().includes(search) || c.code.includes(search)
+    );
+  }
+
+  onCountryChange(): void {
+    this.customerPhone = '';
+  }
+
+  getFullPhoneNumber(): string {
+    const phone = this.customerPhone.trim();
+    if (!phone) return '';
+    return this.selectedCountry.code + phone;
+  }
+
   submitNickname(): void {
+    // Build nickname from first + last name
+    this.nickname = [this.firstName.trim(), this.lastName.trim()].filter(Boolean).join(' ');
+
+    // Save customer data for future visits
+    if (this.firstName.trim()) {
+      this.setCookie('customerFirstName', this.firstName.trim(), 365);
+    }
+    if (this.lastName.trim()) {
+      this.setCookie('customerLastName', this.lastName.trim(), 365);
+    }
+    const fullPhone = this.getFullPhoneNumber();
+    if (fullPhone) {
+      this.setCookie('customerPhone', fullPhone, 365);
+    }
     this.registerToEvent();
   }
 
@@ -529,6 +840,16 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     }
     if (this.nickname && this.nickname.trim()) {
       params.push(`nickname=${encodeURIComponent(this.nickname.trim())}`);
+    }
+    if (this.firstName && this.firstName.trim()) {
+      params.push(`firstName=${encodeURIComponent(this.firstName.trim())}`);
+    }
+    if (this.lastName && this.lastName.trim()) {
+      params.push(`lastName=${encodeURIComponent(this.lastName.trim())}`);
+    }
+    const fullPhone = this.getFullPhoneNumber();
+    if (fullPhone) {
+      params.push(`phone=${encodeURIComponent(fullPhone)}`);
     }
     if (params.length > 0) {
       url += '?' + params.join('&');
@@ -786,7 +1107,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
             // Start payment with Netopia
             const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&orderId=${orderResponse.id}`;
-            this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderResponse.id}/start`, { returnUrl }).subscribe({
+            this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderResponse.id}/start`, { returnUrl, firstName: this.firstName, lastName: this.lastName, phone: this.getFullPhoneNumber() }).subscribe({
               next: (paymentResponse) => {
                 this.quantities.clear();
 
@@ -1084,7 +1405,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=order`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderId}/start`, { returnUrl, tip }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderId}/start`, { returnUrl, tip, firstName: this.firstName, lastName: this.lastName, phone: this.getFullPhoneNumber() }).subscribe({
       next: (paymentResponse) => {
         if (paymentResponse.payment?.paymentURL) {
           // Store the payment reference for completion after redirect
@@ -1127,7 +1448,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=orderpoint`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/order-points/${orderPointId}/start`, { returnUrl, tip }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/order-points/${orderPointId}/start`, { returnUrl, tip, firstName: this.firstName, lastName: this.lastName, phone: this.getFullPhoneNumber() }).subscribe({
       next: (paymentResponse) => {
         if (paymentResponse.payment?.paymentURL) {
           // Store the payment reference for completion after redirect
@@ -1170,7 +1491,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     localStorage.setItem('tableOrderPayment', 'true');
 
     const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&type=guest`;
-    this.http.post<any>(`${environment.apiUrl}/api/payments/registrations/${registrationId}/start`, { returnUrl, tip }).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/payments/registrations/${registrationId}/start`, { returnUrl, tip, firstName: this.firstName, lastName: this.lastName, phone: this.getFullPhoneNumber() }).subscribe({
       next: (paymentResponse) => {
         console.log('[Payment] Guest payment response:', paymentResponse);
         if (paymentResponse.payment?.paymentURL) {

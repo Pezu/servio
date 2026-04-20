@@ -132,7 +132,9 @@
     "PREPAID": "Preplătit",
     "CLIENT": "Client",
     "CREDIT": "Credit",
-    "CREDIT_VALUE": "Valoare Credit"
+    "CREDIT_VALUE": "Valoare Credit",
+    "CASH_REGISTERS": "Case de Marcat",
+    "NO_CASH_REGISTERS": "Nu sunt case de marcat configurate"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",

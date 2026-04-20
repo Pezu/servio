@@ -32,8 +32,8 @@ public class RegistrationService {
     private final RegistrationMapper registrationMapper;
     private final RegistrationNotificationService registrationNotificationService;
 
-    public Registration createRegistration(UUID eventId, UUID orderPointId, String nickname) {
-        log.info("Creating registration with nickname: {}", nickname);
+    public Registration createRegistration(UUID eventId, UUID orderPointId, String nickname, String phone, String firstName, String lastName) {
+        log.info("Creating registration with firstName: {}, lastName: {}, phone: {}", firstName, lastName, phone);
 
         EventEntity event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event", eventId));
@@ -41,7 +41,9 @@ public class RegistrationService {
         RegistrationEntity registrationEntity = new RegistrationEntity();
         registrationEntity.setEvent(event);
         registrationEntity.setNickname(nickname);
-        log.info("Set nickname on entity: {}", registrationEntity.getNickname());
+        registrationEntity.setFirstName(firstName);
+        registrationEntity.setLastName(lastName);
+        registrationEntity.setPhone(phone);
 
         // Functional approach: determine validation status based on order point
         ValidationStatus status = Optional.ofNullable(orderPointId)

@@ -25,8 +25,11 @@ public class RegisterController {
     public ResponseEntity<Registration> register(
             @PathVariable UUID eventId,
             @RequestParam(required = false) UUID orderPointId,
-            @RequestParam(required = false) String nickname) {
-        Registration response = registrationService.createRegistration(eventId, orderPointId, nickname);
+            @RequestParam(required = false) String nickname,
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String firstName,
+            @RequestParam(required = false) String lastName) {
+        Registration response = registrationService.createRegistration(eventId, orderPointId, nickname, phone, firstName, lastName);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

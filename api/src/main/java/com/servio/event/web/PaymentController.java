@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Slf4j
@@ -20,6 +21,7 @@ public class PaymentController {
 
     private final NetopiaPaymentService netopiaPaymentService;
     private final PaymentService paymentService;
+    private final com.servio.event.repository.OrderRepository orderRepository;
 
     /**
      * Start payment for a single order.
@@ -60,6 +62,58 @@ public class PaymentController {
     public ResponseEntity<StartPaymentWithReferenceResponse> startNetopiaPayment(@RequestBody LegacyPaymentRequest request) {
         String reference = paymentService.createOrderPayment(UUID.fromString(request.orderId()));
         StartPaymentResponse response = netopiaPaymentService.startPayment(reference, request.amount());
+        return ResponseEntity.ok(new StartPaymentWithReferenceResponse(response, reference));
+    }
+
+    /**
+     * Start payment for an order by orderId (frontend-compatible endpoint).
+     */
+    @PostMapping("/orders/{orderId}/start")
+    public ResponseEntity<StartPaymentWithReferenceResponse> startOrderPaymentById(
+            @PathVariable UUID orderId,
+            @RequestBody FrontendPaymentRequest request) {
+        var order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        double amount = order.getItems().stream()
+                .mapToDouble(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())).doubleValue())
+                .sum();
+        String reference = paymentService.createOrderPayment(orderId);
+        StartPaymentResponse response = netopiaPaymentService.startPayment(reference, amount, request.firstName(), request.lastName(), request.phone());
+        return ResponseEntity.ok(new StartPaymentWithReferenceResponse(response, reference));
+    }
+
+    /**
+     * Start payment for all orders at an order point (frontend-compatible endpoint).
+     */
+    @PostMapping("/order-points/{orderPointId}/start")
+    public ResponseEntity<StartPaymentWithReferenceResponse> startOrderPointPaymentById(
+            @PathVariable UUID orderPointId,
+            @RequestBody FrontendPaymentRequest request) {
+        String reference = paymentService.createOrderPointPayment(orderPointId);
+        var orders = orderRepository.findByOrderPointIdAndNeedsPaymentTrue(orderPointId);
+        double amount = orders.stream()
+                .flatMap(o -> o.getItems().stream())
+                .mapToDouble(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())).doubleValue())
+                .sum();
+        StartPaymentResponse response = netopiaPaymentService.startPayment(reference, amount, request.firstName(), request.lastName(), request.phone());
+        return ResponseEntity.ok(new StartPaymentWithReferenceResponse(response, reference));
+    }
+
+    /**
+     * Start payment for all orders of a guest/registration (frontend-compatible endpoint).
+     */
+    @PostMapping("/registrations/{registrationId}/start")
+    public ResponseEntity<StartPaymentWithReferenceResponse> startRegistrationPaymentById(
+            @PathVariable UUID registrationId,
+            @RequestBody FrontendPaymentRequest request) {
+        String reference = paymentService.createGuestPayment(registrationId);
+        var orders = orderRepository.findByRegistrationIdOrderByOrderNoDesc(registrationId);
+        double amount = orders.stream()
+                .filter(o -> o.isNeedsPayment())
+                .flatMap(o -> o.getItems().stream())
+                .mapToDouble(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())).doubleValue())
+                .sum();
+        StartPaymentResponse response = netopiaPaymentService.startPayment(reference, amount, request.firstName(), request.lastName(), request.phone());
         return ResponseEntity.ok(new StartPaymentWithReferenceResponse(response, reference));
     }
 
@@ -127,6 +181,7 @@ public class PaymentController {
     }
 
     // Request DTOs
+    public record FrontendPaymentRequest(String returnUrl, Double tip, String firstName, String lastName, String phone) {}
     public record OrderPaymentRequest(UUID orderId, Double amount) {}
     public record GuestPaymentRequest(UUID registrationId, Double amount) {}
     public record OrderPointPaymentRequest(UUID orderPointId, Double amount) {}

@@ -1,0 +1,2 @@
+ALTER TABLE registrations ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+ALTER TABLE registrations ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
