@@ -20,6 +20,10 @@ public class NetopiaPaymentService {
     private final NetopiaProperties netopiaProperties;
 
     public StartPaymentResponse startPayment(String orderId, Double amount) {
+        return startPayment(orderId, amount, null, null, null);
+    }
+
+    public StartPaymentResponse startPayment(String orderId, Double amount, String firstName, String lastName, String phone) {
         String currentIsoTime = ZonedDateTime.now().format(DateTimeFormatter.ISO_INSTANT);
 
         var config = new StartPaymentRequest.Config(
@@ -29,11 +33,15 @@ public class NetopiaPaymentService {
                 netopiaProperties.language()
         );
 
+        String billingFirstName = (firstName != null && !firstName.isBlank()) ? firstName : "Guest";
+        String billingLastName = (lastName != null && !lastName.isBlank()) ? lastName : "Customer";
+        String billingPhone = (phone != null && !phone.isBlank()) ? phone : "0700000000";
+
         var billing = new StartPaymentRequest.Billing(
                 "guest@servioapp.ro",
-                "0700000000",
-                "Guest",
-                "Customer",
+                billingPhone,
+                billingFirstName,
+                billingLastName,
                 "Bucharest",
                 642,  // Romania ISO 3166-1 numeric
                 "Romania",
@@ -53,7 +61,7 @@ public class NetopiaPaymentService {
 
         var request = new StartPaymentRequest(config, order);
 
-        log.info("Starting Netopia payment for orderId: {}, amount: {}", orderId, amount);
+        log.info("Starting Netopia payment for orderId: {}, amount: {}, billing: {} {}, phone: {}", orderId, amount, billingFirstName, billingLastName, billingPhone);
 
         StartPaymentResponse response = netopiaClient.startPayment(
                 netopiaProperties.apiKey(),

@@ -1,6 +1,8 @@
 import { Component, OnInit, HostListener, ElementRef, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { DateAdapter, MAT_DATE_FORMATS, MAT_DATE_LOCALE, NativeDateAdapter } from '@angular/material/core';
@@ -293,6 +295,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <button class="modal-tab" [class.active]="eventModalTab === 'tables'" (click)="eventModalTab = 'tables'" [disabled]="!editingEvent">
               {{ 'EVENTS.TABLES' | translate }}
             </button>
+            <button class="modal-tab" [class.active]="eventModalTab === 'cashRegisters'" (click)="switchToCashRegisters()" [disabled]="!editingEvent">
+              Cash Registers
+            </button>
           </div>
           <div class="modal-body">
             <!-- Details Tab -->
@@ -428,6 +433,58 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 }
               </div>
             }
+
+            <!-- Cash Registers Tab -->
+            @if (eventModalTab === 'cashRegisters') {
+              <div class="tables-content">
+                <div class="cash-register-header">
+                  <h4>Cash Registers</h4>
+                  <button class="btn-icon-action btn-icon-add" (click)="addCashRegister()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
+                @if (loadingCashRegisters) {
+                  <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                } @else if (cashRegisters.length === 0) {
+                  <div class="empty-tables-message">
+                    <span>No cash registers configured</span>
+                  </div>
+                } @else {
+                  <table class="tables-table">
+                    <thead>
+                      <tr>
+                        <th>UUID</th>
+                        <th>{{ 'COMMON.NAME' | translate }}</th>
+                        <th>IP</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (cr of cashRegisters; track cr.id) {
+                        <tr>
+                          <td class="uuid-cell"><span class="uuid-text">{{ cr.id }}</span></td>
+                          <td>
+                            <input type="text" class="inline-input" [(ngModel)]="cr.name" (blur)="saveCashRegister(cr)" placeholder="Name">
+                          </td>
+                          <td>
+                            <input type="text" class="inline-input" [(ngModel)]="cr.ipAddress" (blur)="saveCashRegister(cr)" placeholder="192.168.0.1">
+                          </td>
+                          <td class="text-end">
+                            <button class="btn-icon-action btn-icon-action-sm btn-icon-delete" (click)="deleteCashRegister(cr)">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </div>
+            }
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" (click)="closeEventModal()">{{ 'COMMON.CANCEL' | translate }}</button>
@@ -543,6 +600,10 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .btn-icon-add { background: var(--primary); border-color: var(--primary); color: white; }
     .btn-icon-add:hover { background: #2563eb; border-color: #2563eb; color: white; }
     .btn-icon-delete:hover { background: rgba(253, 106, 106, 0.1); color: var(--danger); border-color: rgba(253, 106, 106, 0.3); }
+    .cash-register-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .cash-register-header h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-dark); }
+    .uuid-cell { max-width: 120px; }
+    .uuid-text { font-size: 11px; color: var(--text-muted); font-family: monospace; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     label.btn-icon-action { cursor: pointer; }
 
     .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
@@ -924,7 +985,7 @@ export class EventsComponent implements OnInit {
   loadingEvents = false;
   savingEvent = false;
   showEventModal = false;
-  eventModalTab: 'details' | 'tables' = 'details';
+  eventModalTab: 'details' | 'tables' | 'cashRegisters' = 'details';
   editingEvent: Event | null = null;
   eventCurrentPage = 0;
   eventTotalPages = 0;
@@ -951,6 +1012,10 @@ export class EventsComponent implements OnInit {
   savingTables = false;
   editingCell: { orderPointId: string; field: string } | null = null;
 
+  // Cash Registers
+  cashRegisters: any[] = [];
+  loadingCashRegisters = false;
+
   // Material Date Picker
   startDate: Date | null = null;
   endDate: Date | null = null;
@@ -964,8 +1029,11 @@ export class EventsComponent implements OnInit {
     private userService: UserService,
     private menuService: MenuService,
     private eventOrderPointService: EventOrderPointService,
-    private elementRef: ElementRef
+    private elementRef: ElementRef,
+    private http: HttpClient
   ) {}
+
+  private apiUrl = environment.apiUrl + '/api';
 
   ngOnInit(): void {
     this.initUserRoles();
@@ -1358,6 +1426,46 @@ export class EventsComponent implements OnInit {
         console.error('Error loading event tables:', err);
         this.loadingTables = false;
       }
+    });
+  }
+
+  // Cash Register methods
+  switchToCashRegisters(): void {
+    this.eventModalTab = 'cashRegisters';
+    if (this.editingEvent && this.cashRegisters.length === 0) {
+      this.loadCashRegisters();
+    }
+  }
+
+  loadCashRegisters(): void {
+    if (!this.editingEvent?.id) return;
+    this.loadingCashRegisters = true;
+    this.http.get<any[]>(`${this.apiUrl}/events/${this.editingEvent.id}/cash-registers`).subscribe({
+      next: (data) => { this.cashRegisters = data; this.loadingCashRegisters = false; },
+      error: () => { this.cashRegisters = []; this.loadingCashRegisters = false; }
+    });
+  }
+
+  addCashRegister(): void {
+    if (!this.editingEvent?.id) return;
+    this.http.post<any>(`${this.apiUrl}/events/${this.editingEvent.id}/cash-registers`, { name: 'New Register', ipAddress: '' }).subscribe({
+      next: (cr) => { this.cashRegisters.push(cr); },
+      error: (err) => console.error('Error creating cash register:', err)
+    });
+  }
+
+  saveCashRegister(cr: any): void {
+    if (!cr.id || !this.editingEvent?.id) return;
+    this.http.put<any>(`${this.apiUrl}/events/${this.editingEvent.id}/cash-registers/${cr.id}`, cr).subscribe({
+      error: (err) => console.error('Error saving cash register:', err)
+    });
+  }
+
+  deleteCashRegister(cr: any): void {
+    if (!cr.id || !this.editingEvent?.id) return;
+    this.http.delete(`${this.apiUrl}/events/${this.editingEvent.id}/cash-registers/${cr.id}`).subscribe({
+      next: () => { this.cashRegisters = this.cashRegisters.filter(c => c.id !== cr.id); },
+      error: (err) => console.error('Error deleting cash register:', err)
     });
   }
 

@@ -62,11 +62,11 @@ public class ProxyController {
     }
 
     /**
-     * Proxy payment requests to Order Service
+     * Proxy payment requests to Event API
      */
     @RequestMapping(value = "/api/payments/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH})
     public ResponseEntity<byte[]> proxyPayments(HttpServletRequest request) throws IOException, URISyntaxException {
-        return proxyRequest(request, orderServiceUrl);
+        return proxyRequest(request, eventApiUrl);
     }
 
     /**

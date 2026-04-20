@@ -113,15 +113,45 @@
         </svg>
       </div>
       <h2>Welcome!</h2>
-      <p>Please enter your name so staff can identify your order.</p>
+      <p>Please enter your details so staff can identify your order.</p>
       <div class="nickname-form">
         <input
           type="text"
-          [(ngModel)]="nickname"
-          placeholder="Enter your name"
-          class="nickname-input"
-          (keyup.enter)="submitNickname()">
-        <button class="nickname-submit-btn" (click)="submitNickname()" [disabled]="!nickname.trim()">
+          [(ngModel)]="firstName"
+          placeholder="First name"
+          class="nickname-input">
+        <input
+          type="text"
+          [(ngModel)]="lastName"
+          placeholder="Last name"
+          class="nickname-input">
+        <div class="phone-input-wrapper">
+          <div class="country-selector" (click)="toggleCountryDropdown(); $event.stopPropagation()">
+            <span class="country-flag">{{ selectedCountry.flag }}</span>
+            <span class="country-code">{{ selectedCountry.code }}</span>
+            <svg class="country-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <input
+            type="tel"
+            [(ngModel)]="customerPhone"
+            [placeholder]="selectedCountry.placeholder"
+            class="nickname-input phone-input"
+            (keyup.enter)="submitNickname()">
+        </div>
+        <div class="country-overlay" *ngIf="countryDropdownOpen" (click)="closeCountryDropdown()"></div>
+        <div class="country-dropdown" *ngIf="countryDropdownOpen" (click)="$event.stopPropagation()">
+          <div class="country-search-box">
+            <input type="text" [(ngModel)]="countrySearch" placeholder="Search country..." class="country-search-input" autofocus>
+          </div>
+          <div class="country-list">
+            <div *ngFor="let c of filteredCountries" class="country-option" (click)="selectCountry(c)">
+              <span class="country-option-flag">{{ c.flag }}</span>
+              <span class="country-option-name">{{ c.name }}</span>
+              <span class="country-option-code">{{ c.code }}</span>
+            </div>
+          </div>
+        </div>
+        <button class="nickname-submit-btn" (click)="submitNickname()" [disabled]="!firstName.trim()">
           Join
         </button>
       </div>
@@ -172,25 +202,27 @@
     </div>
   </div>
 
-  <!-- MENU VIEW -->
-  <div *ngIf="activeView === 'menu' && !loading && !loadingMenu" class="view-container">
-    <div class="menu-nav-container" *ngIf="menuItems.length > 0" [class.expanded]="categoryNavExpanded">
-      <button class="menu-nav-toggle" (click)="toggleCategoryNav()" [class.expanded]="categoryNavExpanded">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
-      <div class="menu-nav" [class.expanded]="categoryNavExpanded">
-        <ng-container *ngFor="let category of menuItems">
-          <button class="menu-nav-item" (click)="scrollToSection('category-' + category.id)" [innerHTML]="sanitizeHtml(category.name)">
+  <!-- Menu Navigation (fixed, outside view-container) -->
+  <div *ngIf="activeView === 'menu' && !loading && !loadingMenu && menuItems.length > 0" class="menu-nav-container" [class.expanded]="categoryNavExpanded">
+    <button class="menu-nav-toggle" (click)="toggleCategoryNav()" [class.expanded]="categoryNavExpanded">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+    <div class="menu-nav" [class.expanded]="categoryNavExpanded">
+      <ng-container *ngFor="let category of menuItems">
+        <button class="menu-nav-item" (click)="scrollToSection('category-' + category.id)" [innerHTML]="sanitizeHtml(category.name)">
+        </button>
+        <ng-container *ngFor="let child of category.children">
+          <button *ngIf="!child.orderable" class="menu-nav-item menu-nav-sub" (click)="scrollToSection('subcategory-' + child.id)" [innerHTML]="sanitizeHtml(child.name)">
           </button>
-          <ng-container *ngFor="let child of category.children">
-            <button *ngIf="!child.orderable" class="menu-nav-item menu-nav-sub" (click)="scrollToSection('subcategory-' + child.id)" [innerHTML]="sanitizeHtml(child.name)">
-            </button>
-          </ng-container>
         </ng-container>
-      </div>
+      </ng-container>
     </div>
+  </div>
+
+  <!-- MENU VIEW -->
+  <div *ngIf="activeView === 'menu' && !loading && !loadingMenu" class="view-container menu-view-with-nav">
 
     <div class="menu-tree" *ngIf="menuItems.length > 0">
       <ng-container *ngFor="let category of menuItems">

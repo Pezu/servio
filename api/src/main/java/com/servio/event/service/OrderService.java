@@ -45,6 +45,7 @@ public class OrderService {
     private final SqsTemplate sqsTemplate;
     private final OrderNotificationService notificationService;
     private final OrderMapper orderMapper;
+    private final WhatsAppService whatsAppService;
 
     @Transactional
     public OrderEntity createOrder(ReceiveOrderRequest request) {
@@ -253,7 +254,26 @@ public class OrderService {
         OrderEntity savedOrder = orderRepository.save(order);
         notificationService.notifyOrderStatusChange(savedOrder, previousStatus, OrderStatus.READY);
 
+        // Send WhatsApp notification to customer
+        sendWhatsAppReadyNotification(savedOrder);
+
         return savedOrder;
+    }
+
+    private void sendWhatsAppReadyNotification(OrderEntity order) {
+        try {
+            UUID registrationId = order.getRegistrationId();
+            if (registrationId == null) return;
+
+            registrationRepository.findById(registrationId).ifPresent(registration -> {
+                String phone = registration.getPhone();
+                String name = registration.getNickname();
+                String orderPointName = registration.getOrderPoint() != null ? registration.getOrderPoint().getName() : null;
+                whatsAppService.sendOrderReadyNotification(phone, name, order.getOrderNo(), orderPointName);
+            });
+        } catch (Exception e) {
+            log.error("Error sending WhatsApp for order #{}: {}", order.getOrderNo(), e.getMessage());
+        }
     }
 
     @Transactional
@@ -274,6 +294,11 @@ public class OrderService {
 
         OrderEntity savedOrder = orderRepository.save(order);
         notificationService.notifyOrderStatusChange(savedOrder, previousStatus, status);
+
+        // Send WhatsApp when order becomes READY
+        if (status == OrderStatus.READY) {
+            sendWhatsAppReadyNotification(savedOrder);
+        }
 
         return savedOrder;
     }

@@ -132,7 +132,9 @@
     "PREPAID": "Prepaid",
     "CLIENT": "Client",
     "CREDIT": "Credit",
-    "CREDIT_VALUE": "Credit Value"
+    "CREDIT_VALUE": "Credit Value",
+    "CASH_REGISTERS": "Cash Registers",
+    "NO_CASH_REGISTERS": "No cash registers configured"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",

@@ -21,4 +21,7 @@ public class Registration {
     private LocalDateTime approvedAt;
     private LocalDateTime createdAt;
     private String nickname;
+    private String firstName;
+    private String lastName;
+    private String phone;
 }

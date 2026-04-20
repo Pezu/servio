@@ -144,7 +144,7 @@ interface EventOrderPoint {
                  cdkDropList
                  #inProgressList="cdkDropList"
                  [cdkDropListData]="inProgressOrders"
-                 [cdkDropListConnectedTo]="[orderedList, readyList]"
+                 [cdkDropListConnectedTo]="[orderedList]"
                  [cdkDropListSortingDisabled]="true"
                  (cdkDropListDropped)="onOrderDrop($event, 'IN_PROGRESS')">
               <div *ngFor="let order of inProgressOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
@@ -164,7 +164,7 @@ interface EventOrderPoint {
                  cdkDropList
                  #readyList="cdkDropList"
                  [cdkDropListData]="readyOrders"
-                 [cdkDropListConnectedTo]="[inProgressList]"
+                 [cdkDropListConnectedTo]="[]"
                  [cdkDropListSortingDisabled]="true"
                  (cdkDropListDropped)="onOrderDrop($event, 'READY')">
               <div *ngFor="let order of readyOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
