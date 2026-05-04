@@ -212,7 +212,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                             <input type="checkbox"
                                    class="table-checkbox"
                                    [checked]="orderPoint.payLater"
-                                   (change)="togglePayLater(orderPoint)">
+                                   (change)="togglePayLater(orderPoint, $event)">
                           </td>
                         </tr>
                       }
@@ -1280,21 +1280,29 @@ export class LocationsComponent implements OnInit {
     }
   }
 
-  togglePayLater(orderPoint: OrderPoint): void {
-    if (!orderPoint.id || !this.selectedLocation?.id) return;
+  togglePayLater(orderPoint: OrderPoint, event: Event): void {
+    const checkbox = event.target as HTMLInputElement;
+    if (!orderPoint.id || !this.selectedLocation?.id) {
+      // Revert checkbox state
+      checkbox.checked = orderPoint.payLater;
+      return;
+    }
 
+    const newValue = !orderPoint.payLater;
     this.orderPointService.updateOrderPoint(
       orderPoint.id,
       orderPoint.name,
       this.selectedLocation.id,
-      !orderPoint.payLater,
+      newValue,
       orderPoint.menuId
     ).subscribe({
       next: () => {
-        orderPoint.payLater = !orderPoint.payLater;
+        orderPoint.payLater = newValue;
       },
       error: (err) => {
         console.error('Error updating pay later:', err);
+        // Revert checkbox state on error
+        checkbox.checked = orderPoint.payLater;
       }
     });
   }

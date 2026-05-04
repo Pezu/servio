@@ -1,15 +1,15 @@
 # Local development profile
-# Start with: mvn spring-boot:run -Dspring-boot.run.profiles=local
+# Start with: source local.env && mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 spring:
   jpa:
     show-sql: false
 
 application:
-  base-url: http://192.168.0.249:4200
+  base-url: http://${LOCAL_IP:10.21.210.51}:4200
 
 cors:
-  allowed-origins: http://localhost:4200,http://localhost:3000,http://192.168.0.249:4200,http://localhost,capacitor://localhost,*
+  allowed-origins: http://localhost:4200,http://localhost:3000,http://${LOCAL_IP:10.21.210.51}:4200,http://localhost,capacitor://localhost,*
 
 jwt:
   secret: phpauf1PhcHOqocdXY9O0Z6Bjn3jrsGu7kWG2yEqMbNkbPZxM0RFaFEG8NAReW6+
@@ -23,12 +23,13 @@ aws:
     region: us-east-1
 
 # Netopia sandbox (local testing)
+# Using ngrok for callbacks - start with: docker compose -f docker-compose.infra.yml up ngrok -d
 netopia:
   api-key: GMaWOObfdYQBlUWcuZFVnEqw-5DOTm6s7iOz5FFbdh0TYH23CJPEeKFx284g
   pos-signature: 37ZT-B3X1-VZOC-GOIK-2RXP
   base-url: https://secure.sandbox.netopia-payments.com
-  notify-url: http://localhost:8080/api/payments/netopia/notify
-  redirect-url: http://192.168.0.249:4200/payment/confirmed
+  notify-url: https://overprominently-hemodynamic-veronica.ngrok-free.dev/api/payments/netopia/notify
+  redirect-url: http://${LOCAL_IP:10.21.210.51}:4200/payment/confirmed
 
 logging:
   level:

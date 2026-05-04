@@ -8,15 +8,6 @@ import { Client } from '@stomp/stompjs';
 import * as SockJS from 'sockjs-client';
 import { environment } from '../../../../environments/environment';
 
-interface OrderNotification {
-  orderId: string;
-  orderNo: number;
-  type: string;
-  message: string;
-  itemName?: string;
-  orderClosed: boolean;
-}
-
 interface MenuItem {
   id: string;
   name: string;
@@ -83,6 +74,15 @@ interface PendingTeamRegistration {
   nickname?: string;
 }
 
+interface CustomerData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  prefix: string;
+  phone: string;
+  email?: string;
+}
+
 @Component({
   selector: 'app-registration',
   standalone: true,
@@ -99,10 +99,30 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Navigation
   menuOpen: boolean = false;
-  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' = 'menu';
+  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' | 'customerInfo' = 'menu';
   orderPointPayLater: boolean = false;
   orderPointMenuId: string | null = null;
   categoryNavExpanded: boolean = false;
+
+  // Customer info form (for non-payLater order points)
+  customerFirstName: string = '';
+  customerLastName: string = '';
+  customerCountryCode: string = '+40';
+  customerPhoneNumber: string = '';
+  countryCodes: { code: string; name: string; flag: string }[] = [
+    { code: '+40', name: 'Romania', flag: '🇷🇴' },
+    { code: '+1', name: 'USA', flag: '🇺🇸' },
+    { code: '+44', name: 'UK', flag: '🇬🇧' },
+    { code: '+49', name: 'Germany', flag: '🇩🇪' },
+    { code: '+33', name: 'France', flag: '🇫🇷' },
+    { code: '+39', name: 'Italy', flag: '🇮🇹' },
+    { code: '+34', name: 'Spain', flag: '🇪🇸' },
+    { code: '+43', name: 'Austria', flag: '🇦🇹' },
+    { code: '+36', name: 'Hungary', flag: '🇭🇺' },
+    { code: '+359', name: 'Bulgaria', flag: '🇧🇬' },
+    { code: '+373', name: 'Moldova', flag: '🇲🇩' },
+    { code: '+380', name: 'Ukraine', flag: '🇺🇦' },
+  ];
 
   // Validation polling
   private validationPollInterval: any = null;
@@ -125,12 +145,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   // Event data
   eventData: EventData | null = null;
 
-  // WebSocket and notifications
+  // WebSocket (for team/orderpoint features only)
   private stompClient: Client | null = null;
-  notifications: OrderNotification[] = [];
-  activeOrderIds: Set<string> = new Set();
   connected: boolean = false;
-  private audioContext: AudioContext | null = null;
   private visibilityHandler: (() => void) | null = null;
   private onlineHandler: (() => void) | null = null;
 
@@ -143,6 +160,15 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   showPaymentChoice: boolean = false;
   nickname: string = '';
   processingPayment: boolean = false;
+
+  // Checkout confirmation
+  orderConfirmed: boolean = false;
+
+  // Flag to continue order after customer info is submitted
+  pendingOrderAfterCustomerInfo: boolean = false;
+
+  // Item pending to add after registration (for non-payLater deferred registration)
+  pendingItemToAdd: MenuItem | null = null;
 
   // Tip modal
   showTipModal: boolean = false;
@@ -237,7 +263,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
                 this.startValidationPolling();
               } else {
                 this.activeView = 'menu';
-                this.loadActiveOrders();
                 this.loadOrders();
                 // Connect WebSocket and load pending registrations for real-time badge updates
                 if (this.orderPointPayLater && this.orderPointId) {
@@ -294,14 +319,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         return;
       }
 
-      // Add the confirmed order to active orders and connect WebSocket
+      // Clear the confirmed order ID and show success
       if (confirmedOrderId) {
-        console.log('[Payment] Adding order to active orders:', confirmedOrderId);
+        console.log('[Payment] Order confirmed:', confirmedOrderId);
         localStorage.removeItem('confirmedOrderId');
-        this.activeOrderIds.add(confirmedOrderId);
-        this.saveActiveOrders();
-        this.connectWebSocket();
         this.showToast('Order placed! Payment is being processed.', 'success');
+        this.loadOrders();
       }
     } else if (paymentError) {
       localStorage.removeItem('paymentError');
@@ -323,9 +346,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   private clearAllCookies(): void {
     this.deleteCookie('registrationResponse');
     this.deleteCookie('orderPointId');
-    this.deleteCookie('activeOrders');
     this.deleteCookie('eventId');
-    this.activeOrderIds.clear();
+    this.deleteCookie('activeOrders'); // Clean up legacy data when switching order points
     this.disconnectWebSocket();
   }
 
@@ -353,9 +375,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.disconnectWebSocket();
     this.stopValidationPolling();
     this.removeWakeUpListeners();
-    if (this.audioContext) {
-      this.audioContext.close();
-    }
   }
 
   private setupWakeUpListeners(): void {
@@ -388,8 +407,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   private reconnectIfNeeded(): void {
-    const needsConnection = this.activeOrderIds.size > 0 ||
-                           this.activeView === 'team' ||
+    const needsConnection = this.activeView === 'team' ||
                            (this.activeView === 'orders' && this.orderPointPayLater);
     if (needsConnection) {
       // Force disconnect and reconnect to ensure fresh connection
@@ -431,13 +449,16 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             this.registrationResponse = registration;
             this.orderPointPayLater = registration.orderPointPayLater || false;
             this.setCookie('registrationResponse', JSON.stringify(registration), 7);
-            this.activeView = 'menu';
-            this.loadOrders();
-            // Connect WebSocket and load pending registrations for real-time badge updates
-            if (this.orderPointPayLater && this.orderPointId) {
-              this.connectWebSocket();
-              this.loadTeamPendingRegistrations();
+
+            // Add the pending item if exists (deferred from before approval)
+            if (this.pendingItemToAdd) {
+              const current = this.getQuantity(this.pendingItemToAdd.id);
+              this.quantities.set(this.pendingItemToAdd.id, current + 1);
+              console.log('[Validation] Added pending item after approval:', this.pendingItemToAdd.name);
+              this.pendingItemToAdd = null;
             }
+
+            this.activeView = 'menu';
           }
         },
         error: (err) => {
@@ -472,8 +493,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     }
   }
 
-  checkOrderPointAndRegister(): void {
-    console.log('[CheckOP] Starting, orderPointId:', this.orderPointId);
+  checkOrderPointAndRegister(retryCount: number = 0): void {
+    console.log('[CheckOP] Starting, orderPointId:', this.orderPointId, 'retry:', retryCount);
     if (!this.orderPointId) {
       console.log('[CheckOP] No orderPointId, registering directly');
       this.registerToEvent();
@@ -493,22 +514,24 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           // Load menu items now that we have the order point info
           this.loadMenuItems();
 
-          if (orderPoint.payLater) {
-            // Show nickname form before registering
-            console.log('[CheckOP] payLater=true, showing nickname view');
-            this.activeView = 'nickname';
-          } else {
-            // Register immediately
-            console.log('[CheckOP] payLater=false, registering directly');
-            this.registerToEvent();
-          }
+          // Show menu directly for all order points, registration happens when adding items
+          console.log('[CheckOP] Showing menu (registration deferred until adding items)');
+          this.activeView = 'menu';
           console.log('[CheckOP] activeView is now:', this.activeView);
         },
         error: (err) => {
-          console.error('[CheckOP] Error fetching order point info:', err);
-          // Fall back to normal registration
-          this.loading = false;
-          this.registerToEvent();
+          console.error('[CheckOP] Error fetching order point info:', err, 'retry:', retryCount);
+          // Retry up to 2 times with increasing delay (helps with iOS first-load issues)
+          if (retryCount < 2) {
+            const delay = (retryCount + 1) * 500;
+            console.log(`[CheckOP] Retrying in ${delay}ms...`);
+            setTimeout(() => this.checkOrderPointAndRegister(retryCount + 1), delay);
+          } else {
+            // Fall back to normal registration after retries exhausted
+            console.error('[CheckOP] All retries failed, falling back to direct registration');
+            this.loading = false;
+            this.registerToEvent();
+          }
         }
       });
   }
@@ -517,59 +540,270 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.registerToEvent();
   }
 
-  registerToEvent(): void {
+  // Customer methods
+  private getStoredCustomerId(): string | null {
+    return this.getCookie('customerId');
+  }
+
+  private saveCustomerId(customerId: string): void {
+    this.setCookie('customerId', customerId, 365);
+  }
+
+  private loadCustomerInfoToForm(): void {
+    const customerId = this.getStoredCustomerId();
+    if (customerId) {
+      // Fetch customer data from backend
+      this.http.get<CustomerData>(`${environment.apiUrl}/api/customers/${customerId}`)
+        .subscribe({
+          next: (customer) => {
+            this.customerFirstName = customer.firstName;
+            this.customerLastName = customer.lastName;
+            this.customerCountryCode = customer.prefix;
+            this.customerPhoneNumber = customer.phone;
+          },
+          error: (err) => {
+            console.error('[Customer] Error fetching customer:', err);
+            // Customer might not exist anymore, clear the stored ID
+            this.deleteCookie('customerId');
+          }
+        });
+    }
+  }
+
+  isCustomerInfoValid(): boolean {
+    return this.customerFirstName.trim().length > 0 &&
+           this.customerLastName.trim().length > 0 &&
+           this.customerPhoneNumber.trim().length >= 6;
+  }
+
+  cancelCustomerInfo(): void {
+    this.pendingItemToAdd = null;
+    this.pendingOrderAfterCustomerInfo = false;
+    this.activeView = 'menu';
+  }
+
+  private createOrFindCustomer(): Promise<CustomerData> {
+    return new Promise((resolve, reject) => {
+      const body = {
+        firstName: this.customerFirstName.trim(),
+        lastName: this.customerLastName.trim(),
+        prefix: this.customerCountryCode,
+        phone: this.customerPhoneNumber.trim()
+      };
+      this.http.post<CustomerData>(`${environment.apiUrl}/api/customers`, body)
+        .subscribe({
+          next: (customer) => {
+            this.saveCustomerId(customer.id);
+            resolve(customer);
+          },
+          error: (err) => reject(err)
+        });
+    });
+  }
+
+  submitCustomerInfo(): void {
+    if (!this.isCustomerInfoValid()) return;
+
+    // Set nickname as firstName + lastName for display purposes
+    this.nickname = `${this.customerFirstName.trim()} ${this.customerLastName.trim()}`;
+
+    // Create or find customer first, then proceed with the flow
+    this.createOrFindCustomer().then((customer) => {
+      console.log('[CustomerInfo] Created/found customer:', customer.id);
+
+      // Check if we have a pending item to add (deferred registration for non-payLater)
+      if (this.pendingItemToAdd) {
+        const itemToAdd = this.pendingItemToAdd;
+        this.pendingItemToAdd = null;
+
+        // Register first, then add the item
+        this.registerToEventAndThen(() => {
+          // Add the pending item after successful registration
+          const current = this.getQuantity(itemToAdd.id);
+          this.quantities.set(itemToAdd.id, current + 1);
+          console.log('[CustomerInfo] Added pending item after registration:', itemToAdd.name);
+          this.activeView = 'menu';
+        });
+        return;
+      }
+
+      // Check if we need to continue with an order
+      if (this.pendingOrderAfterCustomerInfo) {
+        this.pendingOrderAfterCustomerInfo = false;
+
+        if (this.registrationResponse?.id) {
+          // Registration exists - update it with customer info
+          const body = {
+            firstName: this.customerFirstName.trim(),
+            lastName: this.customerLastName.trim(),
+            prefix: this.customerCountryCode,
+            phone: this.customerPhoneNumber.trim(),
+            email: null
+          };
+          this.http.post<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}/customer`, body)
+            .subscribe({
+              next: (response) => {
+                console.log('[CustomerInfo] Updated registration with customer:', response.customerId);
+                this.registrationResponse = response;
+                this.setCookie('registrationResponse', JSON.stringify(response), 7);
+                this.activeView = 'checkout';
+                this.placeOrder();
+              },
+              error: (err) => {
+                console.error('[CustomerInfo] Error updating registration with customer:', err);
+                // Continue with order anyway
+                this.activeView = 'checkout';
+                this.placeOrder();
+              }
+            });
+          return;
+        } else {
+          // No registration yet - create one then place order
+          this.registerToEventAndThen(() => {
+            this.activeView = 'checkout';
+            this.placeOrder();
+          });
+          return;
+        }
+      } else {
+        // Normal registration flow (for payLater nickname submission)
+        this.registerToEvent();
+      }
+    }).catch((err) => {
+      console.error('[CustomerInfo] Error creating customer:', err);
+      this.showToast('Failed to save customer info. Please try again.', 'error');
+    });
+  }
+
+  private registerToEventAndThen(callback: () => void): void {
     this.loading = true;
     this.error = '';
 
-    let url = `${environment.apiUrl}/api/register/events/${this.eventId}`;
-    const params: string[] = [];
-
-    if (this.orderPointId) {
-      params.push(`orderPointId=${this.orderPointId}`);
-    }
-    if (this.nickname && this.nickname.trim()) {
-      params.push(`nickname=${encodeURIComponent(this.nickname.trim())}`);
-    }
-    if (params.length > 0) {
-      url += '?' + params.join('&');
+    const customerId = this.getStoredCustomerId();
+    if (!customerId) {
+      this.error = 'Customer info is required';
+      this.loading = false;
+      return;
     }
 
-    console.log('[Register] Creating registration with URL:', url);
-    console.log('[Register] Nickname being sent:', this.nickname);
-    this.http.post<any>(url, {})
-      .subscribe({
-        next: (response) => {
-          console.log('[Register] Response:', response);
-          console.log('[Register] validationStatus:', response.validationStatus);
-          this.registrationResponse = response;
-          this.orderPointPayLater = response.orderPointPayLater || false;
-          this.setCookie('registrationResponse', JSON.stringify(response), 7);
-          this.setCookie('orderPointId', this.orderPointId, 7);
-          this.setCookie('eventId', this.eventId, 7);
-          this.loading = false;
+    const url = `${environment.apiUrl}/api/register/events/${this.eventId}/with-customer`;
+    const body = {
+      orderPointId: this.orderPointId || null,
+      nickname: this.nickname?.trim() || null,
+      customerId: customerId
+    };
 
-          // Check if validation is pending
-          if (response.validationStatus === 'PENDING') {
-            console.log('[Register] Status is PENDING, showing waiting view');
-            this.activeView = 'waiting';
-            this.loadApprovedMembers();
-            this.startValidationPolling();
-          } else {
-            console.log('[Register] Status is not PENDING, showing menu');
-            this.activeView = 'menu';
-            this.loadOrders();
-            // Connect WebSocket and load pending registrations for real-time badge updates
-            if (this.orderPointPayLater && this.orderPointId) {
-              this.connectWebSocket();
-              this.loadTeamPendingRegistrations();
-            }
+    console.log('[Register] Creating/finding registration with customerId:', body);
+    this.http.post<any>(url, body).subscribe({
+      next: (response) => {
+        console.log('[Register] Registration response:', response);
+        this.registrationResponse = response;
+        this.orderPointPayLater = response.orderPointPayLater || false;
+        this.setCookie('registrationResponse', JSON.stringify(response), 7);
+        this.setCookie('orderPointId', this.orderPointId, 7);
+        this.setCookie('eventId', this.eventId, 7);
+        this.loading = false;
+
+        // Check if validation is pending (for payLater order points)
+        if (response.validationStatus === 'PENDING') {
+          console.log('[Register] Status is PENDING, showing waiting view');
+          this.activeView = 'waiting';
+          this.loadApprovedMembers();
+          this.startValidationPolling();
+          // pendingItemToAdd is already set, will be added after approval
+        } else {
+          callback();
+        }
+      },
+      error: (err) => {
+        console.error('[Register] Error:', err);
+        this.error = 'Failed to register. Please try again.';
+        this.loading = false;
+      }
+    });
+  }
+
+  registerToEvent(retryCount: number = 0): void {
+    this.loading = true;
+    this.error = '';
+
+    // Check if we have customerId to include
+    const customerId = this.getStoredCustomerId();
+
+    let request$;
+
+    if (customerId) {
+      // Use the new endpoint with customerId
+      const url = `${environment.apiUrl}/api/register/events/${this.eventId}/with-customer`;
+      const body = {
+        orderPointId: this.orderPointId || null,
+        nickname: this.nickname?.trim() || null,
+        customerId: customerId
+      };
+      console.log('[Register] Creating registration with customerId, URL:', url, 'retry:', retryCount);
+      console.log('[Register] Request body:', body);
+      request$ = this.http.post<any>(url, body);
+    } else {
+      // Use the original endpoint with query params
+      let url = `${environment.apiUrl}/api/register/events/${this.eventId}`;
+      const params: string[] = [];
+
+      if (this.orderPointId) {
+        params.push(`orderPointId=${this.orderPointId}`);
+      }
+      if (this.nickname && this.nickname.trim()) {
+        params.push(`nickname=${encodeURIComponent(this.nickname.trim())}`);
+      }
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+
+      console.log('[Register] Creating registration with URL:', url, 'retry:', retryCount);
+      console.log('[Register] Nickname being sent:', this.nickname);
+      request$ = this.http.post<any>(url, {});
+    }
+
+    request$.subscribe({
+      next: (response) => {
+        console.log('[Register] Response:', response);
+        console.log('[Register] validationStatus:', response.validationStatus);
+        this.registrationResponse = response;
+        this.orderPointPayLater = response.orderPointPayLater || false;
+        this.setCookie('registrationResponse', JSON.stringify(response), 7);
+        this.setCookie('orderPointId', this.orderPointId, 7);
+        this.setCookie('eventId', this.eventId, 7);
+        this.loading = false;
+
+        // Check if validation is pending
+        if (response.validationStatus === 'PENDING') {
+          console.log('[Register] Status is PENDING, showing waiting view');
+          this.activeView = 'waiting';
+          this.loadApprovedMembers();
+          this.startValidationPolling();
+        } else {
+          console.log('[Register] Status is not PENDING, showing menu');
+          this.activeView = 'menu';
+          this.loadOrders();
+          // Connect WebSocket and load pending registrations for real-time badge updates
+          if (this.orderPointPayLater && this.orderPointId) {
+            this.connectWebSocket();
+            this.loadTeamPendingRegistrations();
           }
-        },
-        error: (err) => {
-          this.error = 'Failed to register: ' + (err.message || 'Unknown error');
+        }
+      },
+      error: (err) => {
+        console.error('[Register] Error:', err, 'retry:', retryCount);
+        // Retry up to 2 times with increasing delay (helps with iOS first-load issues)
+        if (retryCount < 2) {
+          const delay = (retryCount + 1) * 500;
+          console.log(`[Register] Retrying in ${delay}ms...`);
+          setTimeout(() => this.registerToEvent(retryCount + 1), delay);
+        } else {
+          this.error = 'Failed to register. Please try again.';
           this.loading = false;
         }
-      });
+      }
+    });
   }
 
   // Menu methods
@@ -649,6 +883,46 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   increaseQuantity(item: MenuItem): void {
+    // Require registration before adding items (for all order points)
+    if (!this.registrationResponse) {
+      const customerId = this.getStoredCustomerId();
+      if (customerId) {
+        // Customer ID exists - fetch customer data and register directly
+        console.log('[Menu] No registration but customerId exists, fetching customer data');
+        this.pendingItemToAdd = item;
+        this.http.get<CustomerData>(`${environment.apiUrl}/api/customers/${customerId}`)
+          .subscribe({
+            next: (customer) => {
+              this.nickname = `${customer.firstName} ${customer.lastName}`;
+              this.registerToEventAndThen(() => {
+                // Add the pending item after successful registration
+                if (this.pendingItemToAdd) {
+                  const current = this.getQuantity(this.pendingItemToAdd.id);
+                  this.quantities.set(this.pendingItemToAdd.id, current + 1);
+                  console.log('[Register] Added pending item after registration:', this.pendingItemToAdd.name);
+                  this.pendingItemToAdd = null;
+                }
+                this.activeView = 'menu';
+              });
+            },
+            error: (err) => {
+              console.error('[Menu] Error fetching customer, showing form:', err);
+              // Customer might not exist anymore, clear ID and show form
+              this.deleteCookie('customerId');
+              this.activeView = 'customerInfo';
+              this.loadCustomerInfoToForm();
+            }
+          });
+      } else {
+        // No customer info - show form
+        console.log('[Menu] No registration yet, showing customer info form');
+        this.pendingItemToAdd = item;
+        this.activeView = 'customerInfo';
+        this.loadCustomerInfoToForm();
+      }
+      return;
+    }
+
     const current = this.getQuantity(item.id);
     this.quantities.set(item.id, current + 1);
   }
@@ -697,6 +971,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       return;
     }
     this.orderStatus = '';
+    this.orderConfirmed = false;
     this.activeView = 'checkout';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -709,6 +984,16 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     const selectedItems = this.getSelectedItems();
     if (selectedItems.length === 0) {
       this.orderStatus = 'Please select at least one item';
+      return;
+    }
+
+    // For non-payLater order points, require registration before ordering
+    // (This is a safety check - normally registration happens when adding items)
+    if (!this.orderPointPayLater && !this.registrationResponse) {
+      console.log('[PlaceOrder] No registration, showing customer info form');
+      this.pendingOrderAfterCustomerInfo = true;
+      this.activeView = 'customerInfo';
+      this.loadCustomerInfoToForm();
       return;
     }
 
@@ -768,11 +1053,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             this.quantities.clear();
             this.placingOrder = false;
             this.activeView = 'menu';
-
-            // Add to active orders for notifications
-            this.activeOrderIds.add(orderResponse.id);
-            this.saveActiveOrders();
-            this.connectWebSocket();
 
             this.showToast('Order placed! Pay at the counter.', 'success');
             this.loadOrders();
@@ -1346,41 +1626,18 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     }
   }
 
-  // WebSocket methods
-  private loadActiveOrders(): void {
-    const activeOrdersJson = this.getCookie('activeOrders');
-    console.log('[Init] Loading active orders from cookie:', activeOrdersJson);
-    if (activeOrdersJson) {
-      const orderIds = JSON.parse(activeOrdersJson) as string[];
-      orderIds.forEach(id => this.activeOrderIds.add(id));
-      console.log('[Init] Active order IDs loaded:', orderIds);
-      if (this.activeOrderIds.size > 0) {
-        this.connectWebSocket();
-      }
-    }
-  }
-
-  private saveActiveOrders(): void {
-    const orderIds = Array.from(this.activeOrderIds);
-    if (orderIds.length > 0) {
-      this.setCookie('activeOrders', JSON.stringify(orderIds), 7);
-    } else {
-      this.deleteCookie('activeOrders');
-    }
-  }
-
+  // WebSocket methods (for team/orderpoint features only)
   private connectWebSocket(): void {
     if (this.stompClient?.active) {
       console.log('[WebSocket] Already connected');
       return;
     }
-    if (!this.registrationResponse?.id) {
-      console.log('[WebSocket] No registration ID, cannot connect');
+    if (!this.orderPointId) {
+      console.log('[WebSocket] No order point ID, skipping WebSocket connection');
       return;
     }
 
-    const registrationId = this.registrationResponse.id;
-    console.log('[WebSocket] Connecting for registration:', registrationId);
+    console.log('[WebSocket] Connecting for orderpoint:', this.orderPointId);
 
     // Setup wake-up listeners if not already done
     if (!this.visibilityHandler) {
@@ -1396,12 +1653,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       reconnectDelay: 2000,
       onConnect: () => {
         this.connected = true;
-        console.log('[WebSocket] Connected, subscribing to /topic/registration/' + registrationId);
-        this.stompClient?.subscribe(`/topic/registration/${registrationId}`, (message) => {
-          console.log('[WebSocket] Received message:', message.body);
-          const notification = JSON.parse(message.body) as OrderNotification;
-          this.handleNotification(notification);
-        });
 
         // Subscribe to order point registration updates (for team page)
         if (this.orderPointId) {
@@ -1478,87 +1729,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       this.stompClient.deactivate();
       this.stompClient = null;
       this.connected = false;
-    }
-  }
-
-  private handleNotification(notification: OrderNotification): void {
-    this.notifications.unshift(notification);
-    this.playBeep();
-
-    // Auto-dismiss: 2s if on orders view, 5s otherwise
-    const dismissTime = this.activeView === 'orders' ? 2000 : 5000;
-    setTimeout(() => {
-      const index = this.notifications.indexOf(notification);
-      if (index > -1) {
-        this.notifications.splice(index, 1);
-      }
-    }, dismissTime);
-
-    // Always refresh orders to update badge color
-    this.loadOrders();
-
-    if (notification.orderClosed) {
-      this.activeOrderIds.delete(notification.orderId);
-      this.saveActiveOrders();
-
-      if (this.activeOrderIds.size === 0) {
-        this.disconnectWebSocket();
-      }
-    }
-  }
-
-  onNotificationClick(notification: OrderNotification, index: number): void {
-    this.notifications.splice(index, 1);
-    if (this.activeView !== 'orders') {
-      this.navigateTo('orders');
-    }
-  }
-
-  private playBeep(): void {
-    try {
-      if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-
-      const oscillator = this.audioContext.createOscillator();
-      const gainNode = this.audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
-
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-
-      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
-
-      oscillator.start(this.audioContext.currentTime);
-      oscillator.stop(this.audioContext.currentTime + 0.2);
-    } catch (e) {
-      console.error('Could not play beep:', e);
-    }
-  }
-
-  dismissNotification(index: number): void {
-    this.notifications.splice(index, 1);
-  }
-
-  getNotificationColor(type: string): string {
-    switch (type) {
-      case 'ORDER_TAKEN':
-      case 'ITEM_STARTED':
-        return '#FF9800';
-      case 'ITEM_READY':
-        return '#4CAF50';
-      case 'ORDER_READY':
-        return '#2196F3';
-      case 'ORDER_DELIVERED':
-        return '#9C27B0';
-      case 'ORDER_CANCELLED':
-      case 'ITEM_CANCELLED':
-        return '#f44336';
-      default:
-        return '#757575';
     }
   }
 

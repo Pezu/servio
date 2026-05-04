@@ -933,77 +933,6 @@
   margin: 0;
 }
 
-/* Notifications */
-.notifications-container {
-  position: fixed;
-  bottom: 100px;
-  right: 12px;
-  max-width: 280px;
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.notification {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 8px;
-  color: #fff;
-  animation: slideInRight 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.notification-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  cursor: pointer;
-}
-
-.notification-content strong {
-  font-size: 12px;
-}
-
-.notification-content span {
-  font-size: 11px;
-  opacity: 0.9;
-}
-
-.dismiss-btn {
-  width: 22px;
-  height: 22px;
-  background: rgba(255, 255, 255, 0.25);
-  border: none;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-.dismiss-btn:hover {
-  background: rgba(255, 255, 255, 0.4);
-}
-
 /* Checkout View */
 .checkout-view {
   padding-top: 80px;
@@ -1121,6 +1050,35 @@
   font-size: 14px;
   color: #666;
   margin: 0;
+}
+
+.checkout-confirm {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.confirm-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.confirm-checkbox {
+  width: 22px;
+  height: 22px;
+  accent-color: #4CAF50;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.confirm-checkbox-text {
+  font-size: 15px;
+  color: #333;
+  line-height: 1.4;
 }
 
 .checkout-actions {
@@ -1422,6 +1380,150 @@
 .nickname-submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Customer Info View */
+.customer-info-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #fff;
+}
+
+.customer-info-content {
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  background: #fff;
+  padding: 48px 32px;
+  border-radius: 24px;
+}
+
+.customer-info-logo {
+  width: 100px;
+  height: 80px;
+  margin: 0 auto 24px;
+}
+
+.customer-info-logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.customer-info-content h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 12px 0;
+}
+
+.customer-info-content p {
+  font-size: 15px;
+  color: #666;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.customer-info-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row {
+  width: 100%;
+}
+
+.customer-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 16px;
+  color: #333;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.customer-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+}
+
+.customer-input::placeholder {
+  color: #aaa;
+}
+
+.phone-row {
+  display: flex;
+  gap: 8px;
+}
+
+.country-select {
+  width: 110px;
+  padding: 14px 8px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 16px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.country-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+}
+
+.phone-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-submit-btn {
+  margin-top: 8px;
+  padding: 14px 24px;
+  background: #fff;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.customer-submit-btn:hover:not(:disabled) {
+  background: #f8f8f8;
+  border-color: #ccc;
+}
+
+.customer-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.customer-back-btn {
+  margin-top: 8px;
+  padding: 12px 24px;
+  background: transparent;
+  color: #666;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.customer-back-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
 }
 
 /* Waiting View */

@@ -4,60 +4,7 @@
     <img [src]="getLogoUrl(eventData!.logoPath!)" alt="Event Logo">
   </div>
 
-  <!-- Hamburger Button (hidden during validation waiting and nickname entry) -->
-  <button class="hamburger-btn" *ngIf="activeView !== 'waiting' && activeView !== 'nickname'" (click)="toggleMenu()" [class.active]="menuOpen">
-    <span class="hamburger-line"></span>
-    <span class="hamburger-line"></span>
-    <span class="hamburger-line"></span>
-    <span class="order-badge" *ngIf="getInProgressOrdersCount() > 0" [style.background-color]="getFirstInProgressOrderColor()">
-      {{ getInProgressOrdersCount() }}
-    </span>
-    <span class="hamburger-validation-badge" *ngIf="teamPendingRegistrations.length > 0">
-      {{ teamPendingRegistrations.length }}
-    </span>
-  </button>
-
-  <!-- Menu Overlay -->
-  <div class="menu-overlay" *ngIf="menuOpen" (click)="closeMenu()"></div>
-
-  <!-- Slide Menu -->
-  <div class="slide-menu" [class.open]="menuOpen">
-    <div class="slide-menu-items">
-      <button class="slide-menu-item" [class.active]="activeView === 'menu'" (click)="navigateTo('menu')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
-        </svg>
-        <span>Menu</span>
-      </button>
-      <button class="slide-menu-item" [class.active]="activeView === 'orders'" (click)="navigateTo('orders')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-        </svg>
-        <span>Orders</span>
-        <span class="validation-badge" *ngIf="getInProgressOrdersCount() > 0" [style.background-color]="getFirstInProgressOrderColor()">{{ getInProgressOrdersCount() }}</span>
-      </button>
-      <button class="slide-menu-item" [class.active]="activeView === 'team'" (click)="navigateTo('team')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>Validations</span>
-        <span class="validation-badge" *ngIf="teamPendingRegistrations.length > 0">{{ teamPendingRegistrations.length }}</span>
-      </button>
-      <button class="slide-menu-item" [class.active]="activeView === 'payments'" (click)="navigateTo('payments')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-        </svg>
-        <span>Payments</span>
-      </button>
-      <div class="slide-menu-divider"></div>
-      <button class="slide-menu-item" [class.active]="activeView === 'login'" (click)="navigateTo('login')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-        </svg>
-        <span>Login</span>
-      </button>
-    </div>
-  </div>
+  <!-- Hamburger Button removed - only menu is visible, no navigation needed -->
 
   <!-- Loading State -->
   <div *ngIf="loading || (activeView === 'menu' && loadingMenu) || (activeView === 'orders' && loadingOrders)" class="loading-state">
@@ -123,6 +70,67 @@
           (keyup.enter)="submitNickname()">
         <button class="nickname-submit-btn" (click)="submitNickname()" [disabled]="!nickname.trim()">
           Join
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOMER INFO VIEW (for non-payLater order points) -->
+  <div *ngIf="activeView === 'customerInfo'" class="customer-info-view">
+    <div class="customer-info-content">
+      <div class="customer-info-logo">
+        <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="38,19 66,22 38,25" fill="url(#customerGoldGrad)"/>
+          <polygon points="34,25 64,28 34,31" fill="url(#customerGoldGrad)" opacity="0.85"/>
+          <polygon points="29,31 57,34 29,37" fill="url(#customerGoldGrad)" opacity="0.7"/>
+          <circle cx="20" cy="20" r="17" fill="white"/>
+          <path d="M20 2C10.06 2 2 10.06 2 20s8.06 18 18 18 18-8.06 18-18S29.94 2 20 2z" fill="none" stroke="url(#customerGoldGrad)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="85 28"/>
+          <circle cx="20" cy="15" r="5" fill="none" stroke="url(#customerGoldGrad)" stroke-width="2"/>
+          <path d="M10 30c0-5.5 4.5-8 10-8s10 2.5 10 8" fill="none" stroke="url(#customerGoldGrad)" stroke-width="2" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="customerGoldGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#6b7280"/>
+              <stop offset="0.5" stop-color="#4b5563"/>
+              <stop offset="1" stop-color="#374151"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2>Welcome!</h2>
+      <p>Please enter your details to continue.</p>
+      <div class="customer-info-form">
+        <div class="form-row">
+          <input
+            type="text"
+            [(ngModel)]="customerFirstName"
+            placeholder="First Name"
+            class="customer-input">
+        </div>
+        <div class="form-row">
+          <input
+            type="text"
+            [(ngModel)]="customerLastName"
+            placeholder="Last Name"
+            class="customer-input">
+        </div>
+        <div class="form-row phone-row">
+          <select [(ngModel)]="customerCountryCode" class="country-select">
+            <option *ngFor="let country of countryCodes" [value]="country.code">
+              {{ country.flag }} {{ country.code }}
+            </option>
+          </select>
+          <input
+            type="tel"
+            [(ngModel)]="customerPhoneNumber"
+            placeholder="Phone Number"
+            class="customer-input phone-input"
+            (keyup.enter)="submitCustomerInfo()">
+        </div>
+        <button class="customer-submit-btn" (click)="submitCustomerInfo()" [disabled]="!isCustomerInfoValid()">
+          Continue
+        </button>
+        <button *ngIf="pendingItemToAdd" class="customer-back-btn" (click)="cancelCustomerInfo()">
+          Back to Menu
         </button>
       </div>
     </div>
@@ -307,7 +315,7 @@
         </svg>
         Back to Menu
       </button>
-      <h1 class="checkout-title">Checkout</h1>
+      <h1 class="checkout-title">Summary</h1>
     </div>
 
     <div class="checkout-items">
@@ -320,12 +328,19 @@
       </div>
     </div>
 
+    <div class="checkout-confirm">
+      <label class="confirm-checkbox-label">
+        <input type="checkbox" [(ngModel)]="orderConfirmed" class="confirm-checkbox">
+        <span class="confirm-checkbox-text">I confirm that my order is correct</span>
+      </label>
+    </div>
+
     <div class="checkout-actions">
-      <button class="checkout-place-order-btn" (click)="placeOrder()" [disabled]="placingOrder">
+      <button class="checkout-place-order-btn" (click)="placeOrder()" [disabled]="placingOrder || !orderConfirmed">
         <svg *ngIf="!placingOrder" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
         </svg>
-        {{ placingOrder ? 'Placing Order...' : 'Order - ' + (getTotalPrice() | number:'1.2-2') + ' RON' }}
+        {{ placingOrder ? 'Processing...' : 'Pay ' + (getTotalPrice() | number:'1.2-2') + ' RON' }}
       </button>
     </div>
 
@@ -642,19 +657,6 @@
       </button>
     </div>
     <p class="payment-choice-hint">Pay Later: Pay at the counter when picking up your order</p>
-  </div>
-
-  <!-- Notifications -->
-  <div class="notifications-container" *ngIf="notifications.length > 0">
-    <div *ngFor="let notification of notifications; let i = index"
-         class="notification"
-         [style.background-color]="getNotificationColor(notification.type)">
-      <div class="notification-content" (click)="onNotificationClick(notification, i)">
-        <strong>Order #{{ notification.orderNo }}</strong>
-        <span>{{ notification.message }}</span>
-      </div>
-      <button class="dismiss-btn" (click)="dismissNotification(i)">×</button>
-    </div>
   </div>
 
   <!-- Tip Modal -->

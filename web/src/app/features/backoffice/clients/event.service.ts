@@ -16,6 +16,13 @@ export interface Event {
   menuItemIds?: string[];
 }
 
+export interface CashRegister {
+  id?: string;
+  tempId?: string;
+  name: string;
+  ip: string;
+}
+
 export interface PageResponse<T> {
   content: T[];
   totalElements: number;
@@ -74,5 +81,14 @@ export class EventService {
 
   getLogoUrl(logoPath: string): string {
     return `${environment.apiUrl}/api/images/${logoPath}`;
+  }
+
+  // Cash Register methods
+  getCashRegisters(eventId: string): Observable<CashRegister[]> {
+    return this.http.get<CashRegister[]>(`${this.apiUrl}/${eventId}/cash-registers`);
+  }
+
+  saveCashRegisters(eventId: string, cashRegisters: CashRegister[]): Observable<CashRegister[]> {
+    return this.http.put<CashRegister[]>(`${this.apiUrl}/${eventId}/cash-registers`, cashRegisters);
   }
 }

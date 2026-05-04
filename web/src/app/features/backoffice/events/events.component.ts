@@ -293,6 +293,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
             <button class="modal-tab" [class.active]="eventModalTab === 'tables'" (click)="eventModalTab = 'tables'" [disabled]="!editingEvent">
               {{ 'EVENTS.TABLES' | translate }}
             </button>
+            <button class="modal-tab" [class.active]="eventModalTab === 'cashRegisters'" (click)="eventModalTab = 'cashRegisters'" [disabled]="!editingEvent">
+              {{ 'EVENTS.CASH_REGISTERS' | translate }}
+            </button>
           </div>
           <div class="modal-body">
             <!-- Details Tab -->
@@ -364,16 +367,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <tr>
                         <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
                         <th>{{ 'EVENTS.CLIENT' | translate }}</th>
-                        <th>{{ 'COMMON.EMAIL' | translate }}</th>
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
-                        <th>{{ 'EVENTS.CREDIT' | translate }}</th>
-                        <th>{{ 'EVENTS.CREDIT_VALUE' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="6">
+                          <td colspan="3">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -390,38 +390,80 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               </td>
                               <td class="editable-cell" (click)="startEditing(table.orderPointId, 'clientName', $event)">
                                 @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'clientName') {
-                                  <input type="text" class="inline-input" [(ngModel)]="table.clientName" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'email')" #editInput>
+                                  <input type="text" class="inline-input" [(ngModel)]="table.clientName" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'phone')" #editInput>
                                 } @else {
                                   <span class="cell-value">{{ table.clientName || '' }}</span>
                                 }
                               </td>
-                              <td class="editable-cell" (click)="startEditing(table.orderPointId, 'email', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'email') {
-                                  <input type="email" class="inline-input" [(ngModel)]="table.email" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, 'phone')" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.email || '' }}</span>
-                                }
-                              </td>
                               <td class="editable-cell" (click)="startEditing(table.orderPointId, 'phone', $event)">
                                 @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'phone') {
-                                  <input type="tel" class="inline-input" [(ngModel)]="table.phone" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, table.credit ? 'creditValue' : null)" #editInput>
+                                  <input type="tel" class="inline-input" [(ngModel)]="table.phone" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, null)" #editInput>
                                 } @else {
                                   <span class="cell-value">{{ table.phone || '' }}</span>
-                                }
-                              </td>
-                              <td class="checkbox-cell">
-                                <input type="checkbox" class="credit-checkbox" [(ngModel)]="table.credit" (change)="onCreditChange(table)">
-                              </td>
-                              <td class="editable-cell" [class.disabled-cell]="!table.credit" (click)="table.credit && startEditing(table.orderPointId, 'creditValue', $event)">
-                                @if (editingCell?.orderPointId === table.orderPointId && editingCell?.field === 'creditValue') {
-                                  <input type="number" class="inline-input credit-value-input" [(ngModel)]="table.creditValue" step="0.01" min="0" (blur)="onCellBlur(table)" (keydown.enter)="onCellBlur(table)" (keydown.tab)="onCellTab($event, table, null)" #editInput>
-                                } @else {
-                                  <span class="cell-value">{{ table.creditValue || '' }}</span>
                                 }
                               </td>
                             </tr>
                           }
                         }
+                      }
+                    </tbody>
+                  </table>
+                }
+              </div>
+            }
+
+            <!-- Cash Registers Tab -->
+            @if (eventModalTab === 'cashRegisters') {
+              <div class="cash-registers-content">
+                <div class="cash-registers-header">
+                  <button class="btn btn-sm btn-primary" (click)="addCashRegister()">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    {{ 'COMMON.ADD' | translate }}
+                  </button>
+                </div>
+                @if (cashRegisters.length === 0) {
+                  <div class="empty-tables-message">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span>{{ 'EVENTS.NO_CASH_REGISTERS' | translate }}</span>
+                  </div>
+                } @else {
+                  <table class="tables-table cash-registers-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'COMMON.NAME' | translate }}</th>
+                        <th>IP</th>
+                        <th class="actions-col"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (cr of cashRegisters; track cr.id || cr.tempId) {
+                        <tr>
+                          <td class="editable-cell" (click)="startEditingCashRegister(cr, 'name', $event)">
+                            @if (isEditingCashRegister(cr, 'name')) {
+                              <input type="text" class="inline-input" [(ngModel)]="cr.name" (blur)="onCashRegisterBlur(cr)" (keydown.enter)="onCashRegisterBlur(cr)" #editInput>
+                            } @else {
+                              <span class="cell-value">{{ cr.name || '' }}</span>
+                            }
+                          </td>
+                          <td class="editable-cell" (click)="startEditingCashRegister(cr, 'ip', $event)">
+                            @if (isEditingCashRegister(cr, 'ip')) {
+                              <input type="text" class="inline-input" [(ngModel)]="cr.ip" (blur)="onCashRegisterBlur(cr)" (keydown.enter)="onCashRegisterBlur(cr)" #editInput>
+                            } @else {
+                              <span class="cell-value">{{ cr.ip || '' }}</span>
+                            }
+                          </td>
+                          <td class="actions-col">
+                            <button class="btn-icon-action btn-icon-delete" (click)="deleteCashRegister(cr)" title="Delete">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
                       }
                     </tbody>
                   </table>
@@ -586,13 +628,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .tables-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .tables-table th, .tables-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
     .tables-table th { font-size: 12px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); white-space: nowrap; }
-    .tables-table th:nth-child(1) { width: 20%; }
-    .tables-table th:nth-child(2) { width: 10%; }
-    .tables-table th:nth-child(3) { width: 15%; }
-    .tables-table th:nth-child(4) { width: 15%; }
-    .tables-table th:nth-child(5) { width: 12%; }
-    .tables-table th:nth-child(6) { width: 10%; text-align: center; }
-    .tables-table th:nth-child(7) { width: 18%; }
+    .tables-table th:nth-child(1) { width: 40%; }
+    .tables-table th:nth-child(2) { width: 30%; }
+    .tables-table th:nth-child(3) { width: 30%; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
     .tables-table .parent-row:hover { background: #e2e8f0; }
@@ -619,6 +657,17 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .credit-checkbox:hover { border-color: #9ca3af; }
     .credit-checkbox:checked { background: var(--primary); border-color: var(--primary); }
     .credit-checkbox:checked::after { content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px; border: solid white; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+
+    /* Cash Registers tab styles */
+    .cash-registers-content { min-height: 200px; }
+    .cash-registers-header { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .btn-sm svg { width: 14px; height: 14px; }
+    .cash-registers-table th:nth-child(1) { width: 50%; }
+    .cash-registers-table th:nth-child(2) { width: 40%; }
+    .cash-registers-table th:nth-child(3) { width: 10%; }
+    .cash-registers-table .actions-col { text-align: center; width: 60px; }
+
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
     .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
     .close-btn:hover { background: #e2e8f0; color: #374151; }
@@ -924,7 +973,7 @@ export class EventsComponent implements OnInit {
   loadingEvents = false;
   savingEvent = false;
   showEventModal = false;
-  eventModalTab: 'details' | 'tables' = 'details';
+  eventModalTab: 'details' | 'tables' | 'cashRegisters' = 'details';
   editingEvent: Event | null = null;
   eventCurrentPage = 0;
   eventTotalPages = 0;
@@ -950,6 +999,11 @@ export class EventsComponent implements OnInit {
   loadingTables = false;
   savingTables = false;
   editingCell: { orderPointId: string; field: string } | null = null;
+
+  // Cash Registers tab
+  cashRegisters: { id?: string; tempId?: string; name: string; ip: string }[] = [];
+  editingCashRegister: { id: string; field: string } | null = null;
+  private cashRegisterTempIdCounter = 0;
 
   // Material Date Picker
   startDate: Date | null = null;
@@ -1207,6 +1261,7 @@ export class EventsComponent implements OnInit {
     }
     this.loadEventMenuItems();
     this.loadEventTables();
+    this.loadCashRegisters();
     this.showEventModal = true;
   }
 
@@ -1214,6 +1269,7 @@ export class EventsComponent implements OnInit {
     this.showEventModal = false;
     this.editingEvent = null;
     this.usersDropdownOpen = false;
+    this.cashRegisters = [];
   }
 
   saveEvent(): void {
@@ -1444,6 +1500,66 @@ export class EventsComponent implements OnInit {
       table.creditValue = undefined;
     }
     this.saveEventTable(table);
+  }
+
+  // Cash Register Methods
+  addCashRegister(): void {
+    const tempId = `temp-${++this.cashRegisterTempIdCounter}`;
+    this.cashRegisters.push({ tempId, name: '', ip: '' });
+  }
+
+  isEditingCashRegister(cr: { id?: string; tempId?: string }, field: string): boolean {
+    if (!this.editingCashRegister) return false;
+    const crIdentifier = cr.id || cr.tempId;
+    return this.editingCashRegister.id === crIdentifier && this.editingCashRegister.field === field;
+  }
+
+  deleteCashRegister(cr: { id?: string; tempId?: string }): void {
+    const index = this.cashRegisters.findIndex(c =>
+      (cr.id && c.id === cr.id) || (cr.tempId && c.tempId === cr.tempId)
+    );
+    if (index >= 0) {
+      this.cashRegisters.splice(index, 1);
+      this.saveCashRegisters();
+    }
+  }
+
+  startEditingCashRegister(cr: { id?: string; tempId?: string }, field: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this.editingCashRegister = { id: cr.id || cr.tempId || '', field };
+    setTimeout(() => {
+      const input = this.elementRef.nativeElement.querySelector('.cash-registers-table .editable-cell input');
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    }, 0);
+  }
+
+  onCashRegisterBlur(cr: { id?: string; tempId?: string; name: string; ip: string }): void {
+    this.editingCashRegister = null;
+    this.saveCashRegisters();
+  }
+
+  private saveCashRegisters(): void {
+    if (!this.editingEvent?.id) return;
+    // Save cash registers to the event
+    this.eventService.saveCashRegisters(this.editingEvent.id, this.cashRegisters).subscribe({
+      next: (saved) => {
+        this.cashRegisters = saved;
+      },
+      error: (err) => console.error('Error saving cash registers:', err)
+    });
+  }
+
+  private loadCashRegisters(): void {
+    if (!this.editingEvent?.id) return;
+    this.eventService.getCashRegisters(this.editingEvent.id).subscribe({
+      next: (registers) => {
+        this.cashRegisters = registers;
+      },
+      error: (err) => console.error('Error loading cash registers:', err)
+    });
   }
 
 }
