@@ -184,10 +184,10 @@ import { AuthService } from '../../services/auth.service';
       --padding-end: 16px;
       --padding-top: 16px;
       --padding-bottom: 16px;
-      --border-radius: 12px;
-      --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      --border-radius: 0;
+      --box-shadow: none;
       border: 1px solid #e2e8f0;
-      border-radius: 12px;
+      border-radius: 0;
       font-size: 16px;
     }
 
@@ -207,12 +207,27 @@ import { AuthService } from '../../services/auth.service';
     }
 
     .login-button {
-      --border-radius: 12px;
+      --border-radius: 0;
+      --background: transparent;
+      --background-hover: rgba(59, 130, 246, 0.08);
+      --background-activated: rgba(59, 130, 246, 0.12);
+      --background-focused: rgba(59, 130, 246, 0.08);
+      --color: var(--ion-color-primary);
+      --border-color: var(--ion-color-primary);
+      --border-style: solid;
+      --border-width: 1px;
+      --box-shadow: none;
       --padding-top: 16px;
       --padding-bottom: 16px;
       margin-top: 8px;
       font-size: 16px;
       font-weight: 600;
+    }
+
+    .login-button.button-disabled {
+      --color: #94a3b8;
+      --border-color: #cbd5e1;
+      opacity: 1;
     }
   `]
 })

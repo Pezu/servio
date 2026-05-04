@@ -29,6 +29,10 @@ public class EventOrderPointEntity {
     @JoinColumn(name = "order_point_id", nullable = false)
     private OrderPointEntity orderPoint;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
+
     @Column(precision = 10, scale = 2)
     private BigDecimal prepaid = BigDecimal.ZERO;
 

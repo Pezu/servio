@@ -1,16 +1,18 @@
 import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
   selector: 'app-loading-state',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="loading-state" [class.inline]="inline">
       <div class="spinner" [style.width.px]="size" [style.height.px]="size"></div>
-      <p *ngIf="message">{{ message }}</p>
+      @if (message) {
+        <p>{{ message }}</p>
+      }
     </div>
-  `,
+    `,
   styles: [`
     .loading-state {
       display: flex;

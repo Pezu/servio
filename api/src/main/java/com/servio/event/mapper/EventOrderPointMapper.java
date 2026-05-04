@@ -13,5 +13,8 @@ public interface EventOrderPointMapper {
     @Mapping(source = "orderPoint.id", target = "orderPointId")
     @Mapping(source = "orderPoint.name", target = "orderPointName")
     @Mapping(source = "orderPoint.location.name", target = "sublocationName")
+    @Mapping(source = "user.id", target = "userId")
+    @Mapping(source = "user.name", target = "userName")
+    @Mapping(source = "user.username", target = "userLogin")
     EventOrderPoint toDto(EventOrderPointEntity entity);
 }

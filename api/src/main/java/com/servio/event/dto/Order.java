@@ -22,6 +22,7 @@ public class Order {
     private String eventName;
     private UUID orderPointId;
     private String orderPointName;
+    private UUID groupId;
     private OrderStatus status;
     private String assignedUser;
     private String note;

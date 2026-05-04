@@ -36,6 +36,7 @@
     "EMAIL": "Email",
     "PHONE": "Telefon",
     "STATUS": "Status",
+    "TYPE": "Tip",
     "ACTIVE": "Activ",
     "INACTIVE": "Inactiv",
     "PENDING": "În așteptare",
@@ -105,7 +106,10 @@
     "NO_ORDER_POINTS": "Nu s-au găsit puncte de comandă",
     "SELECT_LOCATION": "Selectează o locație pentru a vedea punctele de comandă",
     "ENTER_NAME": "Introduceți numele punctului de comandă",
-    "PAY_LATER": "Plătește Mai Târziu"
+    "PAY_LATER": "Plătește Mai Târziu",
+    "ADD_MULTIPLE": "Adaugă Puncte de Comandă",
+    "COUNT": "Câte",
+    "SPLIT": "Împarte"
   },
   "EVENTS": {
     "TITLE": "Evenimente",
@@ -131,10 +135,13 @@
     "TABLES": "Mese",
     "PREPAID": "Preplătit",
     "CLIENT": "Client",
+    "USER": "Utilizator",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Valoare Credit",
     "CASH_REGISTERS": "Case de Marcat",
-    "NO_CASH_REGISTERS": "Nu sunt case de marcat configurate"
+    "NO_CASH_REGISTERS": "Nu sunt case de marcat configurate",
+    "REQUIRE_VALIDATION": "Necesită validare pentru înregistrările cu plată ulterioară",
+    "REQUIRE_VALIDATION_SHORT": "Validare"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",
@@ -181,6 +188,7 @@
     "ORDER_ID": "ID Comandă",
     "ORDER_NO": "Comanda #",
     "EVENT": "Eveniment",
+    "ALL_EVENTS": "Toate evenimentele",
     "ALL_ORDERS": "Toate Comenzile",
     "CUSTOMER": "Client",
     "TOTAL": "Total",

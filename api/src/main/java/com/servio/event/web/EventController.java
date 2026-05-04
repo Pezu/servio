@@ -1,6 +1,7 @@
 package com.servio.event.web;
 
 import com.google.zxing.WriterException;
+import com.servio.event.dto.CashRegister;
 import com.servio.event.dto.CreateEventRequest;
 import com.servio.event.dto.Event;
 import com.servio.event.dto.Location;
@@ -44,8 +45,21 @@ public class EventController {
     public ResponseEntity<Page<Event>> getMyEvents(
             HttpServletRequest request,
             @PageableDefault(size = 20, sort = "name") Pageable pageable) {
-        String username = (String) request.getAttribute("username");
-        Page<Event> events = eventService.getEventsByUsername(username, pageable);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isSuper = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER"));
+        Page<Event> events;
+        if (isSuper) {
+            events = eventService.getAllEvents(pageable);
+        } else {
+            String userClientId = (String) request.getAttribute("clientId");
+            if (userClientId != null) {
+                events = eventService.getEventsByClientId(UUID.fromString(userClientId), pageable);
+            } else {
+                String username = (String) request.getAttribute("username");
+                events = eventService.getEventsByUsername(username, pageable);
+            }
+        }
         return ResponseEntity.ok(events);
     }
 
@@ -59,7 +73,7 @@ public class EventController {
     }
 
     @GetMapping("/active")
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER','SERVICE')")
     public ResponseEntity<Page<Event>> getAllActiveEvents(
             @PageableDefault(size = 100, sort = "name") Pageable pageable) {
         Page<Event> events = eventService.getAllActiveEvents(pageable);
@@ -172,6 +186,29 @@ public class EventController {
         } catch (Exception e) {
             throw new RuntimeException("Failed to delete logo: " + e.getMessage(), e);
         }
+    }
+
+    @GetMapping("/{eventId}/cash-registers")
+    public ResponseEntity<List<CashRegister>> getCashRegisters(
+            @PathVariable UUID eventId,
+            HttpServletRequest httpRequest) {
+        Event event = eventService.getEventById(eventId);
+        Location location = locationService.getLocationById(event.getLocationId());
+        checkClientAccess(location.getClientId(), httpRequest);
+        List<CashRegister> cashRegisters = eventService.getCashRegisters(eventId);
+        return ResponseEntity.ok(cashRegisters);
+    }
+
+    @PutMapping("/{eventId}/cash-registers")
+    public ResponseEntity<List<CashRegister>> saveCashRegisters(
+            @PathVariable UUID eventId,
+            @RequestBody List<CashRegister> cashRegisters,
+            HttpServletRequest httpRequest) {
+        Event event = eventService.getEventById(eventId);
+        Location location = locationService.getLocationById(event.getLocationId());
+        checkClientAccess(location.getClientId(), httpRequest);
+        List<CashRegister> saved = eventService.saveCashRegisters(eventId, cashRegisters);
+        return ResponseEntity.ok(saved);
     }
 
     /**

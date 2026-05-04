@@ -1,5 +1,5 @@
 import { Component, OnInit, HostListener, ElementRef, ViewEncapsulation } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -53,7 +53,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 @Component({
   selector: 'app-events',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, MatDatepickerModule, MatInputModule, MatFormFieldModule],
+  imports: [FormsModule, TranslateModule, MatDatepickerModule, MatInputModule, MatFormFieldModule],
   providers: [
     { provide: DateAdapter, useClass: CustomDateAdapter },
     { provide: MAT_DATE_FORMATS, useValue: CUSTOM_DATE_FORMATS }
@@ -67,104 +67,136 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           <label class="selector-label">{{ 'CLIENTS.TITLE' | translate }}</label>
           <div class="selector-wrapper" [class.open]="clientDropdownOpen">
             <div class="selector-input" (click)="toggleClientDropdown()">
-              <div class="selected-client" *ngIf="selectedClient">
-                <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
-                      [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
-                <span class="client-name">{{ selectedClient.name }}</span>
-                <span class="client-details" *ngIf="selectedClient.email || selectedClient.phone">
-                  ({{ selectedClient.email || selectedClient.phone }})
-                </span>
-              </div>
-              <div class="placeholder" *ngIf="!selectedClient">
-                {{ 'CLIENTS.SELECT_CLIENT' | translate }}
-              </div>
+              @if (selectedClient) {
+                <div class="selected-client">
+                  <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
+                  [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
+                  <span class="client-name">{{ selectedClient.name }}</span>
+                  @if (selectedClient.email || selectedClient.phone) {
+                    <span class="client-details">
+                      ({{ selectedClient.email || selectedClient.phone }})
+                    </span>
+                  }
+                </div>
+              }
+              @if (!selectedClient) {
+                <div class="placeholder">
+                  {{ 'CLIENTS.SELECT_CLIENT' | translate }}
+                </div>
+              }
               <span class="dropdown-arrow">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </span>
             </div>
-
-            <div class="selector-dropdown" *ngIf="clientDropdownOpen">
-              <div class="search-box">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
-                       [(ngModel)]="clientSearchTerm" (input)="onClientSearch()" (click)="$event.stopPropagation()">
-              </div>
-              <div class="client-list">
-                <div *ngIf="loadingClients" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                <div *ngIf="!loadingClients && clients.length === 0" class="empty-state">{{ 'CLIENTS.NO_CLIENTS' | translate }}</div>
-                <div *ngFor="let client of clients" class="client-option"
-                     [class.selected]="selectedClient?.id === client.id" (click)="selectClient(client)">
-                  <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
-                        [class.bg-danger]="client.status === 'INACTIVE'"></span>
-                  <div class="client-info">
-                    <span class="client-name">{{ client.name }}</span>
-                    <span class="client-details">
-                      <span *ngIf="client.email">{{ client.email }}</span>
-                      <span *ngIf="client.email && client.phone"> · </span>
-                      <span *ngIf="client.phone">{{ client.phone }}</span>
-                    </span>
-                  </div>
+    
+            @if (clientDropdownOpen) {
+              <div class="selector-dropdown">
+                <div class="search-box">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
+                    [(ngModel)]="clientSearchTerm" (input)="onClientSearch()" (click)="$event.stopPropagation()">
+                </div>
+                <div class="client-list">
+                  @if (loadingClients) {
+                    <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                  }
+                  @if (!loadingClients && clients.length === 0) {
+                    <div class="empty-state">{{ 'CLIENTS.NO_CLIENTS' | translate }}</div>
+                  }
+                  @for (client of clients; track client) {
+                    <div class="client-option"
+                      [class.selected]="selectedClient?.id === client.id" (click)="selectClient(client)">
+                      <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
+                      [class.bg-danger]="client.status === 'INACTIVE'"></span>
+                      <div class="client-info">
+                        <span class="client-name">{{ client.name }}</span>
+                        <span class="client-details">
+                          @if (client.email) {
+                            <span>{{ client.email }}</span>
+                          }
+                          @if (client.email && client.phone) {
+                            <span> · </span>
+                          }
+                          @if (client.phone) {
+                            <span>{{ client.phone }}</span>
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
-            </div>
+            }
           </div>
         </div>
-
+    
         <!-- Location Selector -->
         @if (selectedClient) {
           <div class="location-selector-container">
             <label class="selector-label">{{ 'LOCATIONS.LOCATION' | translate }}</label>
             <div class="selector-wrapper location-wrapper" [class.open]="locationDropdownOpen">
               <div class="selector-input" (click)="toggleLocationDropdown()">
-                <div class="selected-location" *ngIf="selectedLocation">
-                  <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span class="location-name">{{ selectedLocation.name }}</span>
-                </div>
-                <div class="placeholder" *ngIf="!selectedLocation">
-                  {{ 'MENU.SELECT_LOCATION' | translate }}
-                </div>
+                @if (selectedLocation) {
+                  <div class="selected-location">
+                    <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span class="location-name">{{ selectedLocation.name }}</span>
+                  </div>
+                }
+                @if (!selectedLocation) {
+                  <div class="placeholder">
+                    {{ 'MENU.SELECT_LOCATION' | translate }}
+                  </div>
+                }
                 <span class="dropdown-arrow">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </span>
               </div>
-
-              <div class="selector-dropdown" *ngIf="locationDropdownOpen">
-                <div class="search-box">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
-                         [(ngModel)]="locationSearchTerm" (input)="onLocationSearch()" (click)="$event.stopPropagation()">
-                </div>
-                <div class="location-list">
-                  <div *ngIf="loadingLocations" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                  <div *ngIf="!loadingLocations && filteredLocations.length === 0" class="empty-state">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</div>
-                  <div *ngFor="let location of filteredLocations" class="location-option"
-                       [class.selected]="selectedLocation?.id === location.id"
-                       [class.sublocation]="location.parentId"
-                       (click)="selectLocation(location)">
-                    <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    
+              @if (locationDropdownOpen) {
+                <div class="selector-dropdown">
+                  <div class="search-box">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <span class="location-name">{{ location.name }}</span>
+                    <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
+                      [(ngModel)]="locationSearchTerm" (input)="onLocationSearch()" (click)="$event.stopPropagation()">
+                  </div>
+                  <div class="location-list">
+                    @if (loadingLocations) {
+                      <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                    }
+                    @if (!loadingLocations && filteredLocations.length === 0) {
+                      <div class="empty-state">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</div>
+                    }
+                    @for (location of filteredLocations; track location) {
+                      <div class="location-option"
+                        [class.selected]="selectedLocation?.id === location.id"
+                        [class.sublocation]="location.parentId"
+                        (click)="selectLocation(location)">
+                        <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="location-name">{{ location.name }}</span>
+                      </div>
+                    }
                   </div>
                 </div>
-              </div>
+              }
             </div>
           </div>
         }
       </div>
-
+    
       <!-- Events Table -->
       @if (selectedClient) {
         <div class="events-panel">
@@ -188,6 +220,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
                       <th>{{ 'EVENTS.START_DATE' | translate }}</th>
                       <th>{{ 'EVENTS.END_DATE' | translate }}</th>
+                      <th class="text-center">{{ 'EVENTS.REQUIRE_VALIDATION_SHORT' | translate }}</th>
                       <th class="text-end">
                         @if (selectedLocation) {
                           <button class="btn-icon-action btn-icon-add" (click)="openEventModal(); $event.stopPropagation()" [title]="'EVENTS.ADD_EVENT' | translate">
@@ -201,9 +234,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   </thead>
                   <tbody>
                     @if (loadingEvents) {
-                      <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (events.length === 0) {
-                      <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
+                      <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
                     } @else {
                       @for (event of events; track event.id) {
                         <tr>
@@ -225,6 +258,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           <td class="text-muted">{{ event.locationName }}</td>
                           <td class="text-muted">{{ formatDate(event.startDate) }}</td>
                           <td class="text-muted">{{ formatDate(event.endDate) }}</td>
+                          <td class="text-center">
+                            <input type="checkbox" class="credit-checkbox"
+                                   [checked]="!!event.requireValidation"
+                                   [disabled]="savingValidationFor === event.id"
+                                   (change)="toggleRequireValidation(event, $event)"
+                                   [title]="'EVENTS.REQUIRE_VALIDATION' | translate">
+                          </td>
                           <td class="text-end">
                             <label class="btn-icon-action" [title]="'EVENTS.UPLOAD_LOGO' | translate">
                               <input type="file" accept="image/*" (change)="uploadLogo($event, event)" hidden>
@@ -244,9 +284,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                               </svg>
                             </button>
-                            <button class="btn-icon-action" (click)="editEvent(event)" [title]="'COMMON.EDIT' | translate">
+                            <button class="btn-icon-action btn-icon-action-sm" (click)="editEvent(event)" [title]="'COMMON.EDIT' | translate">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
                           </td>
@@ -266,25 +306,44 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   }
                   <li><a href="javascript:void(0);" (click)="loadEventPage(eventCurrentPage + 1)" [class.disabled]="eventCurrentPage >= eventTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
                 </ul>
-                <select class="page-size-select" [ngModel]="eventPageSize" (ngModelChange)="onEventPageSizeChange($event)">
-                  @for (size of pageSizeOptions; track size) {
-                    <option [value]="size">{{ size }}</option>
+                <div class="custom-select page-size-select-custom" [class.open]="pageSizeDropdownOpen" (click)="togglePageSizeDropdown(); $event.stopPropagation()">
+                  <div class="custom-select-trigger">
+                    <span class="selected-value">{{ eventPageSize }}</span>
+                    <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  @if (pageSizeDropdownOpen) {
+                    <div class="custom-select-options open-upward square">
+                      @for (size of pageSizeOptions; track size) {
+                        <div class="custom-select-option" [class.selected]="eventPageSize === size" (click)="selectPageSize(size); $event.stopPropagation()">
+                          <span class="option-text">{{ size }}</span>
+                          @if (eventPageSize === size) {
+                            <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          }
+                        </div>
+                      }
+                    </div>
                   }
-                </select>
+                </div>
               </div>
             </div>
           </div>
         </div>
       }
     </div>
-
+    
     <!-- Event Modal -->
     @if (showEventModal) {
       <div class="modal-overlay" (mousedown)="closeEventModal()">
         <div class="modal modal-lg" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingEvent ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ 'EVENTS.EVENT' | translate }}</h3>
-            <button class="close-btn" (click)="closeEventModal()">&times;</button>
+            <button class="close-btn" (click)="closeEventModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-tabs">
             <button class="modal-tab" [class.active]="eventModalTab === 'details'" (click)="eventModalTab = 'details'">
@@ -322,33 +381,52 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   </mat-form-field>
                 </div>
               </div>
-
+    
               <!-- Users Selection -->
               <div class="form-group">
                 <label>{{ 'EVENTS.SERVICE_USERS' | translate }}</label>
                 <div class="multi-select-wrapper users-dropdown" [class.open]="usersDropdownOpen">
                   <div class="multi-select-input" (click)="toggleUsersDropdown(); $event.stopPropagation()">
-                    <span class="selected-text" *ngIf="getSelectedUsersText()">{{ getSelectedUsersText() }}</span>
-                    <span class="placeholder" *ngIf="!getSelectedUsersText()">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
+                    @if (getSelectedUsersText()) {
+                      <span class="selected-text">{{ getSelectedUsersText() }}</span>
+                    }
+                    @if (!getSelectedUsersText()) {
+                      <span class="placeholder">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
+                    }
                     <span class="dropdown-arrow">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                       </svg>
                     </span>
                   </div>
-                  <div class="multi-select-dropdown" *ngIf="usersDropdownOpen" (click)="$event.stopPropagation()">
-                    <div *ngIf="loadingUsers" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                    <div *ngIf="!loadingUsers && getServiceUsers().length === 0" class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
-                    <label *ngFor="let user of getServiceUsers()" class="checkbox-option">
-                      <input type="checkbox" [checked]="eventFormData.userIds.includes(user.id!)" (change)="toggleEventUser(user.id!, $event)">
-                      <span class="checkbox-label-text">{{ user.name }}</span>
-                    </label>
-                  </div>
+                  @if (usersDropdownOpen) {
+                    <div class="multi-select-dropdown open-upward" (click)="$event.stopPropagation()">
+                      @if (loadingUsers) {
+                        <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                      }
+                      @if (!loadingUsers && getServiceUsers().length === 0) {
+                        <div class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
+                      }
+                      @for (user of getServiceUsers(); track user) {
+                        <label class="checkbox-option">
+                          <input type="checkbox" [checked]="eventFormData.userIds.includes(user.id!)" (change)="toggleEventUser(user.id!, $event)">
+                          <span class="checkbox-label-text">{{ user.name }}</span>
+                        </label>
+                      }
+                    </div>
+                  }
                 </div>
               </div>
 
-            }
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="eventFormData.requireValidation">
+                  <span class="checkbox-label-text">{{ 'EVENTS.REQUIRE_VALIDATION' | translate }}</span>
+                </label>
+              </div>
 
+            }
+    
             <!-- Tables Tab -->
             @if (eventModalTab === 'tables') {
               <div class="tables-content">
@@ -368,12 +446,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                         <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
                         <th>{{ 'EVENTS.CLIENT' | translate }}</th>
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
+                        <th>{{ 'EVENTS.USER' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="3">
+                          <td colspan="4">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -402,6 +481,14 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                   <span class="cell-value">{{ table.phone || '' }}</span>
                                 }
                               </td>
+                              <td class="user-cell">
+                                <select class="user-select" [ngModel]="table.userId || ''" (ngModelChange)="onUserChange(table, $event)">
+                                  <option value="">-</option>
+                                  @for (u of serviceUsers; track u.id) {
+                                    <option [value]="u.id">{{ u.name }}</option>
+                                  }
+                                </select>
+                              </td>
                             </tr>
                           }
                         }
@@ -411,7 +498,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 }
               </div>
             }
-
+    
             <!-- Cash Registers Tab -->
             @if (eventModalTab === 'cashRegisters') {
               <div class="cash-registers-content">
@@ -436,6 +523,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <tr>
                         <th>{{ 'COMMON.NAME' | translate }}</th>
                         <th>IP</th>
+                        <th>Shared token</th>
                         <th class="actions-col"></th>
                       </tr>
                     </thead>
@@ -456,6 +544,22 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <span class="cell-value">{{ cr.ip || '' }}</span>
                             }
                           </td>
+                          <td class="shared-token-cell">
+                            <div class="shared-token-row">
+                              <span class="editable-cell shared-token-value" (click)="startEditingCashRegister(cr, 'sharedToken', $event)">
+                                @if (isEditingCashRegister(cr, 'sharedToken')) {
+                                  <input type="text" class="inline-input" [(ngModel)]="cr.sharedToken" (blur)="onCashRegisterBlur(cr)" (keydown.enter)="onCashRegisterBlur(cr)" #editInput>
+                                } @else {
+                                  <span class="cell-value mono">{{ cr.sharedToken || '' }}</span>
+                                }
+                              </span>
+                              <button class="btn-icon-action btn-icon-generate" (click)="generateSharedToken(cr); $event.stopPropagation()" title="Generate token">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
                           <td class="actions-col">
                             <button class="btn-icon-action btn-icon-delete" (click)="deleteCashRegister(cr)" title="Delete">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -473,14 +577,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" (click)="closeEventModal()">{{ 'COMMON.CANCEL' | translate }}</button>
-            <button class="btn btn-primary" (click)="saveEvent()" [disabled]="!eventFormData.name.trim() || savingEvent" *ngIf="eventModalTab === 'details'">
-              {{ savingEvent ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
-            </button>
+            @if (eventModalTab === 'details') {
+              <button class="btn btn-primary" (click)="saveEvent()" [disabled]="!eventFormData.name.trim() || savingEvent">
+                {{ savingEvent ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
+              </button>
+            }
           </div>
         </div>
       </div>
     }
-  `,
+    `,
   styles: [`
     :host {
       --primary: #3b82f6;
@@ -506,7 +612,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .selector-label { font-size: 14px; font-weight: 500; color: #374151; white-space: nowrap; }
     .selector-wrapper { position: relative; min-width: 300px; }
     .location-wrapper { min-width: 280px; }
-    .selector-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s ease; }
+    .selector-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 0; background: white; cursor: pointer; transition: all 0.2s ease; }
     .selector-input:hover { border-color: #cbd5e1; }
     .selector-wrapper.open .selector-input { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     .selected-client, .selected-location { display: flex; align-items: center; gap: 8px; }
@@ -514,7 +620,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .dropdown-arrow { display: flex; align-items: center; color: #94a3b8; transition: transform 0.2s ease; }
     .dropdown-arrow svg { width: 18px; height: 18px; }
     .selector-wrapper.open .dropdown-arrow { transform: rotate(180deg); }
-    .selector-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 350px; display: flex; flex-direction: column; }
+    .selector-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 350px; display: flex; flex-direction: column; }
     .search-box { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; gap: 8px; }
     .search-icon { width: 18px; height: 18px; color: #94a3b8; flex-shrink: 0; }
     .search-input { flex: 1; border: none; outline: none; font-size: 14px; color: #374151; background: transparent; }
@@ -537,18 +643,37 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .events-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
     /* Card */
-    .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .card { background: white; border-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     .card.stretch { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .card-body { padding: 20px; }
     .card-body.p-0 { padding: 0 !important; flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .card-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; flex-shrink: 0; }
 
-    /* Table */
-    .table-responsive { flex: 1; overflow-y: auto; min-height: 0; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { padding: 12px 20px; text-align: left; border-bottom: 1px solid var(--border-color); }
-    .table th { font-size: 13px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); position: sticky; top: 0; z-index: 10; }
-    .table td { font-size: 14px; color: var(--text-dark); }
+    /* Table - matches users table styling */
+    .table-responsive { flex: 1; overflow-x: auto; overflow-y: auto; min-height: 0; }
+    .table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    .table thead th {
+      padding: 12px 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      background: white;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      text-align: left;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .table tbody td {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+      font-size: 14px;
+      color: var(--text-dark);
+    }
+    .table tbody tr:last-child td { border-bottom: none; }
+    .table-hover tbody tr { transition: background 0.15s ease; }
     .table-hover tbody tr:hover { background: var(--bg-light); }
     .table.mb-0 { margin-bottom: 0; }
     .text-center { text-align: center; }
@@ -557,7 +682,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .py-4 { padding-top: 24px; padding-bottom: 24px; }
 
     .th-with-search { display: flex; align-items: center; gap: 12px; }
-    .search-input-wrapper { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; background: white; }
+    .search-input-wrapper { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 0; background: white; }
     .search-input-wrapper .search-icon { width: 14px; height: 14px; }
     .search-input-wrapper .search-input { width: 120px; font-size: 13px; }
 
@@ -579,35 +704,65 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .event-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 
     /* Buttons */
-    .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
+    .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
     .btn-icon-action:hover { background: rgba(0, 0, 0, 0.04); color: #374151; }
     .btn-icon-action svg { width: 16px; height: 16px; }
-    .btn-icon-add { background: var(--primary); border-color: var(--primary); color: white; }
-    .btn-icon-add:hover { background: #2563eb; border-color: #2563eb; color: white; }
+    .btn-icon-action-sm { width: 34px; height: 34px; border-radius: 0; }
+    .btn-icon-action-sm svg { width: 17px; height: 17px; }
+    .btn-icon-add { background: transparent; border-color: rgba(0, 0, 0, 0.08); color: #64748b; border-radius: 0; }
+    .btn-icon-add:hover { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.08); color: #374151; }
     .btn-icon-delete:hover { background: rgba(253, 106, 106, 0.1); color: var(--danger); border-color: rgba(253, 106, 106, 0.3); }
     label.btn-icon-action { cursor: pointer; }
 
-    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
-    .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
-    .btn-primary:hover { background: #2563eb; border-color: #2563eb; }
-    .btn-primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
-    .btn-secondary { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-    .btn-secondary:hover { background: #e2e8f0; color: #374151; }
+    .btn { padding: 8px 16px; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+    .btn-primary { background: white; color: var(--primary); border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    .btn-primary:disabled { background: white; color: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border-color: var(--border-color); }
+    .btn-secondary:hover { background: white; color: #374151; border-color: #cbd5e1; }
 
     /* Pagination */
     .pagination-container { display: flex; align-items: center; gap: 16px; width: 100%; justify-content: flex-end; }
     .pagination-list { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
-    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: all 0.15s ease; }
+    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 0; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: all 0.15s ease; }
     .pagination-list li a:hover:not(.disabled):not(.active) { background: var(--bg-light); color: var(--text-dark); }
     .pagination-list li a.active { background: var(--primary); color: white; }
     .pagination-list li a.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     .pagination-list li a svg { width: 16px; height: 16px; }
-    .page-size-select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; }
+    /* Custom Select - Duralux Style */
+    .custom-select { position: relative; width: 100%; cursor: pointer; }
+    .custom-select-trigger { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: white; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); transition: all 0.2s ease; }
+    .custom-select:hover .custom-select-trigger { border-color: #cbd5e1; }
+    .custom-select.open .custom-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+    .selected-value { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .selected-value.placeholder { color: var(--text-muted); font-weight: 400; }
+    .custom-select .dropdown-arrow { width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+    .custom-select.open .dropdown-arrow { transform: rotate(180deg); }
+    .custom-select-options { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 0; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12); z-index: 1100; overflow: hidden; }
+    .custom-select-options.open-upward { top: auto; bottom: calc(100% + 4px); }
+    .custom-select-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; color: var(--text-dark); cursor: pointer; transition: background 0.15s ease; }
+    .custom-select-option:hover { background: var(--bg-light); }
+    .custom-select-option.selected { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+    .custom-select-option:first-child,
+    .custom-select-option:last-child,
+    .custom-select-option:only-child { border-radius: 0; }
+    .option-text { flex: 1; }
+    .check-icon { width: 16px; height: 16px; color: var(--primary); margin-left: auto; }
+
+    .custom-select.page-size-select-custom { width: auto; min-width: 72px; flex: 0 0 auto; }
+    .custom-select.page-size-select-custom .custom-select-trigger { padding: 6px 10px; border-radius: 0; font-size: 13px; }
+    .custom-select.page-size-select-custom .selected-value { font-weight: 400; }
+    .custom-select.page-size-select-custom .custom-select-options { min-width: 100%; width: auto; }
+    .custom-select-options.square { border-radius: 0; }
+    .custom-select-options.square .custom-select-option,
+    .custom-select-options.square .custom-select-option:first-child,
+    .custom-select-options.square .custom-select-option:last-child,
+    .custom-select-options.square .custom-select-option:only-child { border-radius: 0; }
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: white; border-radius: 12px; width: 100%; max-width: 680px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; }
-    .modal.modal-lg { max-width: 800px; }
+    .modal { background: white; border-radius: 0; width: 100%; max-width: 680px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; }
+    .modal.modal-lg { max-width: 75vw; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: none; flex-shrink: 0; }
     .modal-tabs { display: flex; gap: 0; padding: 0 20px; border-bottom: 1px solid #e2e8f0; }
     .modal-tab { padding: 12px 20px; border: none; background: none; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; position: relative; transition: color 0.2s ease; }
@@ -627,10 +782,14 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .empty-tables-message span { font-size: 14px; }
     .tables-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .tables-table th, .tables-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    .tables-table th:nth-child(2),
+    .tables-table th:nth-child(3),
+    .tables-table th:nth-child(4) { text-align: center; }
     .tables-table th { font-size: 12px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); white-space: nowrap; }
-    .tables-table th:nth-child(1) { width: 40%; }
+    .tables-table th:nth-child(1) { width: 20%; }
     .tables-table th:nth-child(2) { width: 30%; }
     .tables-table th:nth-child(3) { width: 30%; }
+    .tables-table th:nth-child(4) { width: 20%; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
     .tables-table .parent-row:hover { background: #e2e8f0; }
@@ -646,10 +805,33 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .editable-cell:hover { background: rgba(59, 130, 246, 0.05); }
     .cell-value { display: block; padding: 6px 10px; border-radius: 6px; height: 32px; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .editable-cell:hover .cell-value { background: rgba(59, 130, 246, 0.08); }
-    .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--primary); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; box-shadow: 0 0 0 2px var(--primary-light); height: 32px; box-sizing: border-box; }
+    .inline-input { width: 100%; padding: 5px 9px; border: 1px solid var(--primary); border-radius: 0; font-size: 13px; color: var(--text-dark); background: white; box-shadow: 0 0 0 2px var(--primary-light); height: 32px; box-sizing: border-box; }
     .inline-input:focus { outline: none; }
     .credit-value-input { text-align: right; }
     .disabled-cell { cursor: not-allowed; opacity: 0.5; }
+    .user-cell { padding: 6px 12px; }
+    .user-select {
+      width: 100%;
+      height: 32px;
+      padding: 0 28px 0 8px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0;
+      font-size: 13px;
+      color: var(--text-dark);
+      background: transparent;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      background-size: 14px;
+    }
+    .user-select:hover { background-color: rgba(0, 0, 0, 0.04); }
+    .user-select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-light);
+    }
     .disabled-cell:hover { background: transparent; }
     .disabled-cell .cell-value { background: transparent; }
     .checkbox-cell { text-align: center; }
@@ -663,31 +845,39 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .cash-registers-header { display: flex; justify-content: flex-end; margin-bottom: 16px; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
     .btn-sm svg { width: 14px; height: 14px; }
-    .cash-registers-table th:nth-child(1) { width: 50%; }
-    .cash-registers-table th:nth-child(2) { width: 40%; }
-    .cash-registers-table th:nth-child(3) { width: 10%; }
+    .cash-registers-table th:nth-child(1) { width: 22%; }
+    .cash-registers-table th:nth-child(2) { width: 18%; }
+    .cash-registers-table th:nth-child(3) { width: 50%; }
+    .cash-registers-table th:nth-child(4) { width: 10%; }
     .cash-registers-table .actions-col { text-align: center; width: 60px; }
+    .cash-registers-table .shared-token-cell { padding: 0 8px; }
+    .shared-token-row { display: flex; align-items: center; gap: 6px; }
+    .shared-token-value { flex: 1; min-width: 0; }
+    .shared-token-value .cell-value.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; word-break: break-all; }
+    .btn-icon-generate { color: #2563eb; }
+    .btn-icon-generate:hover { color: #1d4ed8; }
 
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
-    .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
-    .close-btn:hover { background: #e2e8f0; color: #374151; }
+    .close-btn { width: 32px; height: 32px; border: 1px solid var(--border-color); background: transparent; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; padding: 0; }
+    .close-btn:hover { background: transparent; color: #374151; border-color: #cbd5e1; }
+    .close-btn svg { width: 16px; height: 16px; display: block; }
     .modal-body { padding: 20px; overflow-y: auto; overflow-x: visible; flex: 1; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 20px; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
     .form-group label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
-    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); box-sizing: border-box; }
+    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); box-sizing: border-box; }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .form-row { display: flex; gap: 16px; }
     .form-row .form-group { flex: 1; }
 
     /* Multi-select */
     .multi-select-wrapper { position: relative; }
-    .multi-select-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s ease; }
+    .multi-select-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; background: white; cursor: pointer; transition: all 0.2s ease; }
     .multi-select-input:hover { border-color: #cbd5e1; }
     .multi-select-wrapper.open .multi-select-input { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .selected-text { font-size: 14px; color: var(--text-dark); }
-    .multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1100; max-height: 200px; overflow-y: auto; }
+    .multi-select-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1100; max-height: 200px; overflow-y: auto; }
     .multi-select-dropdown.open-upward { top: auto; bottom: calc(100% + 4px); }
     .checkbox-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.15s ease; }
     .checkbox-option:hover { background: var(--bg-light); }
@@ -699,22 +889,22 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     /* Custom DateTime Picker */
     .datetime-picker-wrapper { position: relative; }
-    .datetime-input { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s ease; }
+    .datetime-input { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; background: white; cursor: pointer; transition: all 0.2s ease; }
     .datetime-input:hover { border-color: #cbd5e1; }
     .datetime-picker-wrapper.open .datetime-input { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .datetime-picker-wrapper.open .dropdown-arrow { transform: rotate(180deg); }
     .calendar-icon { width: 18px; height: 18px; color: var(--text-muted); flex-shrink: 0; }
     .datetime-value { font-size: 14px; color: var(--text-dark); flex: 1; }
     .datetime-placeholder { font-size: 14px; color: #94a3b8; flex: 1; }
-    .datetime-dropdown { position: absolute; top: calc(100% + 4px); left: 0; background: white; border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 200; padding: 12px; min-width: 280px; }
+    .datetime-dropdown { position: absolute; top: calc(100% + 4px); left: 0; background: white; border: 1px solid var(--border-color); border-radius: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 200; padding: 12px; min-width: 280px; }
     .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .nav-btn { width: 28px; height: 28px; border: 1px solid var(--border-color); background: white; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); transition: all 0.15s ease; }
+    .nav-btn { width: 28px; height: 28px; border: 1px solid var(--border-color); background: white; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); transition: all 0.15s ease; }
     .nav-btn:hover { background: var(--bg-light); color: var(--text-dark); }
     .month-year { font-size: 14px; font-weight: 600; color: var(--text-dark); }
     .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 8px; }
     .calendar-weekdays span { font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: center; padding: 4px; text-transform: uppercase; }
     .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-    .calendar-day { font-size: 13px; color: var(--text-dark); text-align: center; padding: 8px 4px; border-radius: 6px; cursor: pointer; transition: all 0.15s ease; }
+    .calendar-day { font-size: 13px; color: var(--text-dark); text-align: center; padding: 8px 4px; border-radius: 0; cursor: pointer; transition: all 0.15s ease; }
     .calendar-day:hover { background: var(--bg-light); }
     .calendar-day.other-month { color: #cbd5e1; }
     .calendar-day.today { font-weight: 600; color: var(--primary); }
@@ -722,7 +912,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .calendar-day.selected:hover { background: #2563eb; }
     .time-section { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); }
     .time-label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
-    .time-select { padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; color: var(--text-dark); background: white; cursor: pointer; min-width: 50px; }
+    .time-select { padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); background: white; cursor: pointer; min-width: 50px; }
     .time-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .time-separator { font-size: 14px; color: var(--text-muted); font-weight: 600; }
 
@@ -744,7 +934,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .date-field .mdc-text-field--outlined {
       background: white !important;
       border: 1px solid #e2e8f0 !important;
-      border-radius: 8px !important;
+      border-radius: 0 !important;
       padding: 0 8px 0 0 !important;
       height: 44px !important;
       transition: all 0.2s ease !important;
@@ -802,7 +992,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     /* Material Datepicker Calendar Popup - Duralux Style */
     .mat-datepicker-content {
       background-color: #ffffff !important;
-      border-radius: 12px !important;
+      border-radius: 0 !important;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08) !important;
       border: 1px solid #e2e8f0 !important;
       overflow: visible !important;
@@ -972,6 +1162,7 @@ export class EventsComponent implements OnInit {
   events: Event[] = [];
   loadingEvents = false;
   savingEvent = false;
+  savingValidationFor: string | null = null;
   showEventModal = false;
   eventModalTab: 'details' | 'tables' | 'cashRegisters' = 'details';
   editingEvent: Event | null = null;
@@ -980,14 +1171,15 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[] } = {
-    name: '', startDate: '', endDate: '', userIds: []
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; requireValidation: boolean } = {
+    name: '', startDate: '', endDate: '', userIds: [], requireValidation: false
   };
 
   // Users
   users: User[] = [];
   loadingUsers = false;
   usersDropdownOpen = false;
+  pageSizeDropdownOpen = false;
 
 
   // Menu Items for event
@@ -1001,7 +1193,7 @@ export class EventsComponent implements OnInit {
   editingCell: { orderPointId: string; field: string } | null = null;
 
   // Cash Registers tab
-  cashRegisters: { id?: string; tempId?: string; name: string; ip: string }[] = [];
+  cashRegisters: { id?: string; tempId?: string; name: string; ip: string; sharedToken?: string }[] = [];
   editingCashRegister: { id: string; field: string } | null = null;
   private cashRegisterTempIdCounter = 0;
 
@@ -1057,10 +1249,23 @@ export class EventsComponent implements OnInit {
     if (usersDropdown && !usersDropdown.contains(event.target)) {
       this.usersDropdownOpen = false;
     }
+    const pageSizeDropdown = this.elementRef.nativeElement.querySelector('.page-size-select-custom');
+    if (pageSizeDropdown && !pageSizeDropdown.contains(event.target)) {
+      this.pageSizeDropdownOpen = false;
+    }
   }
 
   toggleUsersDropdown(): void {
     this.usersDropdownOpen = !this.usersDropdownOpen;
+  }
+
+  togglePageSizeDropdown(): void {
+    this.pageSizeDropdownOpen = !this.pageSizeDropdownOpen;
+  }
+
+  selectPageSize(size: number): void {
+    this.pageSizeDropdownOpen = false;
+    this.onEventPageSizeChange(size);
   }
 
   // Client Methods
@@ -1234,7 +1439,7 @@ export class EventsComponent implements OnInit {
   openEventModal(): void {
     this.editingEvent = null;
     this.eventModalTab = 'details';
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [] };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], requireValidation: false };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1251,7 +1456,8 @@ export class EventsComponent implements OnInit {
       name: event.name,
       startDate: '',
       endDate: '',
-      userIds: event.userIds || []
+      userIds: event.userIds || [],
+      requireValidation: !!event.requireValidation
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
@@ -1286,7 +1492,8 @@ export class EventsComponent implements OnInit {
       startDate: this.dateToApiFormat(this.startDate),
       endDate: this.dateToApiFormat(this.endDate),
       userIds: this.eventFormData.userIds,
-      menuItemIds
+      menuItemIds,
+      requireValidation: this.eventFormData.requireValidation
     };
     const operation = this.editingEvent
       ? this.eventService.updateEvent(this.editingEvent.id!, { ...eventData, locationId })
@@ -1294,6 +1501,33 @@ export class EventsComponent implements OnInit {
     operation.subscribe({
       next: () => { this.closeEventModal(); this.loadEvents(); this.savingEvent = false; },
       error: (err) => { console.error('Error saving event:', err); this.savingEvent = false; }
+    });
+  }
+
+  toggleRequireValidation(event: Event, change: any): void {
+    if (!event.id) return;
+    const target = change?.target as HTMLInputElement | undefined;
+    const newValue = target ? target.checked : !event.requireValidation;
+    const previous = !!event.requireValidation;
+    event.requireValidation = newValue;
+    this.savingValidationFor = event.id;
+    this.eventService.updateEvent(event.id, {
+      name: event.name,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      locationId: event.locationId,
+      userIds: event.userIds,
+      paymentTypeIds: event.paymentTypeIds,
+      menuItemIds: event.menuItemIds,
+      requireValidation: newValue
+    }).subscribe({
+      next: () => { this.savingValidationFor = null; },
+      error: (err) => {
+        console.error('Error updating requireValidation:', err);
+        event.requireValidation = previous;
+        if (target) target.checked = previous;
+        this.savingValidationFor = null;
+      }
     });
   }
 
@@ -1502,10 +1736,40 @@ export class EventsComponent implements OnInit {
     this.saveEventTable(table);
   }
 
+  get serviceUsers(): User[] {
+    return this.users.filter(u => u.roles?.includes('SERVICE'));
+  }
+
+  onUserChange(table: EventOrderPoint, userId: string): void {
+    const newId = userId || null;
+    if ((table.userId || null) === newId) return;
+    table.userId = newId;
+    const matched = newId ? this.users.find(u => u.id === newId) : null;
+    table.userName = matched?.name;
+    this.saveEventTable(table);
+  }
+
   // Cash Register Methods
   addCashRegister(): void {
     const tempId = `temp-${++this.cashRegisterTempIdCounter}`;
-    this.cashRegisters.push({ tempId, name: '', ip: '' });
+    this.cashRegisters.push({ tempId, name: '', ip: '', sharedToken: '' });
+  }
+
+  generateSharedToken(cr: { id?: string; tempId?: string; sharedToken?: string }): void {
+    cr.sharedToken = this.randomSharedToken();
+    this.saveCashRegisters();
+  }
+
+  private randomSharedToken(): string {
+    // 32 random bytes encoded as hex (64 chars). Uses the Web Crypto API when
+    // available and falls back to Math.random for older runtimes.
+    const bytes = new Uint8Array(32);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   isEditingCashRegister(cr: { id?: string; tempId?: string }, field: string): boolean {

@@ -42,6 +42,9 @@ public class EventEntity {
     @Column(name = "logo_path")
     private String logoPath;
 
+    @Column(name = "require_validation", nullable = false)
+    private boolean requireValidation = false;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "event_users",

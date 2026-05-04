@@ -1,1 +1,0 @@
-ALTER TABLE event_order_points ADD COLUMN credit BOOLEAN DEFAULT FALSE;

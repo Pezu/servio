@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Client, IMessage } from '@stomp/stompjs';
-import * as SockJS from 'sockjs-client';
+import SockJS from 'sockjs-client';
 import { Subject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { APP_CONFIG } from '../shared/constants';

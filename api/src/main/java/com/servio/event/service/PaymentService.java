@@ -2,6 +2,7 @@ package com.servio.event.service;
 
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemStatus;
+import com.servio.event.entity.OrderStatus;
 import com.servio.event.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -199,11 +200,14 @@ public class PaymentService {
 
     /**
      * Marks all unpaid, non-cancelled items in an order as paid and updates needsPayment flag.
+     * Also activates DRAFT orders (pay-now flow) when payment is confirmed.
      * Returns the number of items marked as paid.
      */
     private int markOrderAsPaid(OrderEntity order) {
         int itemsMarkedPaid = 0;
-        log.info("Processing order {} with {} items", order.getId(), order.getItems().size());
+        boolean wasDraft = order.getStatus() == OrderStatus.DRAFT;
+        log.info("Processing order {} with {} items, status={}", order.getId(), order.getItems().size(), order.getStatus());
+
         for (var item : order.getItems()) {
             log.info("  Item: {} status={} paid={}", item.getId(), item.getStatus(), item.isPaid());
             // Skip cancelled items - they shouldn't be marked as paid
@@ -225,8 +229,20 @@ public class PaymentService {
             order.setNeedsPayment(false);
         }
 
+        // Activate DRAFT orders when payment is confirmed (pay-now flow)
+        if (wasDraft) {
+            order.setStatus(OrderStatus.ACTIVE);
+            log.info("Activated DRAFT order {} -> ACTIVE", order.getId());
+        }
+
         orderRepository.save(order);
-        log.info("Marked {} items as paid in order {}, allPaid: {}", itemsMarkedPaid, order.getId(), allPaid);
+        log.info("Marked {} items as paid in order {}, allPaid: {}, activated: {}", itemsMarkedPaid, order.getId(), allPaid, wasDraft);
+
+        // Notify about the new order if it was just activated
+        if (wasDraft) {
+            orderNotificationService.notifyOrderCreated(order);
+        }
+
         return itemsMarkedPaid;
     }
 }

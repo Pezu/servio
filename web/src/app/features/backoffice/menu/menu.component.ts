@@ -21,150 +21,189 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
           <label class="selector-label">{{ 'CLIENTS.TITLE' | translate }}</label>
           <div class="selector-wrapper" [class.open]="dropdownOpen">
             <div class="selector-input" (click)="toggleDropdown()">
-              <div class="selected-client" *ngIf="selectedClient">
-                <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
-                      [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
-                <span class="client-name">{{ selectedClient.name }}</span>
-                <span class="client-details" *ngIf="selectedClient.email || selectedClient.phone">
-                  ({{ selectedClient.email || selectedClient.phone }})
-                </span>
-              </div>
-              <div class="placeholder" *ngIf="!selectedClient">
-                {{ 'CLIENTS.SELECT_CLIENT' | translate }}
-              </div>
+              @if (selectedClient) {
+                <div class="selected-client">
+                  <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
+                  [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
+                  <span class="client-name">{{ selectedClient.name }}</span>
+                  @if (selectedClient.email || selectedClient.phone) {
+                    <span class="client-details">
+                      ({{ selectedClient.email || selectedClient.phone }})
+                    </span>
+                  }
+                </div>
+              }
+              @if (!selectedClient) {
+                <div class="placeholder">
+                  {{ 'CLIENTS.SELECT_CLIENT' | translate }}
+                </div>
+              }
               <span class="dropdown-arrow">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                 </svg>
               </span>
             </div>
-
-            <div class="selector-dropdown" *ngIf="dropdownOpen">
-              <div class="search-box">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
-                       [(ngModel)]="searchTerm" (input)="onSearch()" (click)="$event.stopPropagation()">
-              </div>
-              <div class="client-list">
-                <div *ngIf="loading" class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
-                <div *ngIf="!loading && clients.length === 0" class="empty-state">{{ 'CLIENTS.NO_CLIENTS' | translate }}</div>
-                <div *ngFor="let client of clients" class="client-option"
-                     [class.selected]="selectedClient?.id === client.id" (click)="selectClient(client)">
-                  <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
-                        [class.bg-danger]="client.status === 'INACTIVE'"></span>
-                  <div class="client-info">
-                    <span class="client-name">{{ client.name }}</span>
-                    <span class="client-details">
-                      <span *ngIf="client.email">{{ client.email }}</span>
-                      <span *ngIf="client.email && client.phone"> · </span>
-                      <span *ngIf="client.phone">{{ client.phone }}</span>
-                    </span>
-                  </div>
+    
+            @if (dropdownOpen) {
+              <div class="selector-dropdown">
+                <div class="search-box">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
+                    [(ngModel)]="searchTerm" (input)="onSearch()" (click)="$event.stopPropagation()">
+                </div>
+                <div class="client-list">
+                  @if (loading) {
+                    <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                  }
+                  @if (!loading && clients.length === 0) {
+                    <div class="empty-state">{{ 'CLIENTS.NO_CLIENTS' | translate }}</div>
+                  }
+                  @for (client of clients; track client) {
+                    <div class="client-option"
+                      [class.selected]="selectedClient?.id === client.id" (click)="selectClient(client)">
+                      <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
+                      [class.bg-danger]="client.status === 'INACTIVE'"></span>
+                      <div class="client-info">
+                        <span class="client-name">{{ client.name }}</span>
+                        <span class="client-details">
+                          @if (client.email) {
+                            <span>{{ client.email }}</span>
+                          }
+                          @if (client.email && client.phone) {
+                            <span> · </span>
+                          }
+                          @if (client.phone) {
+                            <span>{{ client.phone }}</span>
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
-            </div>
+            }
           </div>
         </div>
-
+    
         <!-- Location Selector -->
         @if (selectedClient) {
           <div class="location-selector-container">
             <label class="selector-label">{{ 'LOCATIONS.LOCATION' | translate }}</label>
             <div class="selector-wrapper location-wrapper" [class.open]="locationDropdownOpen">
               <div class="selector-input" (click)="toggleLocationDropdown()">
-                <div class="selected-location" *ngIf="selectedLocationId">
-                  <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span class="location-name">{{ selectedLocationName }}</span>
-                </div>
-                <div class="placeholder" *ngIf="!selectedLocationId">
-                  {{ 'MENU.SELECT_LOCATION' | translate }}
-                </div>
+                @if (selectedLocationId) {
+                  <div class="selected-location">
+                    <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span class="location-name">{{ selectedLocationName }}</span>
+                  </div>
+                }
+                @if (!selectedLocationId) {
+                  <div class="placeholder">
+                    {{ 'MENU.SELECT_LOCATION' | translate }}
+                  </div>
+                }
                 <span class="dropdown-arrow">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </span>
               </div>
-
-              <div class="selector-dropdown" *ngIf="locationDropdownOpen">
-                <div class="search-box">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
-                         [(ngModel)]="locationSearchTerm" (input)="onLocationSearch()" (click)="$event.stopPropagation()">
-                </div>
-                <div class="location-list">
-                  <div *ngIf="filteredLocations.length === 0" class="empty-state">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</div>
-                  <div *ngFor="let location of filteredLocations" class="location-option"
-                       [class.selected]="selectedLocationId === location.id"
-                       [class.sublocation]="location.parentId"
-                       (click)="selectLocation(location)">
-                    <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    
+              @if (locationDropdownOpen) {
+                <div class="selector-dropdown">
+                  <div class="search-box">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <span class="location-name">{{ location.name }}</span>
+                    <input type="text" class="search-input" [placeholder]="'COMMON.SEARCH' | translate"
+                      [(ngModel)]="locationSearchTerm" (input)="onLocationSearch()" (click)="$event.stopPropagation()">
+                  </div>
+                  <div class="location-list">
+                    @if (filteredLocations.length === 0) {
+                      <div class="empty-state">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</div>
+                    }
+                    @for (location of filteredLocations; track location) {
+                      <div class="location-option"
+                        [class.selected]="selectedLocationId === location.id"
+                        [class.sublocation]="location.parentId"
+                        (click)="selectLocation(location)">
+                        <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="location-name">{{ location.name }}</span>
+                      </div>
+                    }
                   </div>
                 </div>
-              </div>
+              }
             </div>
           </div>
         }
-
+    
         <!-- Menu Selector -->
         @if (selectedLocationId) {
           <div class="menu-selector-container">
             <label class="selector-label">Menu</label>
             <div class="selector-wrapper menu-wrapper" [class.open]="menuDropdownOpen">
               <div class="selector-input" (click)="toggleMenuDropdown()">
-                <div class="selected-menu" *ngIf="selectedMenuId">
-                  <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <span class="menu-name">{{ selectedMenuName }}</span>
-                </div>
-                <div class="placeholder" *ngIf="!selectedMenuId">
-                  Select menu
-                </div>
+                @if (selectedMenuId) {
+                  <div class="selected-menu">
+                    <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <span class="menu-name">{{ selectedMenuName }}</span>
+                  </div>
+                }
+                @if (!selectedMenuId) {
+                  <div class="placeholder">
+                    Select menu
+                  </div>
+                }
                 <span class="dropdown-arrow">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </span>
               </div>
-
-              <div class="selector-dropdown" *ngIf="menuDropdownOpen">
-                <div class="menu-list">
-                  <div *ngIf="menus.length === 0" class="empty-state">No menus found</div>
-                  <div *ngFor="let menu of menus" class="menu-option"
-                       [class.selected]="selectedMenuId === menu.id"
-                       (click)="selectMenu(menu)">
-                    <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span class="menu-name">{{ menu.name }}</span>
+    
+              @if (menuDropdownOpen) {
+                <div class="selector-dropdown">
+                  <div class="menu-list">
+                    @if (menus.length === 0) {
+                      <div class="empty-state">No menus found</div>
+                    }
+                    @for (menu of menus; track menu) {
+                      <div class="menu-option"
+                        [class.selected]="selectedMenuId === menu.id"
+                        (click)="selectMenu(menu)">
+                        <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span class="menu-name">{{ menu.name }}</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="dropdown-footer">
+                    <button class="btn-create-menu" (click)="openCreateMenuModal(); $event.stopPropagation()" [title]="'MENU.CREATE_MENU' | translate">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-                <div class="dropdown-footer">
-                  <button class="btn btn-sm btn-primary w-full" (click)="openCreateMenuModal(); $event.stopPropagation()">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Create Menu
-                  </button>
-                </div>
-              </div>
+              }
             </div>
           </div>
         }
       </div>
-
+    
       <!-- Menu Editor -->
       @if (canShowMenu) {
         <div class="menu-panel">
@@ -203,7 +242,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <ng-container *ngTemplateOutlet="menuItemsTemplate; context: { items: menuItems, depth: 0, parent: null }"></ng-container>
                   </div>
                 }
-
+    
                 <!-- Recursive Menu Items Template -->
                 <ng-template #menuItemsTemplate let-items="items" let-depth="depth" let-parent="parent">
                   @for (item of items; track item.id || item.tempId) {
@@ -238,7 +277,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           </button>
                           <button class="action-btn" (click)="editItem(item, parent)" [title]="'COMMON.EDIT' | translate">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>
                           <button class="action-btn action-btn-delete" (click)="deleteItem(item, parent)" [title]="'COMMON.DELETE' | translate">
@@ -280,12 +319,39 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           @if (item.price) {
                             <span class="item-price">{{ item.price | number:'1.2-2' }} RON</span>
                           }
-                          <select class="vat-select" [ngModel]="item.vatTypeId || ''" (ngModelChange)="onVatTypeChange(item, $event)" [disabled]="!item.id">
-                            <option value="">-</option>
-                            @for (vat of vatTypes; track vat.id) {
-                              <option [value]="vat.id">{{ vat.name }}</option>
+                          <div class="custom-select vat-select-custom"
+                               [class.open]="openVatDropdownId === item.id"
+                               [class.disabled]="!item.id"
+                               (click)="toggleVatDropdown(item, $event)">
+                            <div class="custom-select-trigger">
+                              <span class="selected-value">{{ getVatTypeLabel(item.vatTypeId) }}</span>
+                              <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                            @if (openVatDropdownId === item.id && item.id) {
+                              <div class="custom-select-options square">
+                                <div class="custom-select-option" [class.selected]="!item.vatTypeId" (click)="selectVatType(item, ''); $event.stopPropagation()">
+                                  <span class="option-text">-</span>
+                                  @if (!item.vatTypeId) {
+                                    <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  }
+                                </div>
+                                @for (vat of vatTypes; track vat.id) {
+                                  <div class="custom-select-option" [class.selected]="item.vatTypeId === vat.id" (click)="selectVatType(item, vat.id!); $event.stopPropagation()">
+                                    <span class="option-text">{{ vat.name }}</span>
+                                    @if (item.vatTypeId === vat.id) {
+                                      <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    }
+                                  </div>
+                                }
+                              </div>
                             }
-                          </select>
+                          </div>
                           <div class="menu-row-actions">
                             @if (item.id) {
                               <label class="image-upload-btn" [title]="'MENU.UPLOAD_IMAGE' | translate">
@@ -310,7 +376,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                             }
                             <button class="action-btn" (click)="editItem(item, parent)" [title]="'COMMON.EDIT' | translate">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
                             <button class="action-btn action-btn-delete" (click)="deleteItem(item, parent)" [title]="'COMMON.DELETE' | translate">
@@ -330,14 +396,22 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       }
     </div>
-
+    
     <!-- Menu Item Modal -->
     @if (showModal) {
       <div class="modal-overlay" (mousedown)="closeModal()">
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>{{ editingItem ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ formData.orderable ? ('MENU.NEW_ITEM' | translate) : ('MENU.NEW_CATEGORY' | translate) }}</h3>
-            <button class="close-btn" (click)="closeModal()">&times;</button>
+            <h3>
+              @if (editingItem) {
+                {{ 'COMMON.EDIT' | translate }} {{ getPlainText(editingItem.name) }}
+              } @else {
+                {{ 'COMMON.ADD' | translate }} {{ formData.orderable ? ('MENU.NEW_ITEM' | translate) : ('MENU.NEW_CATEGORY' | translate) }}
+              }
+            </h3>
+            <button class="close-btn" (click)="closeModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -357,8 +431,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 <input type="color" class="toolbar-color" (input)="execCommandWithArg('foreColor', $event)" title="Text Color" value="#000000">
               </div>
               <div #nameEditor class="rich-text-editor" contenteditable="true"
-                   (input)="onNameInput($event)"
-                   (paste)="onPaste($event)"></div>
+                (input)="onNameInput($event)"
+              (paste)="onPaste($event)"></div>
             </div>
             @if (formData.orderable) {
               <div class="form-group">
@@ -382,8 +456,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   <input type="color" class="toolbar-color" (input)="execCommandWithArg('foreColor', $event, 'desc')" title="Text Color" value="#000000">
                 </div>
                 <div #descEditor class="rich-text-editor rich-text-editor-multiline" contenteditable="true"
-                     (input)="onDescInput($event)"
-                     (paste)="onPaste($event)"></div>
+                  (input)="onDescInput($event)"
+                (paste)="onPaste($event)"></div>
               </div>
               <div class="form-group">
                 <label>{{ 'MENU.ALLERGENS' | translate }}</label>
@@ -420,14 +494,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       </div>
     }
-
+    
     <!-- Create Menu Modal -->
     @if (showCreateMenuModal) {
       <div class="modal-overlay" (mousedown)="closeCreateMenuModal()">
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>Create Menu</h3>
-            <button class="close-btn" (click)="closeCreateMenuModal()">&times;</button>
+            <button class="close-btn" (click)="closeCreateMenuModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -444,7 +520,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       </div>
     }
-  `,
+    `,
   styles: [`
     :host {
       --primary: #3b82f6;
@@ -468,7 +544,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .client-selector-container { display: flex; align-items: center; gap: 12px; }
     .selector-label { font-size: 14px; font-weight: 500; color: #374151; white-space: nowrap; }
     .selector-wrapper { position: relative; min-width: 300px; }
-    .selector-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s ease; }
+    .selector-input { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 0; background: white; cursor: pointer; transition: all 0.2s ease; }
     .selector-input:hover { border-color: #cbd5e1; }
     .selector-wrapper.open .selector-input { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     .selected-client { display: flex; align-items: center; gap: 8px; }
@@ -476,7 +552,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .dropdown-arrow { display: flex; align-items: center; color: #94a3b8; transition: transform 0.2s ease; }
     .dropdown-arrow svg { width: 18px; height: 18px; }
     .selector-wrapper.open .dropdown-arrow { transform: rotate(180deg); }
-    .selector-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 350px; display: flex; flex-direction: column; }
+    .selector-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100; max-height: 350px; display: flex; flex-direction: column; }
     .search-box { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e2e8f0; gap: 8px; }
     .search-icon { width: 18px; height: 18px; color: #94a3b8; flex-shrink: 0; }
     .search-input { flex: 1; border: none; outline: none; font-size: 14px; color: #374151; }
@@ -520,12 +596,15 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .menu-icon { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
     .selected-menu { display: flex; align-items: center; gap: 8px; }
     .menu-name { font-size: 14px; font-weight: 500; color: #1e293b; }
-    .dropdown-footer { padding: 12px; border-top: 1px solid #e2e8f0; }
+    .dropdown-footer { padding: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: center; }
+    .btn-create-menu { width: 32px; height: 32px; padding: 0; border: 1px solid var(--primary); background: transparent; color: var(--primary); border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
+    .btn-create-menu:hover { background: var(--primary-light); }
+    .btn-create-menu svg { width: 16px; height: 16px; }
     .w-full { width: 100%; }
 
     /* Menu Panel */
     .menu-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-    .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .card { background: white; border-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     .card.stretch { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(0, 0, 0, 0.08); flex-shrink: 0; flex-wrap: wrap; gap: 12px; }
     .card-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--text-dark); }
@@ -541,15 +620,15 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .py-4 { padding: 24px 20px; }
 
     /* Buttons */
-    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+    .btn { padding: 8px 16px; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
     .btn svg { width: 16px; height: 16px; }
     .btn-sm { padding: 6px 12px; font-size: 12px; }
     .btn-sm svg { width: 14px; height: 14px; }
-    .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
-    .btn-primary:hover { background: #2563eb; border-color: #2563eb; }
-    .btn-primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
-    .btn-secondary { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-    .btn-secondary:hover { background: #e2e8f0; color: #374151; }
+    .btn-primary { background: white; color: var(--primary); border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    .btn-primary:disabled { background: white; color: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border-color: var(--border-color); }
+    .btn-secondary:hover { background: white; color: #374151; border-color: #cbd5e1; }
     .btn-outline-secondary { background: transparent; color: #64748b; border-color: #e2e8f0; }
     .btn-outline-secondary:hover { background: #f8fafc; color: #374151; }
 
@@ -585,8 +664,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .category-name { font-weight: 600; }
     .item-count { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
 
-    .item-image { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
-    .item-image-placeholder { width: 48px; height: 48px; border-radius: 8px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #94a3b8; flex-shrink: 0; }
+    .item-image { width: 48px; height: 48px; border-radius: 0; object-fit: cover; flex-shrink: 0; }
+    .item-image-placeholder { width: 48px; height: 48px; border-radius: 0; background: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #94a3b8; flex-shrink: 0; }
     .item-image-placeholder svg { width: 24px; height: 24px; }
 
     .item-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -595,38 +674,83 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 
     .item-price { font-size: 14px; font-weight: 600; color: var(--text-dark); white-space: nowrap; }
 
-    .action-btn { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; }
+    .action-btn { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; }
     .action-btn:hover { background: rgba(0, 0, 0, 0.04); color: #374151; }
     .action-btn svg { width: 16px; height: 16px; }
     .action-btn-delete:hover { background: rgba(253, 106, 106, 0.1); color: var(--danger); border-color: rgba(253, 106, 106, 0.3); }
     .action-btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
     .action-btn-primary:hover { background: #2563eb; border-color: #2563eb; color: white; }
 
-    .image-upload-btn { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; }
+    .image-upload-btn { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; }
     .image-upload-btn:hover { background: rgba(0, 0, 0, 0.04); color: #374151; }
     .image-upload-btn svg { width: 16px; height: 16px; }
     .action-btn-disabled { opacity: 0.4; cursor: not-allowed; }
     .action-btn-disabled:hover { background: transparent; color: #64748b; }
 
-    /* VAT Type Select */
-    .vat-select { height: 32px; padding: 0 8px; border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 6px; font-size: 13px; color: #64748b; background: transparent; min-width: 90px; cursor: pointer; transition: all 0.15s ease; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; background-size: 14px; padding-right: 24px; }
-    .vat-select:hover { background-color: rgba(0, 0, 0, 0.04); color: #374151; }
-    .vat-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
-    .vat-select:disabled { background-color: transparent; color: #94a3b8; cursor: not-allowed; opacity: 0.4; }
+    /* VAT Type custom dropdown */
+    .custom-select { position: relative; cursor: pointer; }
+    .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 0 8px;
+      height: 32px;
+      background: transparent;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0;
+      font-size: 13px;
+      color: #64748b;
+      transition: all 0.15s ease;
+    }
+    .custom-select:hover .custom-select-trigger { background: rgba(0, 0, 0, 0.04); color: #374151; }
+    .custom-select.open .custom-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); color: var(--text-dark); }
+    .custom-select.disabled { pointer-events: none; opacity: 0.4; }
+    .custom-select .selected-value { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .custom-select .dropdown-arrow { width: 14px; height: 14px; color: #94a3b8; transition: transform 0.2s ease; flex-shrink: 0; }
+    .custom-select.open .dropdown-arrow { transform: rotate(180deg); }
+    .custom-select-options {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+      z-index: 1100;
+      overflow: hidden;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .custom-select-options.open-upward { top: auto; bottom: calc(100% + 4px); }
+    .custom-select-options.square,
+    .custom-select-options.square .custom-select-option,
+    .custom-select-options.square .custom-select-option:first-child,
+    .custom-select-options.square .custom-select-option:last-child,
+    .custom-select-options.square .custom-select-option:only-child { border-radius: 0; }
+    .custom-select-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font-size: 13px; color: var(--text-dark); cursor: pointer; transition: background 0.15s ease; }
+    .custom-select-option:hover { background: var(--bg-light); }
+    .custom-select-option.selected { background: rgba(59, 130, 246, 0.08); color: var(--primary); font-weight: 500; }
+    .custom-select-option .option-text { flex: 1; }
+    .custom-select-option .check-icon { width: 14px; height: 14px; color: var(--primary); margin-left: auto; }
+
+    .custom-select.vat-select-custom { min-width: 90px; }
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: white; border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); }
+    .modal { background: white; border-radius: 0; width: 100%; max-width: 480px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
-    .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
-    .close-btn:hover { background: #e2e8f0; color: #374151; }
+    .close-btn { width: 32px; height: 32px; border: 1px solid var(--border-color); background: transparent; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; padding: 0; }
+    .close-btn:hover { background: transparent; color: #374151; border-color: #cbd5e1; }
+    .close-btn svg { width: 16px; height: 16px; display: block; }
     .modal-body { padding: 20px; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 20px; border-top: 1px solid #e2e8f0; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
     .form-group label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
-    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); }
+    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     textarea.form-control { resize: vertical; min-height: 80px; }
 
@@ -641,7 +765,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .allergen-name { font-size: 13px; font-weight: 500; }
 
     /* Rich Text Editor */
-    .rich-text-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #f8fafc; border: 1px solid var(--border-color); border-bottom: none; border-radius: 8px 8px 0 0; }
+    .rich-text-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #f8fafc; border: 1px solid var(--border-color); border-bottom: none; border-radius: 0; }
     .toolbar-btn { width: 28px; height: 28px; border: 1px solid transparent; background: transparent; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #64748b; transition: all 0.15s ease; }
     .toolbar-btn:hover { background: white; border-color: var(--border-color); color: #374151; }
     .toolbar-separator { width: 1px; height: 20px; background: var(--border-color); margin: 0 4px; }
@@ -650,7 +774,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .toolbar-select:focus { outline: none; border-color: var(--primary); }
     .toolbar-color { width: 28px; height: 28px; padding: 2px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; background: transparent; }
     .toolbar-color:hover { border-color: var(--border-color); }
-    .rich-text-editor { min-height: 38px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0 0 8px 8px; font-size: 14px; color: var(--text-dark); background: white; outline: none; overflow-wrap: break-word; word-wrap: break-word; }
+    .rich-text-editor { min-height: 138px; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); background: white; outline: none; overflow-wrap: break-word; word-wrap: break-word; }
     .rich-text-editor:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .rich-text-editor:empty:before { content: attr(data-placeholder); color: #94a3b8; }
     .rich-text-editor-multiline { min-height: 80px; }
@@ -758,6 +882,12 @@ export class ClientMenuComponent implements OnInit {
     const menuSelector = this.elementRef.nativeElement.querySelector('.menu-selector-container .selector-wrapper');
     if (menuSelector && !menuSelector.contains(event.target)) {
       this.menuDropdownOpen = false;
+    }
+    if (this.openVatDropdownId) {
+      const openVatDropdown = this.elementRef.nativeElement.querySelector('.vat-select-custom.open');
+      if (openVatDropdown && !openVatDropdown.contains(event.target)) {
+        this.openVatDropdownId = null;
+      }
     }
   }
 
@@ -1029,6 +1159,32 @@ export class ClientMenuComponent implements OnInit {
   onVatTypeChange(item: MenuItem, vatTypeId: string): void {
     item.vatTypeId = vatTypeId || undefined;
     this.saveMenu();
+  }
+
+  openVatDropdownId: string | null = null;
+
+  toggleVatDropdown(item: MenuItem, event: Event): void {
+    event.stopPropagation();
+    if (!item.id) return;
+    this.openVatDropdownId = this.openVatDropdownId === item.id ? null : item.id;
+  }
+
+  selectVatType(item: MenuItem, vatTypeId: string): void {
+    this.openVatDropdownId = null;
+    this.onVatTypeChange(item, vatTypeId);
+  }
+
+  getVatTypeLabel(vatTypeId?: string): string {
+    if (!vatTypeId) return '-';
+    const vat = this.vatTypes.find(v => v.id === vatTypeId);
+    return vat?.name || '-';
+  }
+
+  getPlainText(html: string | undefined | null): string {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return (tmp.textContent || tmp.innerText || '').trim();
   }
 
   closeModal(): void {

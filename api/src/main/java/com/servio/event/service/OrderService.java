@@ -3,6 +3,7 @@ package com.servio.event.service;
 import com.servio.event.dto.ReceiveOrderRequest;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
+import com.servio.event.entity.OrderGroupEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.RegistrationEntity;
@@ -11,15 +12,14 @@ import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.OrderMapper;
 import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.MenuItemRepository;
+import com.servio.event.repository.OrderGroupRepository;
 import com.servio.event.repository.OrderItemRepository;
 import com.servio.event.repository.OrderRepository;
 import com.servio.event.repository.RegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import io.awspring.cloud.sqs.operations.SqsTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +34,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderService {
 
-    @Value("${sqs.queues.order-item-cancel}")
-    private String cancelOrderItemQueue;
-
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderGroupRepository orderGroupRepository;
     private final RegistrationRepository registrationRepository;
     private final EventRepository eventRepository;
     private final MenuItemRepository menuItemRepository;
-    private final SqsTemplate sqsTemplate;
     private final OrderNotificationService notificationService;
     private final OrderMapper orderMapper;
 
@@ -68,6 +65,11 @@ public class OrderService {
         } else {
             order.setStatus(OrderStatus.DRAFT);
         }
+
+        // Resolve the group: join an existing ACTIVE order's group at the same
+        // order point, or create a new group. Once an order leaves ACTIVE its
+        // group is "frozen" and any subsequent order at the same OP starts fresh.
+        order.setGroupId(resolveOrderGroupId(order.getOrderPointId()));
 
         // Copy nickname from registration to order
         log.info("Creating order: registration.nickname='{}', order.nickname before='{}'",
@@ -116,6 +118,23 @@ public class OrderService {
 
     public List<OrderEntity> getOrdersByEventId(UUID eventId) {
         return orderRepository.findByEventIdAndStatusNotIn(eventId, List.of(OrderStatus.DRAFT, OrderStatus.DELIVERED, OrderStatus.CANCELLED));
+    }
+
+    private UUID resolveOrderGroupId(UUID orderPointId) {
+        if (orderPointId == null) {
+            return createNewGroup(null).getId();
+        }
+        return orderRepository.findByOrderPointIdAndStatus(orderPointId, OrderStatus.ACTIVE).stream()
+                .map(OrderEntity::getGroupId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElseGet(() -> createNewGroup(orderPointId).getId());
+    }
+
+    private OrderGroupEntity createNewGroup(UUID orderPointId) {
+        OrderGroupEntity group = new OrderGroupEntity();
+        group.setOrderPointId(orderPointId);
+        return orderGroupRepository.save(group);
     }
 
     public List<OrderEntity> getOrdersNeedingPayment(UUID eventId) {
@@ -175,6 +194,14 @@ public class OrderService {
         return orderRepository.findByCreatedAtBetween(startDate, endDate, pageable);
     }
 
+    public Page<OrderEntity> getOrdersByEventIdPaged(UUID eventId, Pageable pageable) {
+        return orderRepository.findByEventIdPaged(eventId, pageable);
+    }
+
+    public Page<OrderEntity> getOrdersByEventIdAndDateRange(UUID eventId, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return orderRepository.findByEventIdAndCreatedAtBetween(eventId, startDate, endDate, pageable);
+    }
+
     public OrderEntity getOrderById(UUID orderId) {
         return orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
@@ -189,15 +216,45 @@ public class OrderService {
         orderItem.setStatus(status);
         orderItemRepository.save(orderItem);
 
-        // Send cancellation event if item was cancelled
-        if (status == OrderItemStatus.CANCELLED) {
-            sqsTemplate.send(cancelOrderItemQueue, orderItemId.toString());
-        }
-
         notificationService.notifyItemStatusChange(orderItem, previousItemStatus, status);
         updateOrderStatusBasedOnItems(orderItem.getOrder());
 
         return orderItem;
+    }
+
+    @Transactional
+    public OrderEntity deleteOrderItem(UUID orderItemId) {
+        OrderItemEntity orderItem = orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("OrderItem", orderItemId));
+        if (orderItem.isPaid()) {
+            throw new BusinessException("Cannot delete a paid item");
+        }
+        OrderEntity order = orderItem.getOrder();
+        order.getItems().removeIf(i -> i.getId().equals(orderItemId));
+        orderRepository.save(order);
+        updateOrderStatusBasedOnItems(order);
+        return order;
+    }
+
+    /**
+     * Adjusts an item's quantity by `delta` (positive or negative). When the
+     * resulting quantity is &le; 0 the item is hard-deleted. Refuses to touch
+     * paid items.
+     */
+    @Transactional
+    public OrderEntity adjustOrderItemQuantity(UUID orderItemId, int delta) {
+        OrderItemEntity orderItem = orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("OrderItem", orderItemId));
+        if (orderItem.isPaid()) {
+            throw new BusinessException("Cannot edit a paid item");
+        }
+        int next = orderItem.getQuantity() + delta;
+        if (next <= 0) {
+            return deleteOrderItem(orderItemId);
+        }
+        orderItem.setQuantity(next);
+        orderItemRepository.save(orderItem);
+        return orderItem.getOrder();
     }
 
     private void updateOrderStatusBasedOnItems(OrderEntity order) {
@@ -221,19 +278,12 @@ public class OrderService {
             return Optional.of(OrderStatus.CANCELLED);
         }
 
-        boolean allItemsComplete = order.getItems().stream()
-                .allMatch(item -> item.getStatus() == OrderItemStatus.DONE || item.getStatus() == OrderItemStatus.CANCELLED);
-
-        if (allItemsComplete && order.getStatus() == OrderStatus.IN_PROGRESS) {
-            return Optional.of(OrderStatus.READY);
-        }
-
         return Optional.empty();
     }
 
     /**
-     * Completes an order by marking all non-cancelled items as DONE and transitioning to READY.
-     * This is done in a single transaction for efficiency.
+     * Completes an order by transitioning it from IN_PROGRESS to READY. Item-level
+     * validation has been removed, so items keep their existing status.
      */
     @Transactional
     public OrderEntity completeOrder(UUID orderId) {
@@ -241,13 +291,6 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
 
         OrderStatus previousStatus = order.getStatus();
-
-        // Mark all non-cancelled, non-done items as DONE
-        order.getItems().stream()
-                .filter(item -> item.getStatus() != OrderItemStatus.CANCELLED && item.getStatus() != OrderItemStatus.DONE)
-                .forEach(item -> item.setStatus(OrderItemStatus.DONE));
-
-        // Set order status to READY
         order.setStatus(OrderStatus.READY);
 
         OrderEntity savedOrder = orderRepository.save(order);
@@ -263,9 +306,9 @@ public class OrderService {
 
         OrderStatus previousStatus = order.getStatus();
 
-        // If returning to ACTIVE, reset all items to ORDERED and clear assigned user
+        // If returning to ACTIVE, clear the assigned user. Items keep their status
+        // (only ORDERED or CANCELLED — there is no DONE/PREPARING anymore).
         if (status == OrderStatus.ACTIVE) {
-            order.getItems().forEach(item -> item.setStatus(OrderItemStatus.ORDERED));
             order.setAssignedUser(null);
         }
 
@@ -276,6 +319,38 @@ public class OrderService {
         notificationService.notifyOrderStatusChange(savedOrder, previousStatus, status);
 
         return savedOrder;
+    }
+
+    /**
+     * Atomically transitions every non-terminal order in the given group to the new
+     * status. Used by the kanban "drag the table card to a new column" / single-button
+     * group actions so the front-end sees one coherent state change instead of N
+     * interleaved per-order updates that flash a half-moved group.
+     */
+    @Transactional
+    public List<OrderEntity> updateGroupStatus(UUID groupId, OrderStatus status, String user) {
+        List<OrderEntity> orders = orderRepository.findByGroupIdAndStatusNotIn(
+                groupId, List.of(OrderStatus.DRAFT, OrderStatus.DELIVERED, OrderStatus.CANCELLED));
+        if (orders.isEmpty()) {
+            return orders;
+        }
+
+        List<OrderEntity> updated = new java.util.ArrayList<>(orders.size());
+        java.util.List<OrderStatus> previousStatuses = new java.util.ArrayList<>(orders.size());
+        for (OrderEntity order : orders) {
+            previousStatuses.add(order.getStatus());
+            if (status == OrderStatus.ACTIVE) {
+                order.setAssignedUser(null);
+            }
+            order.setStatus(status);
+            Optional.ofNullable(user).ifPresent(order::setAssignedUser);
+            updated.add(orderRepository.save(order));
+        }
+
+        for (int i = 0; i < updated.size(); i++) {
+            notificationService.notifyOrderStatusChange(updated.get(i), previousStatuses.get(i), status);
+        }
+        return updated;
     }
 
     /**

@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -7,7 +7,7 @@ import { environment } from '../../../environments/environment';
 @Component({
   selector: 'app-payment-confirmed',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="loading-container">
       <div class="spinner"></div>

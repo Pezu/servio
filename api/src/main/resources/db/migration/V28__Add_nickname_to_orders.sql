@@ -1,1 +1,0 @@
-ALTER TABLE orders ADD COLUMN nickname VARCHAR(100);

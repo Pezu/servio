@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from './client.service';
@@ -8,7 +8,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
 @Component({
   selector: 'app-clients',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   template: `
     <!-- Clients Section -->
     <div class="section-container">
@@ -16,6 +16,14 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-hover mb-0">
+              <colgroup>
+                <col style="width: 30%">
+                <col style="width: 15%">
+                <col style="width: 15%">
+                <col style="width: 15%">
+                <col style="width: 15%">
+                <col style="width: 10%">
+              </colgroup>
               <thead>
                 <tr>
                   <th>
@@ -29,8 +37,9 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
                       </div>
                     </div>
                   </th>
+                  <th>{{ 'COMMON.EMAIL' | translate }}</th>
                   <th>{{ 'COMMON.PHONE' | translate }}</th>
-                  <th>{{ 'CLIENT_TYPES.TYPE' | translate }}</th>
+                  <th>{{ 'COMMON.TYPE' | translate }}</th>
                   <th>{{ 'COMMON.STATUS' | translate }}</th>
                   <th class="text-end">
                     <button class="btn-icon-action btn-icon-add" (click)="openClientModal(); $event.stopPropagation()" title="Add Client">
@@ -43,9 +52,9 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
               </thead>
               <tbody>
                 @if (loadingClients) {
-                  <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                  <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                 } @else if (clients.length === 0) {
-                  <tr><td colspan="5" class="text-center py-4 text-muted">{{ 'CLIENTS.NO_CLIENTS' | translate }}</td></tr>
+                  <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'CLIENTS.NO_CLIENTS' | translate }}</td></tr>
                 } @else {
                   @for (client of clients; track client.id) {
                     <tr>
@@ -60,10 +69,10 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
                           </div>
                           <div class="client-details">
                             <a href="javascript:void(0);" class="client-name fw-semibold">{{ client.name }}</a>
-                            <span class="client-email text-muted">{{ client.email || '-' }}</span>
                           </div>
                         </div>
                       </td>
+                      <td class="text-muted">{{ client.email || '-' }}</td>
                       <td class="text-muted">{{ client.phone || '-' }}</td>
                       <td class="text-muted">{{ client.clientTypeName || '-' }}</td>
                       <td>
@@ -76,7 +85,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
                       <td class="text-end">
                         <button class="btn-icon-action btn-icon-action-sm" (click)="editClient(client); $event.stopPropagation()" title="Edit Client">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
                       </td>
@@ -96,11 +105,28 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
               }
               <li><a href="javascript:void(0);" (click)="loadClientPage(clientCurrentPage + 1)" [class.disabled]="clientCurrentPage >= clientTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
             </ul>
-            <select class="page-size-select" [ngModel]="clientPageSize" (ngModelChange)="onClientPageSizeChange($event)">
-              @for (size of pageSizeOptions; track size) {
-                <option [value]="size">{{ size }}</option>
+            <div class="custom-select page-size-select-custom" [class.open]="pageSizeDropdownOpen" (click)="togglePageSizeDropdown(); $event.stopPropagation()">
+              <div class="custom-select-trigger">
+                <span class="selected-value">{{ clientPageSize }}</span>
+                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              @if (pageSizeDropdownOpen) {
+                <div class="custom-select-options open-upward square">
+                  @for (size of pageSizeOptions; track size) {
+                    <div class="custom-select-option" [class.selected]="clientPageSize === size" (click)="selectPageSize(size); $event.stopPropagation()">
+                      <span class="option-text">{{ size }}</span>
+                      @if (clientPageSize === size) {
+                        <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      }
+                    </div>
+                  }
+                </div>
               }
-            </select>
+            </div>
           </div>
         </div>
       </div>
@@ -112,7 +138,11 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingClient ? ('COMMON.EDIT' | translate) : ('COMMON.ADD' | translate) }} {{ 'CLIENTS.CLIENT' | translate }}</h3>
-            <button class="close-btn" (click)="closeClientModal()" title="Close">&times;</button>
+            <button class="close-btn" (click)="closeClientModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -265,7 +295,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
     .section-container { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
     /* Card */
-    .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .card { background: white; border-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     .card.stretch { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .card-body { padding: 20px; }
     .card-body.p-0 { padding: 0 !important; flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -275,7 +305,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
     .table-responsive { flex: 1; overflow-y: auto; min-height: 0; }
     .table { width: 100%; border-collapse: collapse; }
     .table th, .table td { padding: 12px 20px; text-align: left; border-bottom: 1px solid var(--border-color); }
-    .table th { font-size: 13px; font-weight: 600; color: var(--text-dark); background: var(--bg-light); position: sticky; top: 0; z-index: 10; }
+    .table th { font-size: 13px; font-weight: 600; color: var(--text-dark); background: white; position: sticky; top: 0; z-index: 10; }
     .table td { font-size: 14px; color: var(--text-dark); }
     .table-hover tbody tr:hover { background: var(--bg-light); cursor: pointer; }
     .table.mb-0 { margin-bottom: 0; }
@@ -285,9 +315,9 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
     .py-4 { padding-top: 24px; padding-bottom: 24px; }
 
     .th-with-search { display: flex; align-items: center; gap: 12px; }
-    .search-input-wrapper { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; background: white; }
+    .search-input-wrapper { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 0; background: white; }
     .search-input-wrapper .search-icon { width: 14px; height: 14px; color: var(--text-muted); }
-    .search-input-wrapper .search-input { border: none; outline: none; font-size: 13px; width: 150px; background: transparent; }
+    .search-input-wrapper .search-input { border: none; outline: none; font-size: 13px; width: 226px; background: transparent; }
 
     /* Client Info Cell */
     .client-info-cell { display: flex; align-items: center; gap: 12px; }
@@ -295,7 +325,6 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
     .client-logo-img { width: 100%; height: 100%; object-fit: cover; }
     .client-details { display: flex; flex-direction: column; gap: 2px; }
     .client-name { font-size: 14px; font-weight: 600; color: var(--text-dark); text-decoration: none; }
-    .client-email { font-size: 12px; color: var(--text-muted); }
     .fw-semibold { font-weight: 600; }
 
     /* Status Badge */
@@ -305,57 +334,66 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
     .status-pending { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
 
     /* Buttons */
-    .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
+    .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
     .btn-icon-action:hover { background: rgba(0, 0, 0, 0.04); color: #374151; }
     .btn-icon-action svg { width: 16px; height: 16px; }
-    .btn-icon-action-sm { width: 28px; height: 28px; }
-    .btn-icon-action-sm svg { width: 14px; height: 14px; }
-    .btn-icon-add { background: var(--primary); border-color: var(--primary); color: white; }
-    .btn-icon-add:hover { background: #2563eb; border-color: #2563eb; color: white; }
+    .btn-icon-action-sm { width: 34px; height: 34px; border-radius: 0; }
+    .btn-icon-action-sm svg { width: 17px; height: 17px; }
+    .btn-icon-add { background: transparent; border-color: rgba(0, 0, 0, 0.08); color: #64748b; border-radius: 0; }
+    .btn-icon-add:hover { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.08); color: #374151; }
 
-    .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
-    .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
-    .btn-primary:hover { background: #2563eb; border-color: #2563eb; }
-    .btn-primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
-    .btn-secondary { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
-    .btn-secondary:hover { background: #e2e8f0; color: #374151; }
+    .btn { padding: 8px 16px; border-radius: 0; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+    .btn-primary { background: white; color: var(--primary); border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    .btn-primary:disabled { background: white; color: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border-color: var(--border-color); }
+    .btn-secondary:hover { background: white; color: #374151; border-color: #cbd5e1; }
 
     /* Pagination */
     .pagination-container { display: flex; align-items: center; gap: 16px; width: 100%; justify-content: flex-end; }
     .pagination-list { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
-    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: all 0.15s ease; }
+    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 0; font-size: 13px; color: var(--text-muted); text-decoration: none; transition: all 0.15s ease; }
     .pagination-list li a:hover:not(.disabled):not(.active) { background: var(--bg-light); color: var(--text-dark); }
     .pagination-list li a.active { background: var(--primary); color: white; }
     .pagination-list li a.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     .pagination-list li a svg { width: 16px; height: 16px; }
-    .page-size-select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; color: var(--text-dark); background: white; }
+    .custom-select.page-size-select-custom { width: auto; min-width: 72px; flex: 0 0 auto; }
+    .custom-select.page-size-select-custom .custom-select-trigger { padding: 6px 10px; border-radius: 0; font-size: 13px; }
+    .custom-select.page-size-select-custom .selected-value { font-weight: 400; }
+    .custom-select.page-size-select-custom .custom-select-options { min-width: 100%; width: auto; }
+    .custom-select-options.square { border-radius: 0; }
+    .custom-select-options.square .custom-select-option,
+    .custom-select-options.square .custom-select-option:first-child,
+    .custom-select-options.square .custom-select-option:last-child,
+    .custom-select-options.square .custom-select-option:only-child { border-radius: 0; }
 
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: white; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; overflow: visible; }
+    .modal { background: white; border-radius: 0; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); max-height: 90vh; display: flex; flex-direction: column; overflow: visible; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
-    .close-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 20px; }
-    .close-btn:hover { background: #e2e8f0; color: #374151; }
+    .close-btn { width: 32px; height: 32px; border: 1px solid var(--border-color); background: transparent; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; padding: 0; }
+    .close-btn:hover { background: transparent; color: #374151; border-color: #cbd5e1; }
+    .close-btn svg { width: 16px; height: 16px; display: block; }
     .modal-body { padding: 20px; overflow-y: visible; overflow-x: visible; flex: 1; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 20px; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
     .form-group label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 6px; }
-    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); box-sizing: border-box; }
+    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); box-sizing: border-box; }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     select.form-control { appearance: auto; cursor: pointer; }
 
     /* Logo Upload */
     .logo-upload-container { margin-top: 8px; }
     .logo-preview { display: flex; align-items: center; gap: 16px; }
-    .logo-preview img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
-    .btn-delete-logo { width: 32px; height: 32px; border: none; background: rgba(253, 106, 106, 0.1); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--danger); }
+    .logo-preview img { width: 80px; height: 80px; object-fit: cover; border-radius: 0; border: 1px solid var(--border-color); }
+    .btn-delete-logo { width: 32px; height: 32px; border: none; background: rgba(253, 106, 106, 0.1); border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--danger); }
     .btn-delete-logo:hover { background: rgba(253, 106, 106, 0.2); }
     .btn-delete-logo svg { width: 16px; height: 16px; }
     .logo-upload-box { position: relative; }
     .logo-upload-box input[type="file"] { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
-    .upload-label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; border: 2px dashed var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+    .upload-label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; border: 2px dashed var(--border-color); border-radius: 0; cursor: pointer; transition: all 0.2s ease; }
     .upload-label:hover { border-color: var(--primary); background: var(--primary-light); }
     .upload-label svg { width: 32px; height: 32px; color: var(--text-muted); margin-bottom: 8px; }
     .upload-label span { font-size: 13px; color: var(--text-muted); }
@@ -373,7 +411,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
       padding: 10px 14px;
       background: white;
       border: 1px solid var(--border-color);
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       color: var(--text-dark);
       transition: all 0.2s ease;
@@ -412,7 +450,7 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
       right: 0;
       background: white;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: 0;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
       z-index: 1100;
       overflow: hidden;
@@ -444,14 +482,10 @@ import { ClientTypeService, ClientType } from '../configuration/client-types/cli
       color: var(--primary);
       font-weight: 500;
     }
-    .custom-select-option:first-child {
-      border-radius: 9px 9px 0 0;
-    }
-    .custom-select-option:last-child {
-      border-radius: 0 0 9px 9px;
-    }
+    .custom-select-option:first-child,
+    .custom-select-option:last-child,
     .custom-select-option:only-child {
-      border-radius: 9px;
+      border-radius: 0;
     }
     .option-text {
       flex: 1;
@@ -511,6 +545,7 @@ export class ClientsComponent implements OnInit {
   // Dropdown States
   statusDropdownOpen = false;
   clientTypeDropdownOpen = false;
+  pageSizeDropdownOpen = false;
 
   constructor(
     public clientService: ClientService,
@@ -737,6 +772,15 @@ export class ClientsComponent implements OnInit {
     }
   }
 
+  togglePageSizeDropdown(): void {
+    this.pageSizeDropdownOpen = !this.pageSizeDropdownOpen;
+  }
+
+  selectPageSize(size: number): void {
+    this.pageSizeDropdownOpen = false;
+    this.onClientPageSizeChange(size);
+  }
+
   selectStatus(status: string): void {
     this.clientFormData.status = status;
     this.statusDropdownOpen = false;
@@ -756,5 +800,6 @@ export class ClientsComponent implements OnInit {
   closeDropdowns(): void {
     this.statusDropdownOpen = false;
     this.clientTypeDropdownOpen = false;
+    this.pageSizeDropdownOpen = false;
   }
 }

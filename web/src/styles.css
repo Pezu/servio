@@ -746,7 +746,6 @@ select.form-control {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  background: var(--bg-light);
 }
 
 .close-btn {

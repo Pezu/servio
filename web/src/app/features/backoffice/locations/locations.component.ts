@@ -1,5 +1,5 @@
 import { Component, OnInit, HostListener, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from '../clients/client.service';
@@ -11,7 +11,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 @Component({
   selector: 'app-locations',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   template: `
     <div class="page-container">
       <!-- Client Selector -->
@@ -19,234 +19,329 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         <label class="selector-label">{{ 'CLIENTS.TITLE' | translate }}</label>
         <div class="selector-wrapper" [class.open]="dropdownOpen">
           <div class="selector-input" (click)="toggleDropdown()">
-            <div class="selected-client" *ngIf="selectedClient">
-              <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
-                    [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
-              <span class="client-name">{{ selectedClient.name }}</span>
-              <span class="client-details" *ngIf="selectedClient.email || selectedClient.phone">
-                ({{ selectedClient.email || selectedClient.phone }})
-              </span>
-            </div>
-            <div class="placeholder" *ngIf="!selectedClient">
-              {{ 'CLIENTS.SELECT_CLIENT' | translate }}
-            </div>
+            @if (selectedClient) {
+              <div class="selected-client">
+                <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
+                [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
+                <span class="client-name">{{ selectedClient.name }}</span>
+                @if (selectedClient.email || selectedClient.phone) {
+                  <span class="client-details">
+                    ({{ selectedClient.email || selectedClient.phone }})
+                  </span>
+                }
+              </div>
+            }
+            @if (!selectedClient) {
+              <div class="placeholder">
+                {{ 'CLIENTS.SELECT_CLIENT' | translate }}
+              </div>
+            }
             <span class="dropdown-arrow">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
           </div>
-
-          <div class="selector-dropdown" *ngIf="dropdownOpen">
-            <div class="search-box">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input type="text"
-                     class="search-input"
-                     [placeholder]="'COMMON.SEARCH' | translate"
-                     [(ngModel)]="searchTerm"
-                     (input)="onSearch()"
-                     (click)="$event.stopPropagation()">
+    
+          @if (dropdownOpen) {
+            <div class="selector-dropdown">
+              <div class="search-box">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text"
+                  class="search-input"
+                  [placeholder]="'COMMON.SEARCH' | translate"
+                  [(ngModel)]="searchTerm"
+                  (input)="onSearch()"
+                  (click)="$event.stopPropagation()">
+              </div>
+              <div class="client-list">
+                @if (loading) {
+                  <div class="loading-state">
+                    {{ 'COMMON.LOADING' | translate }}
+                  </div>
+                }
+                @if (!loading && clients.length === 0) {
+                  <div class="empty-state">
+                    {{ 'CLIENTS.NO_CLIENTS' | translate }}
+                  </div>
+                }
+                @for (client of clients; track client) {
+                  <div
+                    class="client-option"
+                    [class.selected]="selectedClient?.id === client.id"
+                    (click)="selectClient(client)">
+                    <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
+                    [class.bg-danger]="client.status === 'INACTIVE'"></span>
+                    <div class="client-info">
+                      <span class="client-name">{{ client.name }}</span>
+                      <span class="client-details">
+                        @if (client.email) {
+                          <span>{{ client.email }}</span>
+                        }
+                        @if (client.email && client.phone) {
+                          <span> · </span>
+                        }
+                        @if (client.phone) {
+                          <span>{{ client.phone }}</span>
+                        }
+                      </span>
+                    </div>
+                  </div>
+                }
+              </div>
             </div>
-
-            <div class="client-list">
-              <div *ngIf="loading" class="loading-state">
-                {{ 'COMMON.LOADING' | translate }}
-              </div>
-              <div *ngIf="!loading && clients.length === 0" class="empty-state">
-                {{ 'CLIENTS.NO_CLIENTS' | translate }}
-              </div>
-              <div *ngFor="let client of clients"
-                   class="client-option"
-                   [class.selected]="selectedClient?.id === client.id"
-                   (click)="selectClient(client)">
-                <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
-                      [class.bg-danger]="client.status === 'INACTIVE'"></span>
-                <div class="client-info">
-                  <span class="client-name">{{ client.name }}</span>
-                  <span class="client-details">
-                    <span *ngIf="client.email">{{ client.email }}</span>
-                    <span *ngIf="client.email && client.phone"> · </span>
-                    <span *ngIf="client.phone">{{ client.phone }}</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          }
         </div>
       </div>
-
+    
       <!-- Locations and Order Points Split Layout -->
-    @if (selectedClient) {
-      <div class="split-layout">
-        <!-- Locations Panel -->
-        <div class="locations-panel">
-          <div class="card stretch">
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                  <thead>
-                    <tr>
-                      <th>{{ 'LOCATIONS.LOCATION' | translate }} <span class="text-muted fw-normal">- {{ selectedClient.name }}</span></th>
-                      <th class="text-end">
-                        <button class="btn-icon-action btn-icon-add" (click)="openLocationModal(); $event.stopPropagation()" [title]="'LOCATIONS.ADD_LOCATION' | translate">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @if (loadingLocations) {
-                      <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
-                    } @else if (locations.length === 0) {
-                      <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</td></tr>
-                    } @else {
-                      @for (location of locations; track location.id) {
-                        <tr [class.selected]="selectedLocation?.id === location.id" (click)="selectLocation(location)">
-                          <td>
-                            <div class="location-name-cell" [class.sublocation]="location.parentId">
-                              <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              <a href="javascript:void(0);" class="fw-semibold">{{ location.name }}</a>
-                            </div>
-                          </td>
-                          <td class="text-end">
-                            <div class="action-buttons">
-                              @if (!location.parentId) {
-                                <button class="btn-icon-action btn-icon-action-sm" (click)="openSubLocationModal(location); $event.stopPropagation()" [title]="'LOCATIONS.ADD_SUBLOCATION' | translate">
+      @if (selectedClient) {
+        <div class="split-layout">
+          <!-- Locations Panel -->
+          <div class="locations-panel">
+            <div class="card stretch">
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
+                    <thead>
+                      <tr>
+                        <th>{{ 'LOCATIONS.LOCATION' | translate }} <span class="text-muted fw-normal">- {{ selectedClient.name }}</span></th>
+                        <th class="text-end">
+                          <button class="btn-icon-action btn-icon-add" (click)="openLocationModal(); $event.stopPropagation()" [title]="'LOCATIONS.ADD_LOCATION' | translate">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @if (loadingLocations) {
+                        <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      } @else if (locations.length === 0) {
+                        <tr><td colspan="2" class="text-center py-4 text-muted">{{ 'LOCATIONS.NO_LOCATIONS' | translate }}</td></tr>
+                      } @else {
+                        @for (location of locations; track location.id) {
+                          <tr [class.selected]="selectedLocation?.id === location.id" (click)="selectLocation(location)">
+                            <td>
+                              <div class="location-name-cell" [class.sublocation]="location.parentId">
+                                <svg class="location-pin-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <a href="javascript:void(0);" class="fw-semibold">{{ location.name }}</a>
+                              </div>
+                            </td>
+                            <td class="text-end">
+                              <div class="action-buttons">
+                                @if (!location.parentId) {
+                                  <button class="btn-icon-action btn-icon-action-sm" (click)="openSubLocationModal(location); $event.stopPropagation()" [title]="'LOCATIONS.ADD_SUBLOCATION' | translate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                  </button>
+                                }
+                                <button class="btn-icon-action btn-icon-action-sm" (click)="editLocation(location); $event.stopPropagation()" [title]="'LOCATIONS.EDIT_LOCATION' | translate">
                                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                   </svg>
                                 </button>
-                              }
-                              <button class="btn-icon-action btn-icon-action-sm" (click)="editLocation(location); $event.stopPropagation()" [title]="'LOCATIONS.EDIT_LOCATION' | translate">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                              </div>
+                            </td>
+                          </tr>
+                        }
                       }
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            @if (locationTotalPages > 1) {
-              <div class="card-footer">
-                <div class="pagination-container">
-                  <ul class="pagination-list">
-                    <li><a href="javascript:void(0);" (click)="loadLocationPage(locationCurrentPage - 1)" [class.disabled]="locationCurrentPage === 0"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></a></li>
-                    @for (page of getPageNumbers(locationTotalPages, locationCurrentPage); track page) {
-                      <li><a href="javascript:void(0);" [class.active]="page === locationCurrentPage" (click)="loadLocationPage(page)">{{ page + 1 }}</a></li>
-                    }
-                    <li><a href="javascript:void(0);" (click)="loadLocationPage(locationCurrentPage + 1)" [class.disabled]="locationCurrentPage >= locationTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
-                  </ul>
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            }
+              @if (locationTotalPages > 1) {
+                <div class="card-footer">
+                  <div class="pagination-container">
+                    <ul class="pagination-list">
+                      <li><a href="javascript:void(0);" (click)="loadLocationPage(locationCurrentPage - 1)" [class.disabled]="locationCurrentPage === 0"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></a></li>
+                      @for (page of getPageNumbers(locationTotalPages, locationCurrentPage); track page) {
+                        <li><a href="javascript:void(0);" [class.active]="page === locationCurrentPage" (click)="loadLocationPage(page)">{{ page + 1 }}</a></li>
+                      }
+                      <li><a href="javascript:void(0);" (click)="loadLocationPage(locationCurrentPage + 1)" [class.disabled]="locationCurrentPage >= locationTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
+                    </ul>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+    
+          <!-- Order Points Panel -->
+          <div class="details-panel">
+            <div class="card stretch">
+              <div class="card-header">
+                <h6 class="card-title">{{ 'ORDER_POINTS.TITLE' | translate }} @if (selectedLocation) { <span class="text-muted fw-normal">- {{ selectedLocation.name }}</span> }</h6>
+                <button class="btn-icon-action btn-icon-add" (click)="openMultipleModal()" [disabled]="!selectedLocation" [title]="'ORDER_POINTS.ADD_ORDER_POINT' | translate">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
+                    <thead>
+                      <tr>
+                        <th>{{ 'COMMON.NAME' | translate }}</th>
+                        <th class="col-menu">Menu</th>
+                        <th class="text-center col-pay-later">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</th>
+                        <th class="text-end col-actions"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @if (!selectedLocation) {
+                        <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
+                      } @else if (loadingOrderPoints) {
+                        <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      } @else if (orderPoints.length === 0) {
+                        <tr><td colspan="4" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
+                      } @else {
+                        @for (orderPoint of orderPoints; track orderPoint.id) {
+                          <tr>
+                            <td>
+                              <input type="text"
+                                class="inline-name-input"
+                                [value]="orderPoint.name"
+                                (blur)="onNameChange(orderPoint, $event)"
+                                (keydown.enter)="$any($event.target).blur()">
+                            </td>
+                            <td class="col-menu">
+                              <select class="menu-select" [ngModel]="orderPoint.menuId || ''" (ngModelChange)="onMenuChange(orderPoint, $event)">
+                                <option value="">-</option>
+                                @for (menu of menus; track menu.id) {
+                                  <option [value]="menu.id">{{ menu.name }}</option>
+                                }
+                              </select>
+                            </td>
+                            <td class="text-center col-pay-later">
+                              <input type="checkbox"
+                                class="table-checkbox"
+                                [checked]="orderPoint.payLater"
+                                (change)="togglePayLater(orderPoint, $event)">
+                            </td>
+                            <td class="text-end col-actions">
+                              <div class="row-actions">
+                                @if (orderPoint.payLater) {
+                                  <button class="btn-icon-action btn-icon-action-sm btn-icon-split" (click)="splitOrderPoint(orderPoint)" [title]="'ORDER_POINTS.SPLIT' | translate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 3h5v5M4 20l5-5M21 3l-7 7M4 4l5 5M16 21h5v-5M4 4h5v5" />
+                                    </svg>
+                                  </button>
+                                }
+                                <button class="btn-icon-action btn-icon-action-sm btn-icon-delete" (click)="deleteOrderPoint(orderPoint)" [title]="'COMMON.DELETE' | translate">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              @if (orderPointTotalPages > 0) {
+                <div class="card-footer">
+                  <div class="pagination-container">
+                    <ul class="pagination-list">
+                      @if (orderPointTotalPages > 1) {
+                        <li><a href="javascript:void(0);" (click)="loadOrderPointPage(orderPointCurrentPage - 1)" [class.disabled]="orderPointCurrentPage === 0"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></a></li>
+                        @for (page of getPageNumbers(orderPointTotalPages, orderPointCurrentPage); track page) {
+                          <li><a href="javascript:void(0);" [class.active]="page === orderPointCurrentPage" (click)="loadOrderPointPage(page)">{{ page + 1 }}</a></li>
+                        }
+                        <li><a href="javascript:void(0);" (click)="loadOrderPointPage(orderPointCurrentPage + 1)" [class.disabled]="orderPointCurrentPage >= orderPointTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
+                      }
+                    </ul>
+                    <div class="custom-select page-size-select-custom" [class.open]="orderPointPageSizeDropdownOpen" (click)="toggleOrderPointPageSizeDropdown(); $event.stopPropagation()">
+                      <div class="custom-select-trigger">
+                        <span class="selected-value">{{ orderPointPageSize }}</span>
+                        <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                      @if (orderPointPageSizeDropdownOpen) {
+                        <div class="custom-select-options open-upward square">
+                          @for (size of pageSizeOptions; track size) {
+                            <div class="custom-select-option" [class.selected]="orderPointPageSize === size" (click)="selectOrderPointPageSize(size); $event.stopPropagation()">
+                              <span class="option-text">{{ size }}</span>
+                              @if (orderPointPageSize === size) {
+                                <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
           </div>
         </div>
-
-        <!-- Order Points Panel -->
-        <div class="details-panel">
-          <div class="card stretch">
-            <div class="card-header">
-              <h6 class="card-title">{{ 'ORDER_POINTS.TITLE' | translate }} @if (selectedLocation) { <span class="text-muted fw-normal">- {{ selectedLocation.name }}</span> }</h6>
-              <button class="btn-icon-action btn-icon-add" (click)="addOrderPoint()" [disabled]="!selectedLocation" [title]="'ORDER_POINTS.ADD_ORDER_POINT' | translate">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+      }
+    </div>
+    
+    <!-- Multiple Order Points Modal -->
+    @if (showMultipleModal) {
+      <div class="modal-overlay" (mousedown)="closeMultipleModal()">
+        <div class="modal" (mousedown)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{ 'ORDER_POINTS.ADD_MULTIPLE' | translate }}</h3>
+            <button class="close-btn" (click)="closeMultipleModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="multipleCount">{{ 'ORDER_POINTS.COUNT' | translate }}</label>
+              <input type="number" id="multipleCount" class="form-control" min="1" [(ngModel)]="multipleForm.count">
             </div>
-            <div class="card-body p-0">
-              <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                  <thead>
-                    <tr>
-                      <th>{{ 'COMMON.NAME' | translate }}</th>
-                      <th class="col-menu">Menu</th>
-                      <th class="text-center col-pay-later">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @if (!selectedLocation) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.SELECT_LOCATION' | translate }}</td></tr>
-                    } @else if (loadingOrderPoints) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
-                    } @else if (orderPoints.length === 0) {
-                      <tr><td colspan="3" class="text-center py-4 text-muted">{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</td></tr>
-                    } @else {
-                      @for (orderPoint of orderPoints; track orderPoint.id) {
-                        <tr>
-                          <td class="position-relative">
-                            <div class="status-indicator border-success"></div>
-                            <div class="d-flex align-items-center gap-3">
-                              <div class="qr-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13 0h3v2h-3v-2zm-5-2h2v2h-2v-2zm2 4h2v2h-2v-2zm2-4h5v2h-5v-2zm3 4h2v5h-2v-5zm-3 2h2v3h-2v-3zm-2 3h2v2h-2v-2z"/>
-                                </svg>
-                              </div>
-                              <input type="text"
-                                     class="inline-name-input"
-                                     [value]="orderPoint.name"
-                                     (blur)="onNameChange(orderPoint, $event)"
-                                     (keydown.enter)="$any($event.target).blur()">
-                            </div>
-                          </td>
-                          <td class="col-menu">
-                            <select class="menu-select" [ngModel]="orderPoint.menuId || ''" (ngModelChange)="onMenuChange(orderPoint, $event)">
-                              <option value="">-</option>
-                              @for (menu of menus; track menu.id) {
-                                <option [value]="menu.id">{{ menu.name }}</option>
-                              }
-                            </select>
-                          </td>
-                          <td class="text-center col-pay-later">
-                            <input type="checkbox"
-                                   class="table-checkbox"
-                                   [checked]="orderPoint.payLater"
-                                   (change)="togglePayLater(orderPoint, $event)">
-                          </td>
-                        </tr>
-                      }
-                    }
-                  </tbody>
-                </table>
-              </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" [(ngModel)]="multipleForm.payLater">
+                <span class="checkbox-text">{{ 'ORDER_POINTS.PAY_LATER' | translate }}</span>
+              </label>
             </div>
-            @if (orderPointTotalPages > 1) {
-              <div class="card-footer">
-                <div class="pagination-container">
-                  <ul class="pagination-list">
-                    <li><a href="javascript:void(0);" (click)="loadOrderPointPage(orderPointCurrentPage - 1)" [class.disabled]="orderPointCurrentPage === 0"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></a></li>
-                    @for (page of getPageNumbers(orderPointTotalPages, orderPointCurrentPage); track page) {
-                      <li><a href="javascript:void(0);" [class.active]="page === orderPointCurrentPage" (click)="loadOrderPointPage(page)">{{ page + 1 }}</a></li>
-                    }
-                    <li><a href="javascript:void(0);" (click)="loadOrderPointPage(orderPointCurrentPage + 1)" [class.disabled]="orderPointCurrentPage >= orderPointTotalPages - 1"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></a></li>
-                  </ul>
-                </div>
-              </div>
-            }
+            <div class="form-group">
+              <label for="multipleMenu">Menu</label>
+              <select id="multipleMenu" class="form-control" [(ngModel)]="multipleForm.menuId">
+                <option value="">-</option>
+                @for (menu of menus; track menu.id) {
+                  <option [value]="menu.id">{{ menu.name }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeMultipleModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button class="btn btn-primary" (click)="saveMultiple()" [disabled]="!multipleForm.count || multipleForm.count < 1 || savingMultiple">
+              {{ savingMultiple ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
+            </button>
           </div>
         </div>
       </div>
     }
-    </div>
-
+    
     <!-- Location Modal -->
     @if (showLocationModal) {
       <div class="modal-overlay" (mousedown)="closeLocationModal()">
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingLocation ? ('LOCATIONS.EDIT_LOCATION' | translate) : (parentLocationForModal ? ('LOCATIONS.ADD_SUBLOCATION' | translate) : ('LOCATIONS.ADD_LOCATION' | translate)) }}</h3>
-            <button class="close-btn" (click)="closeLocationModal()" title="Close">&times;</button>
+            <button class="close-btn" (click)="closeLocationModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-body">
             @if (parentLocationForModal) {
@@ -269,8 +364,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       </div>
     }
-
-  `,
+    
+    `,
   styles: [`
     :host {
       --primary: #3b82f6;
@@ -307,7 +402,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     /* Client Selector Styles */
     .card {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       overflow: visible;
     }
@@ -335,7 +430,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       justify-content: space-between;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       background: white;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -375,7 +470,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       right: 0;
       background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       z-index: 100;
       max-height: 350px;
@@ -587,40 +682,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 16px;
     }
 
-    /* Order Point Row */
-    .position-relative { position: relative; }
-    .status-indicator {
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 4px;
-      height: 36px;
-      border-radius: 0 4px 4px 0;
-    }
-    .status-indicator.border-success { background: var(--success); }
-    .d-flex { display: flex; }
-    .align-items-center { align-items: center; }
-    .gap-3 { gap: 12px; }
-    .d-block { display: block; }
-    .qr-icon {
-      width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #94a3b8;
-    }
-    .qr-icon svg {
-      width: 16px;
-      height: 16px;
-    }
-
     /* Pagination */
     .pagination-container {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-end;
+      gap: 16px;
+      width: 100%;
     }
     .pagination-list {
       display: flex;
@@ -636,7 +704,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       min-width: 32px;
       height: 32px;
       padding: 0 8px;
-      border-radius: 6px;
+      border-radius: 0;
       font-size: 13px;
       font-weight: 500;
       color: var(--text-muted);
@@ -660,13 +728,62 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 16px;
     }
 
+    /* Custom Select - square variant for page size */
+    .custom-select { position: relative; cursor: pointer; }
+    .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      font-size: 14px;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+      gap: 8px;
+    }
+    .custom-select:hover .custom-select-trigger { border-color: #cbd5e1; }
+    .custom-select.open .custom-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .custom-select .selected-value { display: flex; align-items: center; gap: 8px; }
+    .custom-select .dropdown-arrow { width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+    .custom-select.open .dropdown-arrow { transform: rotate(180deg); }
+    .custom-select-options {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+      z-index: 1100;
+      overflow: hidden;
+    }
+    .custom-select-options.open-upward { top: auto; bottom: calc(100% + 4px); }
+    .custom-select-options.square,
+    .custom-select-options.square .custom-select-option,
+    .custom-select-options.square .custom-select-option:first-child,
+    .custom-select-options.square .custom-select-option:last-child,
+    .custom-select-options.square .custom-select-option:only-child { border-radius: 0; }
+    .custom-select-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; color: var(--text-dark); cursor: pointer; transition: background 0.15s ease; }
+    .custom-select-option:hover { background: var(--bg-light); }
+    .custom-select-option.selected { background: rgba(59, 130, 246, 0.08); color: var(--primary); font-weight: 500; }
+    .custom-select-option .option-text { flex: 1; }
+    .custom-select-option .check-icon { width: 16px; height: 16px; color: var(--primary); margin-left: auto; }
+
+    .custom-select.page-size-select-custom { width: auto; min-width: 72px; flex: 0 0 auto; }
+    .custom-select.page-size-select-custom .custom-select-trigger { padding: 6px 10px; font-size: 13px; }
+    .custom-select.page-size-select-custom .selected-value { font-weight: 400; }
+    .custom-select.page-size-select-custom .custom-select-options { min-width: 100%; width: auto; }
+
     /* Button Styles */
     .btn-icon-action {
       width: 32px;
       height: 32px;
       border: 1px solid rgba(0, 0, 0, 0.08);
       background: transparent;
-      border-radius: 6px;
+      border-radius: 0;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -687,25 +804,30 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 16px;
     }
     .btn-icon-action-sm {
-      width: 28px;
-      height: 28px;
+      width: 34px;
+      height: 34px;
+      border-radius: 0;
     }
     .btn-icon-action-sm svg {
-      width: 14px;
-      height: 14px;
+      width: 17px;
+      height: 17px;
     }
     .btn-icon-add {
-      background: #3b82f6;
-      color: white;
+      background: transparent;
+      border-color: rgba(0, 0, 0, 0.08);
+      color: #64748b;
+      border-radius: 0;
     }
     .btn-icon-add:hover {
-      background: #2563eb;
-      color: white;
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.08);
+      color: #374151;
     }
     .action-buttons {
       display: inline-flex;
       gap: 5px;
     }
+
 
     /* Modal Styles */
     .modal-overlay {
@@ -722,7 +844,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     }
     .modal {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       width: 100%;
       max-width: 480px;
       max-height: 90vh;
@@ -745,20 +867,25 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .close-btn {
       width: 32px;
       height: 32px;
-      border: none;
-      background: #f1f5f9;
-      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      border-radius: 0;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #64748b;
-      font-size: 20px;
-      line-height: 1;
+      padding: 0;
     }
     .close-btn:hover {
-      background: #e2e8f0;
+      background: transparent;
       color: #374151;
+      border-color: #cbd5e1;
+    }
+    .close-btn svg {
+      width: 16px;
+      height: 16px;
+      display: block;
     }
     .modal-body {
       padding: 20px;
@@ -787,7 +914,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       width: 100%;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       color: #374151;
       transition: border-color 0.15s ease;
@@ -806,33 +933,36 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     }
     .btn {
       padding: 10px 20px;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .btn-secondary {
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
+      background: white;
+      border: 1px solid var(--border-color);
       color: #64748b;
     }
     .btn-secondary:hover {
-      background: #e2e8f0;
+      background: white;
       color: #374151;
+      border-color: #cbd5e1;
     }
     .btn-primary {
-      background: #3b82f6;
-      border: 1px solid #3b82f6;
-      color: white;
+      background: white;
+      border: 1px solid var(--primary);
+      color: var(--primary);
     }
     .btn-primary:hover {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: var(--primary-light);
+      border-color: var(--primary);
+      color: var(--primary);
     }
     .btn-primary:disabled {
-      background: #94a3b8;
+      background: white;
       border-color: #94a3b8;
+      color: #94a3b8;
       cursor: not-allowed;
     }
 
@@ -863,11 +993,53 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .table-checkbox {
       width: 18px;
       height: 18px;
-      accent-color: #3b82f6;
       cursor: pointer;
+      border-radius: 0;
+      -webkit-appearance: none;
+      appearance: none;
+      border: 1px solid #cbd5e1;
+      background: white;
+      display: inline-grid;
+      place-content: center;
+      margin: 0;
+    }
+    .table-checkbox:checked {
+      background: white;
+      border-color: #cbd5e1;
+    }
+    .table-checkbox:checked::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: #475569;
+      clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
     }
     .col-pay-later {
       width: 100px;
+    }
+    .col-actions {
+      width: 92px;
+    }
+    .row-actions {
+      display: inline-flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .btn-icon-split {
+      color: var(--primary);
+      border-radius: 0;
+    }
+    .btn-icon-split:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: var(--primary);
+    }
+    .btn-icon-delete {
+      color: var(--danger);
+      border-radius: 0;
+    }
+    .btn-icon-delete:hover {
+      background: rgba(253, 106, 106, 0.1);
+      color: var(--danger);
     }
 
     /* Menu Column */
@@ -879,7 +1051,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 32px;
       padding: 0 8px;
       border: 1px solid rgba(0, 0, 0, 0.08);
-      border-radius: 6px;
+      border-radius: 0;
       font-size: 13px;
       color: #64748b;
       background: transparent;
@@ -906,8 +1078,8 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .inline-name-input {
       border: 1px solid transparent;
       background: transparent;
-      padding: 4px 8px;
-      border-radius: 6px;
+      padding: 10px 12px;
+      border-radius: 0;
       font-size: 14px;
       font-weight: 600;
       color: var(--text-dark);
@@ -951,6 +1123,8 @@ export class LocationsComponent implements OnInit {
   orderPointCurrentPage = 0;
   orderPointTotalPages = 0;
   orderPointPageSize = 20;
+  orderPointPageSizeDropdownOpen = false;
+  pageSizeOptions = [5, 10, 20, 50];
 
   // Menus for selected location
   menus: Menu[] = [];
@@ -961,6 +1135,11 @@ export class LocationsComponent implements OnInit {
   parentLocationForModal: Location | null = null;
   locationForm = { name: '' };
   savingLocation = false;
+
+  // Add Order Point modal
+  showMultipleModal = false;
+  multipleForm: { count: number; payLater: boolean; menuId: string } = { count: 1, payLater: false, menuId: '' };
+  savingMultiple = false;
 
 
   private searchSubject = new Subject<string>();
@@ -1006,6 +1185,10 @@ export class LocationsComponent implements OnInit {
     const selector = this.elementRef.nativeElement.querySelector('.selector-wrapper');
     if (selector && !selector.contains(event.target)) {
       this.dropdownOpen = false;
+    }
+    const pageSizeSelect = this.elementRef.nativeElement.querySelector('.page-size-select-custom');
+    if (pageSizeSelect && !pageSizeSelect.contains(event.target)) {
+      this.orderPointPageSizeDropdownOpen = false;
     }
   }
 
@@ -1138,6 +1321,21 @@ export class LocationsComponent implements OnInit {
     if (page < 0 || page >= this.orderPointTotalPages) return;
     this.orderPointCurrentPage = page;
     this.loadOrderPoints();
+  }
+
+  onOrderPointPageSizeChange(size: number): void {
+    this.orderPointPageSize = +size;
+    this.orderPointCurrentPage = 0;
+    this.loadOrderPoints();
+  }
+
+  toggleOrderPointPageSizeDropdown(): void {
+    this.orderPointPageSizeDropdownOpen = !this.orderPointPageSizeDropdownOpen;
+  }
+
+  selectOrderPointPageSize(size: number): void {
+    this.orderPointPageSizeDropdownOpen = false;
+    this.onOrderPointPageSizeChange(size);
   }
 
   loadMenus(): void {
@@ -1307,20 +1505,65 @@ export class LocationsComponent implements OnInit {
     });
   }
 
-  // Add Order Point
-  addOrderPoint(): void {
-    if (!this.selectedLocation?.id) return;
-
-    this.orderPointService.createOrderPoint(
-      this.selectedLocation.id,
-      'New Order Point',
-      false
-    ).subscribe({
+  splitOrderPoint(orderPoint: OrderPoint): void {
+    if (!orderPoint.id || !orderPoint.payLater) return;
+    this.orderPointService.splitOrderPoint(orderPoint.id).subscribe({
       next: () => {
         this.loadOrderPoints();
       },
       error: (err) => {
-        console.error('Error creating order point:', err);
+        console.error('Error splitting order point:', err);
+      }
+    });
+  }
+
+  deleteOrderPoint(orderPoint: OrderPoint): void {
+    if (!orderPoint.id) return;
+    if (!confirm(`Delete order point "${orderPoint.name}"?`)) return;
+
+    this.orderPointService.deleteOrderPoint(orderPoint.id).subscribe({
+      next: () => {
+        this.loadOrderPoints();
+      },
+      error: (err) => {
+        console.error('Error deleting order point:', err);
+        alert('Could not delete this order point. It may be referenced by orders or registrations.');
+      }
+    });
+  }
+
+  // Add Order Point modal
+  openMultipleModal(): void {
+    if (!this.selectedLocation) return;
+    this.multipleForm = { count: 1, payLater: false, menuId: '' };
+    this.showMultipleModal = true;
+  }
+
+  closeMultipleModal(): void {
+    this.showMultipleModal = false;
+    this.savingMultiple = false;
+  }
+
+  saveMultiple(): void {
+    if (!this.selectedLocation?.id) return;
+    const count = Number(this.multipleForm.count);
+    if (!Number.isInteger(count) || count < 1) return;
+
+    this.savingMultiple = true;
+    this.orderPointService.createOrderPointsBatch(
+      this.selectedLocation.id,
+      count,
+      this.multipleForm.payLater,
+      this.multipleForm.menuId || undefined
+    ).subscribe({
+      next: () => {
+        this.savingMultiple = false;
+        this.closeMultipleModal();
+        this.loadOrderPoints();
+      },
+      error: (err) => {
+        console.error('Error creating order points:', err);
+        this.savingMultiple = false;
       }
     });
   }

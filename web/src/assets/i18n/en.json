@@ -36,6 +36,7 @@
     "EMAIL": "Email",
     "PHONE": "Phone",
     "STATUS": "Status",
+    "TYPE": "Type",
     "ACTIVE": "Active",
     "INACTIVE": "Inactive",
     "PENDING": "Pending",
@@ -105,7 +106,10 @@
     "NO_ORDER_POINTS": "No order points found",
     "SELECT_LOCATION": "Select a location to view order points",
     "ENTER_NAME": "Enter order point name",
-    "PAY_LATER": "Pay Later"
+    "PAY_LATER": "Pay Later",
+    "ADD_MULTIPLE": "Add Order Points",
+    "COUNT": "How many",
+    "SPLIT": "Split"
   },
   "EVENTS": {
     "TITLE": "Events",
@@ -131,10 +135,13 @@
     "TABLES": "Tables",
     "PREPAID": "Prepaid",
     "CLIENT": "Client",
+    "USER": "User",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Credit Value",
     "CASH_REGISTERS": "Cash Registers",
-    "NO_CASH_REGISTERS": "No cash registers configured"
+    "NO_CASH_REGISTERS": "No cash registers configured",
+    "REQUIRE_VALIDATION": "Require validation for pay-later registrations",
+    "REQUIRE_VALIDATION_SHORT": "Validation"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",
@@ -181,6 +188,7 @@
     "ORDER_ID": "Order ID",
     "ORDER_NO": "Order #",
     "EVENT": "Event",
+    "ALL_EVENTS": "All events",
     "ALL_ORDERS": "All Orders",
     "CUSTOMER": "Customer",
     "TOTAL": "Total",

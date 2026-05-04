@@ -38,6 +38,9 @@ public class OrderEntity {
     @Column(name = "order_point_id", nullable = false)
     private UUID orderPointId;
 
+    @Column(name = "group_id", nullable = false)
+    private UUID groupId;
+
     @Column(name = "order_no", nullable = false)
     private Integer orderNo;
 

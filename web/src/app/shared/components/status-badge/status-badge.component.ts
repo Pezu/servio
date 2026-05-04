@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { STATUS_COLORS } from '../../constants';
 
 type StatusType = keyof typeof STATUS_COLORS;
@@ -7,16 +7,18 @@ type StatusType = keyof typeof STATUS_COLORS;
 @Component({
   selector: 'app-status-badge',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <span
       class="status-badge"
       [style.background]="backgroundColor"
       [style.color]="textColor">
-      <span class="status-dot" *ngIf="showDot" [style.background]="textColor"></span>
+      @if (showDot) {
+        <span class="status-dot" [style.background]="textColor"></span>
+      }
       {{ displayText }}
     </span>
-  `,
+    `,
   styles: [`
     .status-badge {
       display: inline-flex;

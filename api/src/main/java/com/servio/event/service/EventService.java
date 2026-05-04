@@ -1,8 +1,10 @@
 package com.servio.event.service;
 
+import com.servio.event.dto.CashRegister;
 import com.servio.event.dto.CreateEventRequest;
 import com.servio.event.dto.Event;
 import com.servio.event.dto.UpdateEventRequest;
+import com.servio.event.entity.CashRegisterEntity;
 import com.servio.event.entity.EventEntity;
 import com.servio.event.entity.LocationEntity;
 import com.servio.event.entity.MenuItemEntity;
@@ -10,6 +12,7 @@ import com.servio.event.entity.PaymentTypeEntity;
 import com.servio.event.entity.UserEntity;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.EventMapper;
+import com.servio.event.repository.CashRegisterRepository;
 import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.LocationRepository;
 import com.servio.event.repository.MenuItemRepository;
@@ -21,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.transaction.Transactional;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashSet;
@@ -28,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +43,7 @@ public class EventService {
     private final UserRepository userRepository;
     private final PaymentTypeRepository paymentTypeRepository;
     private final MenuItemRepository menuItemRepository;
+    private final CashRegisterRepository cashRegisterRepository;
     private final EventMapper eventMapper;
     private final ImageService imageService;
 
@@ -50,6 +56,7 @@ public class EventService {
         eventEntity.setStartDate(request.getStartDate());
         eventEntity.setEndDate(request.getEndDate());
         eventEntity.setLocation(location);
+        eventEntity.setRequireValidation(request.isRequireValidation());
 
         // Functional approach: batch load related entities
         Optional.ofNullable(request.getUserIds())
@@ -124,6 +131,7 @@ public class EventService {
         eventEntity.setStartDate(request.getStartDate());
         eventEntity.setEndDate(request.getEndDate());
         eventEntity.setLocation(location);
+        eventEntity.setRequireValidation(request.isRequireValidation());
 
         // Functional approach: update or clear collections
         updateCollection(request.getUserIds(), userRepository::findAllById, eventEntity::setUsers, eventEntity.getUsers());
@@ -184,5 +192,43 @@ public class EventService {
      */
     public Integer incrementAndGetLastOrderNo(UUID eventId) {
         return eventRepository.incrementAndGetLastOrderNo(eventId);
+    }
+
+    // Cash Register methods
+    public List<CashRegister> getCashRegisters(UUID eventId) {
+        return cashRegisterRepository.findByEventId(eventId).stream()
+                .map(this::toCashRegisterDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<CashRegister> saveCashRegisters(UUID eventId, List<CashRegister> cashRegisters) {
+        // Delete existing cash registers for this event
+        cashRegisterRepository.deleteByEventId(eventId);
+
+        // Save new cash registers
+        List<CashRegisterEntity> entities = cashRegisters.stream()
+                .map(cr -> CashRegisterEntity.builder()
+                        .eventId(eventId)
+                        .name(cr.getName())
+                        .ip(cr.getIp())
+                        .sharedToken(cr.getSharedToken())
+                        .build())
+                .collect(Collectors.toList());
+
+        List<CashRegisterEntity> saved = cashRegisterRepository.saveAll(entities);
+
+        return saved.stream()
+                .map(this::toCashRegisterDto)
+                .collect(Collectors.toList());
+    }
+
+    private CashRegister toCashRegisterDto(CashRegisterEntity entity) {
+        return CashRegister.builder()
+                .id(entity.getId())
+                .name(entity.getName())
+                .ip(entity.getIp())
+                .sharedToken(entity.getSharedToken())
+                .build();
     }
 }

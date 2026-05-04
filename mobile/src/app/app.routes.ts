@@ -21,10 +21,6 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/event/orders/orders.page').then(m => m.OrdersPage)
       },
       {
-        path: 'validations',
-        loadComponent: () => import('./pages/event/validations/validations.page').then(m => m.ValidationsPage)
-      },
-      {
         path: 'payments',
         loadComponent: () => import('./pages/event/payments/payments.page').then(m => m.PaymentsPage)
       },

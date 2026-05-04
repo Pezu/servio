@@ -21,4 +21,5 @@ public class Registration {
     private LocalDateTime approvedAt;
     private LocalDateTime createdAt;
     private String nickname;
+    private UUID customerId;
 }

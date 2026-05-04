@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { RoleService, Role, PageResponse } from './role.service';
@@ -14,12 +14,11 @@ import {
   selector: 'app-roles',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     PaginationComponent,
     ModalComponent,
     ToggleSwitchComponent
-  ],
+],
   template: `
     <div class="page-container">
       <div class="card">
@@ -59,7 +58,7 @@ import {
                       <td class="text-end">
                         <button class="btn-icon-action btn-icon-action-sm" (click)="editRole(role)" title="Edit Role">
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
                       </td>
@@ -102,7 +101,7 @@ import {
   `,
   styles: [`
     .page-container { margin-bottom: 24px; }
-    .card { background: var(--white); border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); overflow: hidden; }
+    .card { background: var(--white); border-radius: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); overflow: hidden; }
     .card-body.p-0 { padding: 0 !important; }
 
     .table-responsive { overflow-x: auto; }
@@ -121,17 +120,18 @@ import {
     .py-4 { padding-top: 24px !important; padding-bottom: 24px !important; }
     .mb-0 { margin-bottom: 0; }
 
-    .btn-icon-action { width: 32px; height: 32px; border: none; background: var(--bg-light); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: all 0.15s ease; margin-left: 4px; }
-    .btn-icon-action:hover { background: var(--primary-light); color: var(--primary); }
+    .btn-icon-action { width: 32px; height: 32px; border: 1px solid rgba(0, 0, 0, 0.08); background: transparent; border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s ease; margin-left: 4px; }
+    .btn-icon-action:hover { background: rgba(0, 0, 0, 0.04); color: #374151; }
     .btn-icon-action svg { width: 16px; height: 16px; }
-    .btn-icon-action-sm { width: 28px; height: 28px; }
-    .btn-icon-action-sm svg { width: 14px; height: 14px; }
-    .btn-icon-add:hover { background: var(--primary-light); color: var(--primary); }
+    .btn-icon-action-sm { width: 34px; height: 34px; border-radius: 0; }
+    .btn-icon-action-sm svg { width: 17px; height: 17px; }
+    .btn-icon-add { background: transparent; border-color: rgba(0, 0, 0, 0.08); color: #64748b; border-radius: 0; }
+    .btn-icon-add:hover { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.08); color: #374151; }
 
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
     .form-group label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-dark); }
-    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); transition: all 0.15s ease; box-sizing: border-box; }
+    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); transition: all 0.15s ease; box-sizing: border-box; }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .form-control::placeholder { color: var(--text-muted); }
     textarea.form-control { resize: vertical; min-height: 80px; }

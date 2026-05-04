@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Client } from '@stomp/stompjs';
-import * as SockJS from 'sockjs-client';
+import SockJS from 'sockjs-client';
 import { forkJoin } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
@@ -13,8 +13,10 @@ interface OrderItem {
   name: string;
   price: number;
   quantity: number;
-  status: 'ORDERED' | 'PREPARING' | 'DONE' | 'CANCELLED';
+  status: 'ORDERED' | 'CANCELLED';
   note?: string;
+  paid?: boolean;
+  vatRate?: number;
 }
 
 interface Order {
@@ -24,12 +26,65 @@ interface Order {
   eventId: string;
   orderPointId: string;
   orderPointName: string;
+  groupId: string;
   status: string;
   assignedUser: string | null;
   note?: string;
   needsPayment: boolean;
   nickname?: string;
   items: OrderItem[];
+}
+
+/**
+ * Aggregated item row on a kanban table card: lines with the same name + status
+ * (and same paid flag) from any of the underlying orders are combined into one
+ * row. The `sourceItemIds` link back to the underlying OrderItemEntities so the
+ * delete button can fan out hard/soft cancellation across all of them.
+ */
+interface AggregatedKanbanItem {
+  key: string;
+  name: string;
+  quantity: number;
+  totalPrice: number;
+  status: 'ORDERED' | 'CANCELLED';
+  paid: boolean;
+  note?: string;
+  sourceItemIds: string[];
+  sourceOrderIds: string[];
+}
+
+/**
+ * A card representing one OrderGroup (backend-assigned). Orders join a group at
+ * creation time only — same orderPoint + existing ACTIVE order. Once the group
+ * leaves ACTIVE the door closes and any new order at the OP starts a new group.
+ * Drag-drop and the four arrow handlers fan out to each underlying order.
+ */
+interface TableCard {
+  groupId: string;
+  orderPointId: string;
+  orderPointName: string;
+  status: string;
+  orders: Order[];
+  orderIds: string[];
+  orderNos: number[];
+  items: AggregatedKanbanItem[];
+  total: number;
+  assignedUser: string | null;
+  hasNote: boolean;
+  noteText: string;
+}
+
+/** Mirror of the backend CashRegisterReceiptResponse (mock ECR for now). */
+interface CashRegisterReceiptResponse {
+  status: 'OK' | 'ERROR';
+  receiptNumber?: string;
+  fiscalReceiptId?: string;
+  cashRegisterSerial?: string;
+  issuedAt?: string;
+  totalAmount?: number;
+  paymentMethod?: 'CASH' | 'CARD';
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 interface PendingRegistration {
@@ -63,8 +118,10 @@ interface EventOrderPoint {
     <!-- Header -->
     <header class="dashboard-header">
       <div class="header-left">
-        <h1 class="header-title">{{ activeView === 'orders' ? 'Orders' : (activeView === 'permissions' ? 'Validations' : 'Payments') }}</h1>
-        <span class="order-count" *ngIf="activeView === 'orders' && orders.length > 0">{{ orders.length }} orders</span>
+        <h1 class="header-title">{{ activeView === 'orders' ? 'Orders' : 'Payments' }}</h1>
+        @if (activeView === 'orders' && visibleOrdersCount > 0) {
+          <span class="order-count">{{ visibleOrdersCount }} orders</span>
+        }
       </div>
       <div class="header-right">
         <div class="user-menu-wrapper">
@@ -84,7 +141,7 @@ interface EventOrderPoint {
         </div>
       </div>
     </header>
-
+    
     <!-- Navigation Tabs -->
     <nav class="nav-tabs">
       <button class="nav-tab" [class.active]="activeView === 'orders'" (click)="navigateTo('orders')">
@@ -92,393 +149,438 @@ interface EventOrderPoint {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
         </svg>
         Orders
-        <span class="tab-badge" *ngIf="orders.length > 0">{{ orders.length }}</span>
-      </button>
-      <button class="nav-tab" [class.active]="activeView === 'permissions'" (click)="navigateTo('permissions')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-        Validations
-        <span class="tab-badge" *ngIf="pendingRegistrations.length > 0">{{ pendingRegistrations.length }}</span>
+        @if (visibleOrdersCount > 0) {
+          <span class="tab-badge">{{ visibleOrdersCount }}</span>
+        }
       </button>
       <button class="nav-tab" [class.active]="activeView === 'payments'" (click)="navigateTo('payments')">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         Payments
-        <span class="tab-badge" *ngIf="groupedPaymentOrders.length > 0">{{ groupedPaymentOrders.length }}</span>
+        @if (groupedPaymentOrders.length > 0) {
+          <span class="tab-badge">{{ groupedPaymentOrders.length }}</span>
+        }
       </button>
     </nav>
-
+    
     <div class="dashboard-content">
       <!-- ORDERS VIEW -->
-      <ng-container *ngIf="activeView === 'orders'">
+      @if (activeView === 'orders') {
         <!-- Kanban Board -->
         <div class="kanban-board">
           <!-- Ordered Column -->
           <div class="kanban-column">
             <div class="column-header column-ordered">
-              <h3>Ordered<span class="column-count" *ngIf="orderedOrders.length > 0">{{ orderedOrders.length }}</span></h3>
+              <h3>Ordered@if (orderedTables.length > 0) {
+                <span class="column-count">{{ orderedTables.length }}</span>
+              }</h3>
             </div>
             <div class="column-content"
-                 cdkDropList
-                 #orderedList="cdkDropList"
-                 [cdkDropListData]="orderedOrders"
-                 [cdkDropListConnectedTo]="[inProgressList]"
-                 [cdkDropListSortingDisabled]="true"
-                 (cdkDropListDropped)="onOrderDrop($event, 'ACTIVE')">
-              <div *ngFor="let order of orderedOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order">
-                <div class="drag-placeholder" *cdkDragPlaceholder></div>
-                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
-              </div>
-              <div *ngIf="orderedOrders.length === 0" class="column-empty">No orders</div>
+              cdkDropList
+              #orderedList="cdkDropList"
+              [cdkDropListData]="orderedTables"
+              [cdkDropListConnectedTo]="[inProgressList]"
+              [cdkDropListSortingDisabled]="true"
+              (cdkDropListDropped)="onTableCardDrop($event, 'ACTIVE')">
+              @for (card of orderedTables; track trackByTableCard($index, card)) {
+                <div class="order-card" cdkDrag [cdkDragData]="card">
+                  <div class="drag-placeholder" *cdkDragPlaceholder></div>
+                  <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: card }"></ng-container>
+                </div>
+              }
+              @if (orderedTables.length === 0) {
+                <div class="column-empty">No orders</div>
+              }
             </div>
           </div>
-
           <!-- In Progress Column -->
           <div class="kanban-column">
             <div class="column-header column-in-progress">
-              <h3>In Progress<span class="column-count" *ngIf="inProgressOrders.length > 0">{{ inProgressOrders.length }}</span></h3>
+              <h3>In Progress@if (inProgressTables.length > 0) {
+                <span class="column-count">{{ inProgressTables.length }}</span>
+              }</h3>
             </div>
             <div class="column-content"
-                 cdkDropList
-                 #inProgressList="cdkDropList"
-                 [cdkDropListData]="inProgressOrders"
-                 [cdkDropListConnectedTo]="[orderedList, readyList]"
-                 [cdkDropListSortingDisabled]="true"
-                 (cdkDropListDropped)="onOrderDrop($event, 'IN_PROGRESS')">
-              <div *ngFor="let order of inProgressOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
-                <div class="drag-placeholder" *cdkDragPlaceholder></div>
-                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
-              </div>
-              <div *ngIf="inProgressOrders.length === 0" class="column-empty">No orders</div>
+              cdkDropList
+              #inProgressList="cdkDropList"
+              [cdkDropListData]="inProgressTables"
+              [cdkDropListConnectedTo]="[orderedList, readyList]"
+              [cdkDropListSortingDisabled]="true"
+              (cdkDropListDropped)="onTableCardDrop($event, 'IN_PROGRESS')">
+              @for (card of inProgressTables; track trackByTableCard($index, card)) {
+                <div class="order-card" cdkDrag [cdkDragData]="card" [cdkDragDisabled]="card.assignedUser !== currentUser">
+                  <div class="drag-placeholder" *cdkDragPlaceholder></div>
+                  <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: card }"></ng-container>
+                </div>
+              }
+              @if (inProgressTables.length === 0) {
+                <div class="column-empty">No orders</div>
+              }
             </div>
           </div>
-
           <!-- Ready Column -->
           <div class="kanban-column">
             <div class="column-header column-ready">
-              <h3>Ready<span class="column-count" *ngIf="readyOrders.length > 0">{{ readyOrders.length }}</span></h3>
+              <h3>Ready@if (readyTables.length > 0) {
+                <span class="column-count">{{ readyTables.length }}</span>
+              }</h3>
             </div>
             <div class="column-content"
-                 cdkDropList
-                 #readyList="cdkDropList"
-                 [cdkDropListData]="readyOrders"
-                 [cdkDropListConnectedTo]="[inProgressList]"
-                 [cdkDropListSortingDisabled]="true"
-                 (cdkDropListDropped)="onOrderDrop($event, 'READY')">
-              <div *ngFor="let order of readyOrders; trackBy: trackByOrderId" class="order-card" cdkDrag [cdkDragData]="order" [cdkDragDisabled]="order.assignedUser !== currentUser">
-                <div class="drag-placeholder" *cdkDragPlaceholder></div>
-                <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: order }"></ng-container>
-              </div>
-              <div *ngIf="readyOrders.length === 0" class="column-empty">No orders</div>
+              cdkDropList
+              #readyList="cdkDropList"
+              [cdkDropListData]="readyTables"
+              [cdkDropListConnectedTo]="[inProgressList]"
+              [cdkDropListSortingDisabled]="true"
+              (cdkDropListDropped)="onTableCardDrop($event, 'READY')">
+              @for (card of readyTables; track trackByTableCard($index, card)) {
+                <div class="order-card" cdkDrag [cdkDragData]="card" [cdkDragDisabled]="card.assignedUser !== currentUser">
+                  <div class="drag-placeholder" *cdkDragPlaceholder></div>
+                  <ng-container *ngTemplateOutlet="orderCardTemplate; context: { $implicit: card }"></ng-container>
+                </div>
+              }
+              @if (readyTables.length === 0) {
+                <div class="column-empty">No orders</div>
+              }
             </div>
           </div>
         </div>
-
-        <!-- Order Card Template -->
-        <ng-template #orderCardTemplate let-order>
+        <!-- Order Card Template (groups all orders at the same orderPoint) -->
+        <ng-template #orderCardTemplate let-card>
           <!-- Card Header -->
           <div class="card-header">
-            <span class="order-number">#{{ order.orderNo }}</span>
+            <span class="order-number">{{ formatOrderNos(card.orderNos) }}</span>
             <div class="header-center">
               <span class="order-point-name">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                {{ order.orderPointName }}
-              </span>
-              <span class="order-nickname" *ngIf="order.nickname">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                {{ order.nickname }}
+                {{ card.orderPointName }}
               </span>
             </div>
-            <span class="order-amount">{{ getOrderTotal(order).toFixed(2) }} RON</span>
-            <span *ngIf="order.assignedUser" class="locked-icon" title="Assigned">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
+            <span class="order-amount">{{ card.total.toFixed(2) }} RON</span>
+          </div>
+          <!-- Combined notes (one per source order) -->
+          @if (card.hasNote) {
+            <div class="order-note">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
               </svg>
-            </span>
-          </div>
-
-          <!-- Order Note -->
-          <div class="order-note" *ngIf="order.note">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-            </svg>
-            <span>{{ order.note }}</span>
-          </div>
-
-          <!-- Items List -->
-          <div class="items-list">
-            <div *ngFor="let item of order.items" class="item-row" [class.item-done]="item.status === 'DONE'" [class.item-cancelled]="item.status === 'CANCELLED'">
-              <div class="item-info">
-                <span class="item-qty">{{ item.quantity }}x</span>
-                <span class="item-name" [innerHTML]="item.name"></span>
-                <span class="item-price">{{ (item.price * item.quantity).toFixed(2) }}</span>
-              </div>
-              <div class="item-note" *ngIf="item.note">{{ item.note }}</div>
-              <div class="item-actions" *ngIf="order.assignedUser === currentUser && item.status === 'ORDERED'">
-                <button class="btn-item btn-ready" (click)="updateItemStatus(item.id, 'DONE')">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                </button>
-                <button class="btn-item btn-cancel" (click)="updateItemStatus(item.id, 'CANCELLED')">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-              <div class="item-status-icon" *ngIf="item.status !== 'ORDERED'">
-                <svg *ngIf="item.status === 'DONE'" class="icon-done" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                </svg>
-                <svg *ngIf="item.status === 'CANCELLED'" class="icon-cancelled" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                </svg>
-              </div>
+              <span>{{ card.noteText }}</span>
             </div>
+          }
+          <!-- Items List (aggregated across the group's orders) -->
+          <div class="items-list">
+            @for (item of card.items; track item.key) {
+              <div class="item-row" [class.item-cancelled]="item.status === 'CANCELLED'">
+                <div class="item-info">
+                  <span class="item-qty">{{ item.quantity }}x</span>
+                  <span class="item-name" [innerHTML]="item.name"></span>
+                  <span class="item-price">{{ item.totalPrice.toFixed(2) }}</span>
+                </div>
+                @if (item.note) {
+                  <div class="item-note">{{ item.note }}</div>
+                }
+                @if (card.assignedUser === currentUser && !item.paid && item.status !== 'CANCELLED' && (
+                  (card.status === 'ACTIVE' && item.status === 'ORDERED') ||
+                  card.status === 'IN_PROGRESS'
+                )) {
+                  <div class="item-actions">
+                    <button class="btn-item btn-cancel" (pointerdown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()" (click)="removeOrderItemFromCard(card, item)">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                }
+                @if (item.status === 'CANCELLED') {
+                  <div class="item-status-icon">
+                    <svg class="icon-cancelled" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                }
+              </div>
+            }
           </div>
-
           <!-- Card Footer -->
           <div class="card-footer">
             <div class="card-actions">
-              <button *ngIf="order.status === 'ACTIVE'" class="arrow-btn arrow-btn-start" (click)="startOrder(order.id)" title="Start">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-return" (click)="returnOrder(order.id)" title="Return">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </button>
-              <button *ngIf="order.status === 'IN_PROGRESS' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-complete" (click)="completeOrder(order)" title="Complete">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-              <button *ngIf="order.status === 'READY' && order.assignedUser === currentUser" class="arrow-btn arrow-btn-deliver" (click)="markOrderDelivered(order.id)" title="Picked Up">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
+              @if (card.status === 'ACTIVE') {
+                <button class="arrow-btn arrow-btn-start" (pointerdown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()" (click)="startTableCard(card)" title="Start">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              }
+              @if (card.status === 'IN_PROGRESS' && card.assignedUser === currentUser) {
+                <button class="arrow-btn arrow-btn-return" (pointerdown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()" (click)="returnTableCard(card)" title="Return">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                </button>
+              }
+              @if (card.status === 'IN_PROGRESS' && card.assignedUser === currentUser) {
+                <button class="arrow-btn arrow-btn-complete" (pointerdown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()" (click)="completeTableCard(card)" title="Complete">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              }
+              @if (card.status === 'READY' && card.assignedUser === currentUser) {
+                <button class="arrow-btn arrow-btn-deliver" (pointerdown)="$event.stopPropagation()" (touchstart)="$event.stopPropagation()" (click)="markTableCardDelivered(card)" title="Picked Up">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              }
             </div>
           </div>
         </ng-template>
-      </ng-container>
-
+      }
+    
       <!-- VALIDATIONS VIEW -->
-      <ng-container *ngIf="activeView === 'permissions'">
+      @if (activeView === 'permissions') {
         <!-- Empty State -->
-        <div *ngIf="!loadingPending && pendingRegistrations.length === 0" class="empty-state validations-empty">
-          <div class="servio-logo">
-            <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="38,19 66,22 38,25" fill="url(#goldGradEmpty)"/>
-              <polygon points="34,25 64,28 34,31" fill="url(#goldGradEmpty)" opacity="0.85"/>
-              <polygon points="29,31 57,34 29,37" fill="url(#goldGradEmpty)" opacity="0.7"/>
-              <circle cx="22" cy="22" r="18" fill="white"/>
-              <circle cx="22" cy="22" r="17" fill="url(#grayGradEmpty)"/>
-              <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
-              <defs>
-                <linearGradient id="goldGradEmpty" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#fbbf24"/>
-                  <stop offset="100%" stop-color="#f59e0b"/>
-                </linearGradient>
-                <linearGradient id="grayGradEmpty" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop stop-color="#6b7280"/>
-                  <stop offset="0.5" stop-color="#4b5563"/>
-                  <stop offset="1" stop-color="#374151"/>
-                </linearGradient>
-              </defs>
-            </svg>
+        @if (!loadingPending && pendingRegistrations.length === 0) {
+          <div class="empty-state validations-empty">
+            <div class="servio-logo">
+              <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="38,19 66,22 38,25" fill="url(#goldGradEmpty)"/>
+                <polygon points="34,25 64,28 34,31" fill="url(#goldGradEmpty)" opacity="0.85"/>
+                <polygon points="29,31 57,34 29,37" fill="url(#goldGradEmpty)" opacity="0.7"/>
+                <circle cx="22" cy="22" r="18" fill="white"/>
+                <circle cx="22" cy="22" r="17" fill="url(#grayGradEmpty)"/>
+                <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
+                <defs>
+                  <linearGradient id="goldGradEmpty" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#fbbf24"/>
+                    <stop offset="100%" stop-color="#f59e0b"/>
+                  </linearGradient>
+                  <linearGradient id="grayGradEmpty" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop stop-color="#6b7280"/>
+                    <stop offset="0.5" stop-color="#4b5563"/>
+                    <stop offset="1" stop-color="#374151"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h3>No validations waiting</h3>
+            <p>All registrations have been approved.</p>
           </div>
-          <h3>No validations waiting</h3>
-          <p>All registrations have been approved.</p>
-        </div>
-
+        }
         <!-- Validation Cards Grid -->
-        <div *ngIf="pendingRegistrations.length > 0" class="validations-grid">
-          <div *ngFor="let registration of pendingRegistrations" class="validation-card">
-            <div class="validation-info">
-              <div class="validation-row">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <span>{{ registration.nickname || 'Guest' }}</span>
+        @if (pendingRegistrations.length > 0) {
+          <div class="validations-grid">
+            @for (registration of pendingRegistrations; track registration) {
+              <div class="validation-card">
+                <div class="validation-info">
+                  <div class="validation-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>{{ registration.nickname || 'Guest' }}</span>
+                  </div>
+                  <div class="validation-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>{{ registration.orderPointName }}</span>
+                  </div>
+                  <div class="validation-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{{ formatTime(registration.createdAt) }}</span>
+                  </div>
+                </div>
+                <div class="validation-action">
+                  <button class="approve-btn" (click)="approveRegistration(registration.id)" title="Approve">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div class="validation-row">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span>{{ registration.orderPointName }}</span>
-              </div>
-              <div class="validation-row">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>{{ formatTime(registration.createdAt) }}</span>
-              </div>
-            </div>
-            <div class="validation-action">
-              <button class="approve-btn" (click)="approveRegistration(registration.id)" title="Approve">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                </svg>
-              </button>
-            </div>
+            }
           </div>
-        </div>
-      </ng-container>
-
+        }
+      }
+    
       <!-- PAYMENTS VIEW -->
-      <ng-container *ngIf="activeView === 'payments'">
+      @if (activeView === 'payments') {
         <!-- Empty State -->
-        <div *ngIf="!loadingNeedsPayment && needsPaymentOrders.length === 0" class="empty-state payments-empty">
-          <div class="servio-logo">
-            <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="38,19 66,22 38,25" fill="url(#goldGradPayments)"/>
-              <polygon points="34,25 64,28 34,31" fill="url(#goldGradPayments)" opacity="0.85"/>
-              <polygon points="29,31 57,34 29,37" fill="url(#goldGradPayments)" opacity="0.7"/>
-              <circle cx="22" cy="22" r="18" fill="white"/>
-              <circle cx="22" cy="22" r="17" fill="url(#grayGradPayments)"/>
-              <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
-              <defs>
-                <linearGradient id="goldGradPayments" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#fbbf24"/>
-                  <stop offset="100%" stop-color="#f59e0b"/>
-                </linearGradient>
-                <linearGradient id="grayGradPayments" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop stop-color="#6b7280"/>
-                  <stop offset="0.5" stop-color="#4b5563"/>
-                  <stop offset="1" stop-color="#374151"/>
-                </linearGradient>
-              </defs>
-            </svg>
+        @if (!loadingNeedsPayment && needsPaymentOrders.length === 0) {
+          <div class="empty-state payments-empty">
+            <div class="servio-logo">
+              <svg viewBox="0 0 70 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="38,19 66,22 38,25" fill="url(#goldGradPayments)"/>
+                <polygon points="34,25 64,28 34,31" fill="url(#goldGradPayments)" opacity="0.85"/>
+                <polygon points="29,31 57,34 29,37" fill="url(#goldGradPayments)" opacity="0.7"/>
+                <circle cx="22" cy="22" r="18" fill="white"/>
+                <circle cx="22" cy="22" r="17" fill="url(#grayGradPayments)"/>
+                <text x="22" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="white">S</text>
+                <defs>
+                  <linearGradient id="goldGradPayments" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#fbbf24"/>
+                    <stop offset="100%" stop-color="#f59e0b"/>
+                  </linearGradient>
+                  <linearGradient id="grayGradPayments" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop stop-color="#6b7280"/>
+                    <stop offset="0.5" stop-color="#4b5563"/>
+                    <stop offset="1" stop-color="#374151"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h3>No pending payments</h3>
+            <p>All orders have been paid.</p>
           </div>
-          <h3>No pending payments</h3>
-          <p>All orders have been paid.</p>
-        </div>
-
+        }
         <!-- Payments Grid -->
-        <div *ngIf="!loadingNeedsPayment && needsPaymentOrders.length > 0" class="payments-container">
-          <!-- Controls Bar -->
-          <div class="payments-controls">
-            <div class="view-toggle-bar">
-              <button class="toggle-btn" [class.active]="paymentMode === 'table'" (click)="paymentMode = 'table'">Table</button>
-              <button class="toggle-btn" [class.active]="paymentMode === 'guest'" (click)="paymentMode = 'guest'">Guest</button>
-            </div>
-          </div>
-
-          <!-- TABLE MODE - Grouped by Table (Order Point) -->
-          <div *ngIf="paymentMode === 'table'" class="payments-by-table">
-            <div *ngFor="let table of groupedPaymentOrders" class="table-section">
-              <div class="table-section-header">
-                <div class="table-info">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span class="table-name">{{ table.orderPointName }}</span>
-                  <span *ngIf="table.creditValue" class="credit-badge">Credit: {{ table.creditValue.toFixed(2) }} RON</span>
-                </div>
-                <span class="table-total-badge">{{ getGroupTotal(table.orders).toFixed(2) }} RON</span>
-              </div>
-              <div class="table-items-list">
-                <div *ngFor="let item of getAggregatedItems(table.orders)" class="aggregated-item-row">
-                  <span class="item-qty">{{ item.quantity }}x</span>
-                  <span class="item-name" [innerHTML]="item.name"></span>
-                  <span class="item-price">{{ item.totalPrice.toFixed(2) }} RON</span>
-                </div>
-              </div>
-              <div class="table-orders-footer">
-                <button class="btn-mark-all-paid" (click)="markTablePaid(table.orders)">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                  </svg>
-                  Mark Table Paid
-                </button>
+        @if (!loadingNeedsPayment && needsPaymentOrders.length > 0) {
+          <div class="payments-container">
+            <!-- Controls Bar -->
+            <div class="payments-controls">
+              <div class="view-toggle-bar">
+                <button class="toggle-btn" [class.active]="paymentMode === 'table'" (click)="paymentMode = 'table'">Table</button>
+                <button class="toggle-btn" [class.active]="paymentMode === 'guest'" (click)="paymentMode = 'guest'">Guest</button>
               </div>
             </div>
-          </div>
-
-          <!-- GUEST MODE - Tables as parents, Guests as children -->
-          <div *ngIf="paymentMode === 'guest'" class="payments-by-guest">
-            <div *ngFor="let table of groupedPaymentOrders" class="table-parent-card">
-              <div class="table-parent-header">
-                <div class="table-info">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span class="table-name">{{ table.orderPointName }}</span>
-                  <span *ngIf="table.creditValue" class="credit-badge">Credit: {{ table.creditValue.toFixed(2) }} RON</span>
-                </div>
-                <span class="table-total-badge">{{ getGroupTotal(table.orders).toFixed(2) }} RON</span>
-              </div>
-              <div class="guest-children">
-                <div *ngFor="let guest of getOrdersByGuest(table.orders)" class="guest-child-card">
-                  <div class="guest-child-header">
-                    <div class="guest-info">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      <span class="guest-nickname">{{ guest.nickname }}</span>
+            <!-- TABLE MODE - Grouped by Table (Order Point) -->
+            @if (paymentMode === 'table') {
+              <div class="payments-by-table">
+                @for (table of groupedPaymentOrders; track table.orderPointId) {
+                  <div class="table-section">
+                    <div class="table-section-header">
+                      <div class="table-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="table-name">{{ table.orderPointName }}</span>
+                        @if (table.creditValue) {
+                          <span class="credit-badge">Credit: {{ table.creditValue | number:'1.0-2' }} RON</span>
+                        }
+                      </div>
+                      <div class="table-header-right">
+                        <span class="table-total-badge">{{ table.total | number:'1.0-2' }} RON</span>
+                        <button class="btn-collect" (click)="markTablePaid(table.orders)">Collect</button>
+                      </div>
                     </div>
-                    <span class="guest-total-badge">{{ guest.total.toFixed(2) }} RON</span>
-                  </div>
-                  <div class="guest-items-list">
-                    <div *ngFor="let item of getAggregatedItems(guest.orders)" class="aggregated-item-row">
-                      <span class="item-qty">{{ item.quantity }}x</span>
-                      <span class="item-name" [innerHTML]="item.name"></span>
-                      <span class="item-price">{{ item.totalPrice.toFixed(2) }} RON</span>
+                    <div class="table-items-list">
+                      @for (item of table.aggregatedItems; track item.name) {
+                        <div class="aggregated-item-row">
+                          <span class="item-qty">{{ item.quantity }}x</span>
+                          <span class="item-name" [innerHTML]="item.name"></span>
+                          <span class="item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
+                        </div>
+                      }
                     </div>
                   </div>
-                  <div class="guest-footer">
-                    <button class="btn-mark-paid small" (click)="markGuestPaid(guest.orders)">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                      </svg>
-                      Mark Paid
-                    </button>
-                  </div>
-                </div>
+                }
               </div>
-            </div>
+            }
+            <!-- GUEST MODE - Tables as parents, Guests as children -->
+            @if (paymentMode === 'guest') {
+              <div class="payments-by-guest">
+                @for (table of groupedPaymentOrders; track table.orderPointId) {
+                  <div class="table-parent-card">
+                    <div class="table-parent-header">
+                      <div class="table-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="table-name">{{ table.orderPointName }}</span>
+                        @if (table.creditValue) {
+                          <span class="credit-badge">Credit: {{ table.creditValue | number:'1.0-2' }} RON</span>
+                        }
+                      </div>
+                      <span class="table-total-badge">{{ table.total | number:'1.0-2' }} RON</span>
+                    </div>
+                    <div class="guest-children">
+                      @for (guest of table.guests; track guest.nickname) {
+                        <div class="guest-child-card">
+                          <div class="guest-child-header">
+                            <div class="guest-info">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              <span class="guest-nickname">{{ guest.nickname }}</span>
+                            </div>
+                            <div class="guest-header-right">
+                              <span class="guest-total-badge">{{ guest.total | number:'1.0-2' }} RON</span>
+                              <button class="btn-collect" (click)="markGuestPaid(guest.orders)">Collect</button>
+                            </div>
+                          </div>
+                          <div class="guest-items-list">
+                            @for (item of guest.aggregatedItems; track item.name) {
+                              <div class="aggregated-item-row">
+                                <span class="item-qty">{{ item.quantity }}x</span>
+                                <span class="item-name" [innerHTML]="item.name"></span>
+                                <span class="item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
           </div>
-        </div>
-      </ng-container>
+        }
+      }
     </div>
-
+    
     <!-- Payment Method Modal -->
-    <div *ngIf="showPaymentModal" class="payment-modal-overlay" (click)="closePaymentModal()">
-      <div class="payment-modal" (click)="$event.stopPropagation()">
-        <div class="payment-modal-header">
-          <h3>Select Payment Method</h3>
-          <button class="modal-close-btn" (click)="closePaymentModal()">&times;</button>
-        </div>
-        <div class="payment-modal-body">
-          <button class="payment-method-btn cash" (click)="confirmPayment('CASH')">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            Cash
-          </button>
-          <button class="payment-method-btn card" (click)="confirmPayment('CARD')">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
-            Card
-          </button>
+    @if (showPaymentModal) {
+      <div class="payment-modal-overlay" (click)="closePaymentModal()">
+        <div class="payment-modal" (click)="$event.stopPropagation()">
+          <div class="payment-modal-header">
+            <h3>Select Payment Method</h3>
+            <button class="modal-close-btn" (click)="closePaymentModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          @if (cashRegisters.length > 0) {
+            <div class="payment-modal-section-label">Cash register</div>
+            <div class="payment-modal-body register-grid">
+              @for (cr of cashRegisters; track cr.id) {
+                <button class="payment-method-btn register"
+                        [class.selected]="selectedCashRegisterDeviceId === cr.id"
+                        (click)="selectedCashRegisterDeviceId = cr.id">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h0a4 4 0 014 4v2m-8 0h8m-8 0a2 2 0 01-2-2V8a2 2 0 012-2h8a2 2 0 012 2v7a2 2 0 01-2 2M9 8h6" />
+                  </svg>
+                  {{ cr.name || 'Register' }}
+                </button>
+              }
+            </div>
+          }
+          <div class="payment-modal-section-label">Payment method</div>
+          <div class="payment-modal-body">
+            <button class="payment-method-btn cash" (click)="confirmPayment('CASH')" [disabled]="!selectedCashRegisterDeviceId && cashRegisters.length > 0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Cash
+            </button>
+            <button class="payment-method-btn card" (click)="confirmPayment('CARD')" [disabled]="!selectedCashRegisterDeviceId && cashRegisters.length > 0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              Card
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     * { box-sizing: border-box; }
     :host {
@@ -581,7 +683,7 @@ interface EventOrderPoint {
       padding: 10px 20px;
       border: 1px solid #e0e0e0;
       background: #fff;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       font-weight: 500;
       color: #64748b;
@@ -743,7 +845,7 @@ interface EventOrderPoint {
     /* Order Card */
     .order-card {
       background: white;
-      border-radius: 16px;
+      border-radius: 0;
       border: 1px solid #d1d5db;
       height: auto;
       flex-shrink: 0;
@@ -812,8 +914,6 @@ interface EventOrderPoint {
       flex-shrink: 0;
     }
     .order-number .hash { color: #c0c5ce; font-weight: 400; }
-    .locked-icon { display: flex; color: #f59e0b; }
-    .locked-icon svg { width: 18px; height: 18px; }
     .header-center {
       flex: 1;
       display: flex;
@@ -934,7 +1034,6 @@ interface EventOrderPoint {
       transition: all 0.15s ease;
     }
     .item-row:hover { background: #f8fafc; }
-    .item-row.item-done { opacity: 0.6; }
     .item-row.item-cancelled { opacity: 0.5; }
     .item-row.item-cancelled .item-name { text-decoration: line-through; color: #ef4444; }
 
@@ -981,8 +1080,9 @@ interface EventOrderPoint {
     .btn-item {
       width: 28px;
       height: 28px;
-      border: none;
-      border-radius: 6px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: transparent;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -990,14 +1090,11 @@ interface EventOrderPoint {
       transition: all 0.15s ease;
     }
     .btn-item svg { width: 14px; height: 14px; }
-    .btn-ready { background: #dcfce7; color: #16a34a; }
-    .btn-ready:hover { background: #16a34a; color: white; }
-    .btn-cancel { background: #fee2e2; color: #dc2626; }
-    .btn-cancel:hover { background: #dc2626; color: white; }
+    .btn-cancel { background: transparent; color: #dc2626; border-color: #fecaca; }
+    .btn-cancel:hover { background: transparent; color: #b91c1c; border-color: #dc2626; }
 
     .item-status-icon { display: flex; }
     .item-status-icon svg { width: 20px; height: 20px; }
-    .icon-done { color: #10b981; }
     .icon-cancelled { color: #ef4444; }
 
     /* Card Footer */
@@ -1492,10 +1589,10 @@ interface EventOrderPoint {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
-      background: #f8f9fa;
-      border-radius: 12px;
-      border: 1px solid #e8ecf1;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+      border: none;
     }
     .controls-left {
       display: flex;
@@ -1508,15 +1605,16 @@ interface EventOrderPoint {
     }
     .view-toggle-bar {
       display: flex;
-      background: #e8ecf1;
-      border-radius: 8px;
-      padding: 4px;
+      background: transparent;
+      border: 1px solid #e8ecf1;
+      border-radius: 0;
+      padding: 3px;
     }
     .toggle-btn {
       padding: 8px 16px;
       border: none;
       background: transparent;
-      border-radius: 6px;
+      border-radius: 0;
       font-size: 13px;
       font-weight: 500;
       color: #64748b;
@@ -1596,14 +1694,18 @@ interface EventOrderPoint {
 
     /* Payments By Table */
     .payments-by-table {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
       gap: 24px;
     }
+    @media (max-width: 700px) {
+      .payments-by-table { grid-template-columns: 1fr; }
+    }
     .table-section {
-      background: #f8f9fa;
-      border-radius: 16px;
+      background: transparent;
+      border-radius: 0;
       padding: 16px;
+      box-sizing: border-box;
       border: 1px solid #e8ecf1;
     }
     .table-section-header {
@@ -1642,10 +1744,10 @@ interface EventOrderPoint {
       font-size: 16px;
       font-weight: 700;
       color: #1e293b;
-      background: white;
-      padding: 6px 14px;
-      border-radius: 8px;
-      border: 1px solid #e8ecf1;
+      background: transparent;
+      padding: 6px 0;
+      border-radius: 0;
+      border: none;
     }
     .table-items-list {
       display: flex;
@@ -1658,14 +1760,17 @@ interface EventOrderPoint {
       align-items: center;
       gap: 12px;
       padding: 8px 12px;
-      background: white;
-      border-radius: 8px;
-      border: 1px solid #e8ecf1;
+      background: transparent;
+      border-radius: 0;
+      border: none;
     }
     .aggregated-item-row .item-qty {
       font-weight: 600;
       color: #64748b;
       min-width: 30px;
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
     }
     .aggregated-item-row .item-name {
       flex: 1;
@@ -1676,30 +1781,25 @@ interface EventOrderPoint {
       font-weight: 600;
       color: #1e293b;
     }
-    .table-orders-footer {
-      display: flex;
-      justify-content: flex-end;
-    }
-    .btn-mark-all-paid {
+    .table-header-right {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 10px 18px;
-      background: #22c55e;
-      color: white;
-      border: none;
-      border-radius: 8px;
+      gap: 12px;
+    }
+    .btn-collect {
+      padding: 8px 18px;
+      background: transparent;
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
+      border-radius: 0;
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.15s ease;
     }
-    .btn-mark-all-paid:hover {
-      background: #16a34a;
-    }
-    .btn-mark-all-paid svg {
-      width: 16px;
-      height: 16px;
+    .btn-collect:hover {
+      background: #f0fdf4;
+      border-color: #86efac;
     }
 
     /* Payments By Guest (Table as parent, Guests as children) */
@@ -1709,8 +1809,8 @@ interface EventOrderPoint {
       gap: 24px;
     }
     .table-parent-card {
-      background: #f8f9fa;
-      border-radius: 16px;
+      background: transparent;
+      border-radius: 0;
       padding: 16px;
       border: 1px solid #e8ecf1;
     }
@@ -1723,15 +1823,24 @@ interface EventOrderPoint {
       border-bottom: 1px solid #e8ecf1;
     }
     .guest-children {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
+    }
+    @media (max-width: 700px) {
+      .guest-children { grid-template-columns: 1fr; }
     }
     .guest-child-card {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       padding: 12px 16px;
       border: 1px solid #e8ecf1;
+      box-sizing: border-box;
+    }
+    .guest-header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
     .guest-child-header {
       display: flex;
@@ -1760,9 +1869,9 @@ interface EventOrderPoint {
       font-size: 14px;
       font-weight: 700;
       color: #1e293b;
-      background: #f1f5f9;
-      padding: 4px 12px;
-      border-radius: 6px;
+      background: transparent;
+      padding: 4px 0;
+      border-radius: 0;
     }
     .guest-items-list {
       display: flex;
@@ -1773,30 +1882,6 @@ interface EventOrderPoint {
     .guest-items-list .aggregated-item-row {
       padding: 6px 10px;
       font-size: 13px;
-    }
-    .guest-footer {
-      display: flex;
-      justify-content: flex-end;
-    }
-    .btn-mark-paid.small {
-      padding: 6px 12px;
-      font-size: 12px;
-      background: #22c55e;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-weight: 600;
-    }
-    .btn-mark-paid.small:hover {
-      background: #16a34a;
-    }
-    .btn-mark-paid.small svg {
-      width: 14px;
-      height: 14px;
     }
 
     /* Responsive */
@@ -1831,7 +1916,7 @@ interface EventOrderPoint {
     }
     .payment-modal {
       background: white;
-      border-radius: 16px;
+      border-radius: 0;
       width: 90%;
       max-width: 400px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -1853,24 +1938,51 @@ interface EventOrderPoint {
     .modal-close-btn {
       width: 32px;
       height: 32px;
-      border: none;
-      background: #f1f5f9;
-      border-radius: 8px;
-      font-size: 20px;
+      border: 1px solid #e8ecf1;
+      background: transparent;
+      border-radius: 0;
       color: #64748b;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 0;
     }
     .modal-close-btn:hover {
-      background: #e2e8f0;
+      background: transparent;
       color: #334155;
+      border-color: #cbd5e1;
     }
+    .modal-close-btn svg { width: 16px; height: 16px; display: block; }
     .payment-modal-body {
-      padding: 24px;
+      padding: 16px 24px 24px;
       display: flex;
       gap: 16px;
+      flex-wrap: wrap;
+    }
+    .payment-modal-body.register-grid { padding-bottom: 8px; }
+    .payment-modal-section-label {
+      padding: 12px 24px 0;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .payment-method-btn.register {
+      min-width: calc(50% - 8px);
+      flex: 1 1 calc(50% - 8px);
+      padding: 18px 12px;
+      font-size: 14px;
+    }
+    .payment-method-btn.register.selected {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      color: #1d4ed8;
+    }
+    .payment-method-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     .payment-method-btn {
       flex: 1;
@@ -1879,8 +1991,8 @@ interface EventOrderPoint {
       align-items: center;
       gap: 12px;
       padding: 24px 16px;
-      border: 2px solid #e8ecf1;
-      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+      border-radius: 0;
       background: white;
       cursor: pointer;
       font-size: 16px;
@@ -1928,22 +2040,169 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   // Payment modal
   showPaymentModal = false;
   pendingPaymentOrders: Order[] = [];
+  cashRegisters: { id: string; name: string }[] = [];
+  selectedCashRegisterDeviceId: string | null = null;
 
-  // Cached arrays for kanban columns (avoids getter re-computation on every change detection)
-  orderedOrders: Order[] = [];
-  inProgressOrders: Order[] = [];
-  readyOrders: Order[] = [];
+  // Cached kanban columns. One TableCard groups all orders at the same orderPoint
+  // matching that column's status (ACTIVE / IN_PROGRESS / READY). Items inside the
+  // card carry their source order's nickname so authorship is visible per item.
+  orderedTables: TableCard[] = [];
+  inProgressTables: TableCard[] = [];
+  readyTables: TableCard[] = [];
+
+  // Cached grouped payment data (keyed by orderPointId; recomputed only on data change)
+  groupedPaymentOrders: {
+    orderPointId: string;
+    orderPointName: string;
+    orders: Order[];
+    creditValue?: number;
+    aggregatedItems: { name: string; quantity: number; totalPrice: number }[];
+    total: number;
+    guests: { nickname: string; orders: Order[]; total: number; aggregatedItems: { name: string; quantity: number; totalPrice: number }[] }[];
+  }[] = [];
 
   // Track by function for drag-drop performance
-  trackByOrderId = (index: number, order: Order): string => order.id;
+  trackByTableCard = (index: number, card: TableCard): string => card.groupId;
 
-  private updateKanbanColumns(): void {
-    this.orderedOrders = this.orders.filter(o => o.status === 'ACTIVE');
-    this.inProgressOrders = this.orders.filter(o => o.status === 'IN_PROGRESS');
-    this.readyOrders = this.orders.filter(o => o.status === 'READY');
+  formatOrderNos(nos: number[]): string {
+    if (!nos.length) return '';
+    if (nos.length === 1) return '#' + nos[0];
+    return nos.map(n => '#' + n).join(', ');
   }
 
-  get groupedPaymentOrders(): { orderPointId: string; orderPointName: string; orders: Order[]; creditValue?: number }[] {
+  startTableCard(card: TableCard): void {
+    this.transitionGroup(card, 'IN_PROGRESS', this.currentUser);
+  }
+
+  returnTableCard(card: TableCard): void {
+    this.transitionGroup(card, 'ACTIVE');
+  }
+
+  completeTableCard(card: TableCard): void {
+    this.transitionGroup(card, 'READY');
+  }
+
+  markTableCardDelivered(card: TableCard): void {
+    this.transitionGroup(card, 'DELIVERED');
+  }
+
+  /**
+   * Single PATCH to /api/orders/groups/{groupId}/status — every non-terminal order
+   * in the group is updated in one transaction, broadcast once. Avoids the visible
+   * "half-moved group" flash that the per-order fan-out used to produce.
+   */
+  private transitionGroup(card: TableCard, status: string, user?: string): void {
+    let url = `${environment.apiUrl}/api/orders/groups/${card.groupId}/status?status=${status}`;
+    if (user) {
+      url += `&user=${encodeURIComponent(user)}`;
+    }
+    this.http.patch(url, {}).subscribe({
+      next: () => this.loadOrders(),
+      error: (err) => console.error('Failed to update group status:', err)
+    });
+  }
+
+  removeOrderItemFromCard(card: TableCard, item: AggregatedKanbanItem): void {
+    // Fan out the delete across every underlying source line — one aggregated
+    // row may map to multiple OrderItemEntities (different guests, same item).
+    item.sourceItemIds.forEach((itemId, idx) => {
+      const orderId = item.sourceOrderIds[idx];
+      const sourceOrder = card.orders.find(o => o.id === orderId);
+      if (sourceOrder) {
+        this.removeOrderItem(sourceOrder, itemId);
+      }
+    });
+  }
+
+  private updateKanbanColumns(): void {
+    // Ordered column: visible to everyone, grouped by orderPoint
+    this.orderedTables = this.groupOrdersByTable(this.orders.filter(o => o.status === 'ACTIVE'));
+    // In Progress / Ready: each user sees their own assigned orders, grouped by orderPoint
+    this.inProgressTables = this.groupOrdersByTable(
+      this.orders.filter(o => o.status === 'IN_PROGRESS' && o.assignedUser === this.currentUser)
+    );
+    this.readyTables = this.groupOrdersByTable(
+      this.orders.filter(o => o.status === 'READY' && o.assignedUser === this.currentUser)
+    );
+  }
+
+  // Header counter: only count what's actually rendered. Without this, a single
+  // IN_PROGRESS/READY order assigned to another user makes the badge say "1 orders"
+  // while every column on the current user's screen is empty.
+  get visibleOrdersCount(): number {
+    return this.orderedTables.reduce((s, t) => s + t.orders.length, 0)
+      + this.inProgressTables.reduce((s, t) => s + t.orders.length, 0)
+      + this.readyTables.reduce((s, t) => s + t.orders.length, 0);
+  }
+
+  private groupOrdersByTable(orders: Order[]): TableCard[] {
+    const groups = new Map<string, Order[]>();
+    for (const order of orders) {
+      // Group key is the backend-assigned groupId, not the orderPointId, so two
+      // orders at the same OP that took different lifecycles stay separate.
+      const key = order.groupId || order.id;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.push(order);
+      } else {
+        groups.set(key, [order]);
+      }
+    }
+
+    return Array.from(groups.entries()).map(([groupId, group]) => {
+      // Sort by orderNo so the newest item additions appear at the bottom
+      group.sort((a, b) => a.orderNo - b.orderNo);
+
+      // Aggregate items across all orders in the group: same name + status + paid
+      // collapses into one row, with source ids preserved for delete fan-out.
+      const aggregated = new Map<string, AggregatedKanbanItem>();
+      for (const order of group) {
+        for (const item of order.items) {
+          const key = `${item.name}::${item.status}::${item.paid ? 'p' : 'u'}`;
+          const existing = aggregated.get(key);
+          if (existing) {
+            existing.quantity += item.quantity;
+            existing.totalPrice += item.price * item.quantity;
+            existing.sourceItemIds.push(item.id);
+            existing.sourceOrderIds.push(order.id);
+          } else {
+            aggregated.set(key, {
+              key,
+              name: item.name,
+              quantity: item.quantity,
+              totalPrice: item.price * item.quantity,
+              status: item.status,
+              paid: !!item.paid,
+              note: item.note,
+              sourceItemIds: [item.id],
+              sourceOrderIds: [order.id]
+            });
+          }
+        }
+      }
+      const items = Array.from(aggregated.values());
+
+      const total = group.reduce((sum, o) => sum + this.getOrderTotal(o), 0);
+      const assignedUser = group[0]?.assignedUser ?? null;
+      const noteParts = group.map(o => o.note).filter((n): n is string => !!n);
+      return {
+        groupId,
+        orderPointId: group[0]?.orderPointId || 'unknown',
+        orderPointName: group[0]?.orderPointName || 'Unknown',
+        status: group[0]?.status || '',
+        orders: group,
+        orderIds: group.map(o => o.id),
+        orderNos: group.map(o => o.orderNo),
+        items,
+        total,
+        assignedUser,
+        hasNote: noteParts.length > 0,
+        noteText: noteParts.join(' · ')
+      };
+    });
+  }
+
+  private updateGroupedPaymentOrders(): void {
     const groups = new Map<string, { orderPointName: string; orders: Order[] }>();
     for (const order of this.needsPaymentOrders) {
       const key = order.orderPointId || 'unknown';
@@ -1952,11 +2211,17 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       }
       groups.get(key)!.orders.push(order);
     }
-    return Array.from(groups.entries()).map(([orderPointId, data]) => ({
+    this.groupedPaymentOrders = Array.from(groups.entries()).map(([orderPointId, data]) => ({
       orderPointId,
       orderPointName: data.orderPointName,
       orders: data.orders,
-      creditValue: this.creditValueMap.get(orderPointId)
+      creditValue: this.creditValueMap.get(orderPointId),
+      aggregatedItems: this.getAggregatedItems(data.orders),
+      total: this.getGroupTotal(data.orders),
+      guests: this.getOrdersByGuest(data.orders).map(g => ({
+        ...g,
+        aggregatedItems: this.getAggregatedItems(g.orders)
+      }))
     }));
   }
 
@@ -2024,9 +2289,8 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     this.activeView = view;
     if (view === 'permissions') {
       this.loadPendingRegistrations();
-    } else if (view === 'payments') {
-      this.loadNeedsPaymentOrders();
     }
+    // Orders and payments are kept live via WebSocket; no fetch needed on tab switch.
   }
 
   loadNeedsPaymentOrders(): void {
@@ -2044,6 +2308,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
             this.creditValueMap.set(eop.orderPointId, eop.creditValue);
           }
         }
+        this.updateGroupedPaymentOrders();
         this.loadingNeedsPayment = false;
       },
       error: (err) => {
@@ -2118,8 +2383,23 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       this.loadOrders();
       this.loadPendingRegistrations();
       this.loadNeedsPaymentOrders();
+      this.loadCashRegisters();
       this.connect();
     }
+  }
+
+  private loadCashRegisters(): void {
+    this.http.get<{ id: string; name: string }[]>(`${environment.apiUrl}/api/events/${this.eventId}/cash-registers`)
+      .subscribe({
+        next: (registers) => {
+          this.cashRegisters = registers || [];
+          this.selectedCashRegisterDeviceId = this.cashRegisters[0]?.id ?? null;
+        },
+        error: (err) => {
+          console.error('Failed to load cash registers:', err);
+          this.cashRegisters = [];
+        }
+      });
   }
 
   private getUsernameFromToken(): string {
@@ -2180,6 +2460,17 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
           console.log('Received order update via WebSocket:', message.body);
           this.loadOrders();
           this.loadNeedsPaymentOrders();
+        });
+
+        // Subscribe to payment updates for this event (mark-paid, payment-complete, etc.)
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/payments`, (message) => {
+          console.log('Received payment update via WebSocket:', message.body);
+          this.loadNeedsPaymentOrders();
+        });
+
+        // Subscribe to async cash-register replies pushed by the agent.
+        this.stompClient?.subscribe(`/topic/event/${this.eventId}/cash-register-reply`, (message) => {
+          console.log('[CashRegister] Async ECR reply via WebSocket:', message.body);
         });
 
         // Subscribe to registration approvals for this event
@@ -2321,8 +2612,6 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   getItemStatusColor(status: string): string {
     switch (status) {
       case 'ORDERED': return '#2196F3';
-      case 'PREPARING': return '#FF9800';
-      case 'DONE': return '#4CAF50';
       case 'CANCELLED': return '#f44336';
       default: return '#757575';
     }
@@ -2338,6 +2627,19 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
           console.error('Failed to update item status:', err);
         }
       });
+  }
+
+  removeOrderItem(order: Order, itemId: string): void {
+    // For in-progress orders we hard-delete the item; otherwise we soft-cancel it.
+    if (order.status === 'IN_PROGRESS') {
+      this.http.delete(`${environment.apiUrl}/api/orders/items/${itemId}`)
+        .subscribe({
+          next: () => this.loadOrders(),
+          error: (err) => console.error('Failed to delete item:', err)
+        });
+    } else {
+      this.updateItemStatus(itemId, 'CANCELLED');
+    }
   }
 
   markOrderDelivered(orderId: string): void {
@@ -2414,6 +2716,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.needsPaymentOrders = this.needsPaymentOrders.filter(o => o.id !== orderId);
+          this.updateGroupedPaymentOrders();
         },
         error: (err) => {
           console.error('Failed to mark order as paid:', err);
@@ -2440,6 +2743,23 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     const orders = this.pendingPaymentOrders;
     this.closePaymentModal();
 
+    // Push the receipt request to the backend; it builds the fiscal payload,
+    // logs it, "talks" to the cash register, and returns the receipt response
+    // (number, fiscal id, status, ...). Then mark the orders paid.
+    this.http.post<CashRegisterReceiptResponse>(`${environment.apiUrl}/api/orders/cash-register/receipt`, {
+      orderIds: orders.map(o => o.id),
+      paymentMethod,
+      operator: this.currentUser,
+      cashRegisterDeviceId: this.selectedCashRegisterDeviceId
+    }).subscribe({
+      next: (receipt) => {
+        console.log('[CashRegister] ECR response:', receipt);
+      },
+      error: (err) => {
+        console.error('[CashRegister] Failed to print receipt:', err);
+      }
+    });
+
     orders.forEach(order => {
       this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/paid`, {
         paymentMethod: paymentMethod,
@@ -2447,6 +2767,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       }).subscribe({
         next: () => {
           this.needsPaymentOrders = this.needsPaymentOrders.filter(o => o.id !== order.id);
+          this.updateGroupedPaymentOrders();
         },
         error: (err) => {
           console.error('Failed to mark order as paid:', err);
@@ -2455,107 +2776,27 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  onOrderDrop(event: CdkDragDrop<Order[]>, targetColumn: string): void {
-    const order = event.item.data as Order;
-    const previousContainer = event.previousContainer;
-    const currentContainer = event.container;
-
-    // If dropped in the same container, do nothing
-    if (previousContainer === currentContainer) {
+  onTableCardDrop(event: CdkDragDrop<TableCard[]>, targetColumn: string): void {
+    const card = event.item.data as TableCard;
+    if (event.previousContainer === event.container) {
       return;
     }
 
-    const previousStatus = order.status;
-    const previousAssignedUser = order.assignedUser;
-    const previousIndex = event.previousIndex;
-    const currentIndex = event.currentIndex;
-
-    // Helper to optimistically move the item
-    const optimisticMove = (newStatus: string, newAssignedUser?: string | null) => {
-      // Remove from previous array
-      const prevIndex = previousContainer.data.findIndex(o => o.id === order.id);
-      if (prevIndex > -1) {
-        previousContainer.data.splice(prevIndex, 1);
+    // One atomic PATCH per drop — backend updates every order in the group in
+    // a single transaction so the dashboard never sees a half-moved group.
+    if (card.status === 'ACTIVE' && targetColumn === 'IN_PROGRESS') {
+      this.transitionGroup(card, 'IN_PROGRESS', this.currentUser);
+    } else if (card.status === 'IN_PROGRESS' && targetColumn === 'ACTIVE') {
+      if (card.assignedUser === this.currentUser) {
+        this.transitionGroup(card, 'ACTIVE');
       }
-      // Update order status
-      order.status = newStatus;
-      if (newAssignedUser !== undefined) {
-        (order as any).assignedUser = newAssignedUser;
+    } else if (card.status === 'IN_PROGRESS' && targetColumn === 'READY') {
+      if (card.assignedUser === this.currentUser) {
+        this.transitionGroup(card, 'READY');
       }
-      // Add to new array
-      currentContainer.data.splice(currentIndex, 0, order);
-    };
-
-    // Helper to revert the move on error
-    const revertMove = () => {
-      // Remove from current array
-      const currIndex = currentContainer.data.findIndex(o => o.id === order.id);
-      if (currIndex > -1) {
-        currentContainer.data.splice(currIndex, 1);
-      }
-      // Restore order status and assigned user
-      order.status = previousStatus;
-      order.assignedUser = previousAssignedUser;
-      // Add back to previous array
-      previousContainer.data.splice(previousIndex, 0, order);
-    };
-
-    // Determine action based on source and target columns
-    if (order.status === 'ACTIVE' && targetColumn === 'IN_PROGRESS') {
-      // Ordered -> In Progress: Start the order
-      optimisticMove('IN_PROGRESS', this.currentUser);
-      this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=IN_PROGRESS&user=${encodeURIComponent(this.currentUser)}`, {})
-        .subscribe({
-          next: () => {},
-          error: (err) => {
-            console.error('Failed to start order:', err);
-            revertMove();
-          }
-        });
-    } else if (order.status === 'IN_PROGRESS' && targetColumn === 'ACTIVE') {
-      // In Progress -> Ordered: Return the order
-      if (order.assignedUser === this.currentUser) {
-        optimisticMove('ACTIVE', null);
-        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=ACTIVE`, {})
-          .subscribe({
-            next: () => {},
-            error: (err) => {
-              console.error('Failed to return order:', err);
-              revertMove();
-            }
-          });
-      }
-    } else if (order.status === 'IN_PROGRESS' && targetColumn === 'READY') {
-      // In Progress -> Ready: Complete the order
-      if (order.assignedUser === this.currentUser) {
-        optimisticMove('READY');
-        // Mark all items as DONE
-        order.items.forEach(item => {
-          if (item.status !== 'CANCELLED') {
-            item.status = 'DONE';
-          }
-        });
-        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/complete`, {})
-          .subscribe({
-            next: () => {},
-            error: (err) => {
-              console.error('Failed to complete order:', err);
-              revertMove();
-            }
-          });
-      }
-    } else if (order.status === 'READY' && targetColumn === 'IN_PROGRESS') {
-      // Ready -> In Progress: Move back (not a common action, but handle it)
-      if (order.assignedUser === this.currentUser) {
-        optimisticMove('IN_PROGRESS');
-        this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/status?status=IN_PROGRESS`, {})
-          .subscribe({
-            next: () => {},
-            error: (err) => {
-              console.error('Failed to move order back to in progress:', err);
-              revertMove();
-            }
-          });
+    } else if (card.status === 'READY' && targetColumn === 'IN_PROGRESS') {
+      if (card.assignedUser === this.currentUser) {
+        this.transitionGroup(card, 'IN_PROGRESS');
       }
     }
   }

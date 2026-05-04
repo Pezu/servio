@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { environment } from '../../../../environments/environment';
@@ -24,16 +24,22 @@ interface PageResponse<T> {
 @Component({
   selector: 'app-my-events',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [TranslateModule],
   styles: [`
+    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
     .section {
-      margin-bottom: 2rem;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 0;
     }
     .section-header {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       margin-bottom: 1rem;
+      flex-shrink: 0;
     }
     .section-header h2 {
       font-size: 1.125rem;
@@ -51,9 +57,11 @@ interface PageResponse<T> {
     }
     .table-container {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
     table {
       width: 100%;
@@ -62,11 +70,14 @@ interface PageResponse<T> {
     th {
       text-align: left;
       padding: 0.875rem 1rem;
-      background: #f8fafc;
+      background: white;
       color: #64748b;
       font-weight: 500;
       font-size: 0.875rem;
       border-bottom: 1px solid #e2e8f0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
     td {
       padding: 0.875rem 1rem;
@@ -87,14 +98,14 @@ interface PageResponse<T> {
     .event-logo-small {
       width: 40px;
       height: 40px;
-      border-radius: 8px;
+      border-radius: 0;
       object-fit: cover;
       background: #f1f5f9;
     }
     .event-logo-placeholder-small {
       width: 40px;
       height: 40px;
-      border-radius: 8px;
+      border-radius: 0;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       display: flex;
       align-items: center;
@@ -152,7 +163,7 @@ interface PageResponse<T> {
       padding: 3rem 2rem;
       color: #64748b;
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
     .empty-state svg {
@@ -184,59 +195,71 @@ interface PageResponse<T> {
         <h2>{{ 'MY_EVENTS.ACTIVE_EVENTS' | translate }}</h2>
         <span class="active-badge">{{ 'MY_EVENTS.CURRENTLY_RUNNING' | translate }}</span>
       </div>
-
-      <div *ngIf="loading" class="loading">
-        {{ 'MY_EVENTS.LOADING_ACTIVE' | translate }}
-      </div>
-
-      <div *ngIf="!loading && activeEvents.length === 0" class="empty-state">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-        <h3>{{ 'MY_EVENTS.NO_ACTIVE_EVENTS' | translate }}</h3>
-        <p>{{ 'MY_EVENTS.NO_ACTIVE_EVENTS_DESC' | translate }}</p>
-      </div>
-
-      <div *ngIf="!loading && activeEvents.length > 0" class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ 'EVENTS.EVENT_NAME' | translate }}</th>
-              <th>{{ 'EVENTS.START_DATE' | translate }}</th>
-              <th>{{ 'EVENTS.END_DATE' | translate }}</th>
-              <th>{{ 'COMMON.STATUS' | translate }}</th>
-              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let event of activeEvents">
-              <td>
-                <div class="event-name-cell">
-                  <img *ngIf="event.logoPath" [src]="getLogoUrl(event.logoPath)" class="event-logo-small" [alt]="event.name">
-                  <div *ngIf="!event.logoPath" class="event-logo-placeholder-small">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <span>{{ event.name }}</span>
-                </div>
-              </td>
-              <td>{{ formatDate(event.startDate) }}</td>
-              <td>{{ formatDate(event.endDate) }}</td>
-              <td><span class="status-active">{{ 'MY_EVENTS.STATUS_ACTIVE' | translate }}</span></td>
-              <td>
-                <a [href]="'/event/' + event.id + '/orders'" target="_blank" class="arrow-btn">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                </a>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    
+      @if (loading) {
+        <div class="loading">
+          {{ 'MY_EVENTS.LOADING_ACTIVE' | translate }}
+        </div>
+      }
+    
+      @if (!loading && activeEvents.length === 0) {
+        <div class="empty-state">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h3>{{ 'MY_EVENTS.NO_ACTIVE_EVENTS' | translate }}</h3>
+          <p>{{ 'MY_EVENTS.NO_ACTIVE_EVENTS_DESC' | translate }}</p>
+        </div>
+      }
+    
+      @if (!loading && activeEvents.length > 0) {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ 'EVENTS.EVENT_NAME' | translate }}</th>
+                <th>{{ 'EVENTS.START_DATE' | translate }}</th>
+                <th>{{ 'EVENTS.END_DATE' | translate }}</th>
+                <th>{{ 'COMMON.STATUS' | translate }}</th>
+                <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (event of activeEvents; track event) {
+                <tr>
+                  <td>
+                    <div class="event-name-cell">
+                      @if (event.logoPath) {
+                        <img [src]="getLogoUrl(event.logoPath)" class="event-logo-small" [alt]="event.name">
+                      }
+                      @if (!event.logoPath) {
+                        <div class="event-logo-placeholder-small">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      }
+                      <span>{{ event.name }}</span>
+                    </div>
+                  </td>
+                  <td>{{ formatDate(event.startDate) }}</td>
+                  <td>{{ formatDate(event.endDate) }}</td>
+                  <td><span class="status-active">{{ 'MY_EVENTS.STATUS_ACTIVE' | translate }}</span></td>
+                  <td>
+                    <a [href]="'/event/' + event.id + '/orders'" target="_blank" class="arrow-btn">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     </div>
-  `
+    `
 })
 export class MyEventsComponent implements OnInit {
   activeEvents: Event[] = [];

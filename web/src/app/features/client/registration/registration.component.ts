@@ -1,11 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Client } from '@stomp/stompjs';
-import * as SockJS from 'sockjs-client';
 import { environment } from '../../../../environments/environment';
 
 interface MenuItem {
@@ -59,10 +58,19 @@ interface GuestOrders {
   total: number;
 }
 
+interface CachedGuestOrders extends GuestOrders {
+  aggregatedItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[];
+  unpaidItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[];
+  paidItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[];
+  unpaidTotal: number;
+  paidTotal: number;
+}
+
 interface EventData {
   id: string;
   name: string;
   logoPath?: string;
+  requireValidation?: boolean;
 }
 
 interface PendingTeamRegistration {
@@ -99,9 +107,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Navigation
   menuOpen: boolean = false;
-  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' | 'customerInfo' = 'menu';
+  activeView: 'menu' | 'orders' | 'checkout' | 'team' | 'waiting' | 'nickname' | 'login' | 'payments' | 'customerInfo' | 'tableSelection' = 'menu';
   orderPointPayLater: boolean = false;
   orderPointMenuId: string | null = null;
+
+  // Table selection (for pay-later order points whose name is M{n}.{m} with multiple siblings)
+  tableSelectionOptions: { id: string; name: string }[] = [];
   categoryNavExpanded: boolean = false;
 
   // Customer info form (for non-payLater order points)
@@ -142,6 +153,20 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   ordersGroupMode: 'table' | 'guest' = 'table';
   ordersViewMode: 'total' | 'order' = 'total';
 
+  // Cached aggregated items (to avoid recalculating in template)
+  cachedAggregatedActiveItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
+  cachedAggregatedAllItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
+  cachedPaymentsDisplayItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
+  cachedPaidItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
+  cachedGuestOrders: CachedGuestOrders[] = [];
+  paymentFilter: 'all' | 'paid' | 'unpaid' = 'unpaid';
+  paymentFilterDropdownOpen: boolean = false;
+  paymentFilterOptions: { value: 'all' | 'paid' | 'unpaid'; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'unpaid', label: 'Unpaid' },
+    { value: 'paid', label: 'Paid' }
+  ];
+
   // Event data
   eventData: EventData | null = null;
 
@@ -156,13 +181,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   toastMessage: string = '';
   toastType: 'success' | 'error' = 'success';
 
-  // Payment choice dialog
-  showPaymentChoice: boolean = false;
   nickname: string = '';
   processingPayment: boolean = false;
 
   // Checkout confirmation
   orderConfirmed: boolean = false;
+  checkoutItems: OrderItem[] = [];
 
   // Flag to continue order after customer info is submitted
   pendingOrderAfterCustomerInfo: boolean = false;
@@ -194,9 +218,21 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private http: HttpClient,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private elementRef: ElementRef
   ) {}
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.paymentFilterDropdownOpen) {
+      const dropdown = this.elementRef.nativeElement.querySelector('.payment-filter-select');
+      if (dropdown && !dropdown.contains(event.target)) {
+        this.paymentFilterDropdownOpen = false;
+      }
+    }
+  }
 
   ngOnInit(): void {
     // Ensure activeView is menu at start
@@ -450,7 +486,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             this.orderPointPayLater = registration.orderPointPayLater || false;
             this.setCookie('registrationResponse', JSON.stringify(registration), 7);
 
-            // Add the pending item if exists (deferred from before approval)
+            // Add the deferred item from case 1a's add-to-cart trigger.
             if (this.pendingItemToAdd) {
               const current = this.getQuantity(this.pendingItemToAdd.id);
               this.quantities.set(this.pendingItemToAdd.id, current + 1);
@@ -458,7 +494,18 @@ export class RegistrationComponent implements OnInit, OnDestroy {
               this.pendingItemToAdd = null;
             }
 
-            this.activeView = 'menu';
+            if (this.pendingOrderAfterCustomerInfo) {
+              // Edge: 1b/2 hit PENDING (e.g. requireValidation flipped during
+              // checkout). On approval, place the order directly so the user
+              // doesn't have to press Pay again on the summary screen.
+              this.pendingOrderAfterCustomerInfo = false;
+              this.activeView = 'checkout';
+              this.afterApproved();
+              this.submitOrder(!!this.registrationResponse?.orderPointPayLater);
+            } else {
+              this.activeView = 'menu';
+              this.afterApproved();
+            }
           }
         },
         error: (err) => {
@@ -477,7 +524,6 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   navigateTo(view: 'menu' | 'orders' | 'team' | 'login' | 'payments'): void {
-    console.log('[Nav] navigateTo called with:', view, 'stack:', new Error().stack);
     this.activeView = view;
     this.closeMenu();
     if (view === 'orders') {
@@ -509,15 +555,28 @@ export class RegistrationComponent implements OnInit, OnDestroy {
           console.log('[CheckOP] Order point info received:', orderPoint);
           this.orderPointPayLater = orderPoint.payLater;
           this.orderPointMenuId = orderPoint.menuId || null;
-          this.loading = false;
 
-          // Load menu items now that we have the order point info
-          this.loadMenuItems();
-
-          // Show menu directly for all order points, registration happens when adding items
-          console.log('[CheckOP] Showing menu (registration deferred until adding items)');
-          this.activeView = 'menu';
-          console.log('[CheckOP] activeView is now:', this.activeView);
+          if (this.orderPointPayLater && this.isGroupedTableName(orderPoint.name)) {
+            this.http.get<any[]>(`${environment.apiUrl}/api/register/order-points/${this.orderPointId}/group`)
+              .subscribe({
+                next: (group) => {
+                  this.loading = false;
+                  this.tableSelectionOptions = (group && group.length > 1)
+                    ? group.map(g => ({ id: g.id, name: g.name }))
+                    : [];
+                  this.continueAfterOrderPointResolved();
+                },
+                error: () => {
+                  this.loading = false;
+                  this.tableSelectionOptions = [];
+                  this.continueAfterOrderPointResolved();
+                }
+              });
+          } else {
+            this.loading = false;
+            this.tableSelectionOptions = [];
+            this.continueAfterOrderPointResolved();
+          }
         },
         error: (err) => {
           console.error('[CheckOP] Error fetching order point info:', err, 'retry:', retryCount);
@@ -538,6 +597,23 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   submitNickname(): void {
     this.registerToEvent();
+  }
+
+  private isGroupedTableName(name: string | null | undefined): boolean {
+    return !!name && /^[A-Za-z]+\d+\.\d+$/.test(name);
+  }
+
+  private continueAfterOrderPointResolved(): void {
+    // Always land on the menu after a fresh scan. For pay-later the customer
+    // can browse and add items without being registered; the registration form
+    // is deferred to checkout (see placeOrder). For non-pay-later, registration
+    // is still required at add-to-cart time (handled in increaseQuantity).
+    this.loadMenuItems();
+    this.activeView = 'menu';
+  }
+
+  selectTable(option: { id: string; name: string }): void {
+    this.orderPointId = option.id;
   }
 
   // Customer methods
@@ -577,9 +653,10 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   cancelCustomerInfo(): void {
+    const wasPlacingOrder = this.pendingOrderAfterCustomerInfo;
     this.pendingItemToAdd = null;
     this.pendingOrderAfterCustomerInfo = false;
-    this.activeView = 'menu';
+    this.activeView = wasPlacingOrder ? 'checkout' : 'menu';
   }
 
   private createOrFindCustomer(): Promise<CustomerData> {
@@ -611,68 +688,56 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     this.createOrFindCustomer().then((customer) => {
       console.log('[CustomerInfo] Created/found customer:', customer.id);
 
-      // Check if we have a pending item to add (deferred registration for non-payLater)
       if (this.pendingItemToAdd) {
-        const itemToAdd = this.pendingItemToAdd;
-        this.pendingItemToAdd = null;
-
-        // Register first, then add the item
+        // Case 1a — came from add-to-cart on a pay-later require-validation OP.
+        // Register and (on APPROVED) add the item, return to menu. Don't null
+        // pendingItemToAdd before the call: when the server returns PENDING,
+        // registerToEventAndThen flips to the waiting view and the polling
+        // handler reads the flag to add the item on later approval.
         this.registerToEventAndThen(() => {
-          // Add the pending item after successful registration
-          const current = this.getQuantity(itemToAdd.id);
-          this.quantities.set(itemToAdd.id, current + 1);
-          console.log('[CustomerInfo] Added pending item after registration:', itemToAdd.name);
+          if (this.pendingItemToAdd) {
+            const current = this.getQuantity(this.pendingItemToAdd.id);
+            this.quantities.set(this.pendingItemToAdd.id, current + 1);
+            console.log('[CustomerInfo] Added pending item after registration:', this.pendingItemToAdd.name);
+            this.pendingItemToAdd = null;
+          }
           this.activeView = 'menu';
+          this.afterApproved();
         });
         return;
       }
 
-      // Check if we need to continue with an order
       if (this.pendingOrderAfterCustomerInfo) {
-        this.pendingOrderAfterCustomerInfo = false;
-
-        if (this.registrationResponse?.id) {
-          // Registration exists - update it with customer info
-          const body = {
-            firstName: this.customerFirstName.trim(),
-            lastName: this.customerLastName.trim(),
-            prefix: this.customerCountryCode,
-            phone: this.customerPhoneNumber.trim(),
-            email: null
-          };
-          this.http.post<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}/customer`, body)
-            .subscribe({
-              next: (response) => {
-                console.log('[CustomerInfo] Updated registration with customer:', response.customerId);
-                this.registrationResponse = response;
-                this.setCookie('registrationResponse', JSON.stringify(response), 7);
-                this.activeView = 'checkout';
-                this.placeOrder();
-              },
-              error: (err) => {
-                console.error('[CustomerInfo] Error updating registration with customer:', err);
-                // Continue with order anyway
-                this.activeView = 'checkout';
-                this.placeOrder();
-              }
-            });
-          return;
-        } else {
-          // No registration yet - create one then place order
-          this.registerToEventAndThen(() => {
-            this.activeView = 'checkout';
-            this.placeOrder();
-          });
-          return;
-        }
-      } else {
-        // Normal registration flow (for payLater nickname submission)
-        this.registerToEvent();
+        // Case 1b / 2 — came from press-order on the checkout view without a
+        // registration. Register and (on APPROVED) place the order directly
+        // so the user doesn't have to press Pay again on the summary screen.
+        this.registerToEventAndThen(() => {
+          this.pendingOrderAfterCustomerInfo = false;
+          this.activeView = 'checkout';
+          this.afterApproved();
+          this.submitOrder(!!this.registrationResponse?.orderPointPayLater);
+        });
+        return;
       }
+
+      // Vestigial nickname-only fallback (no flag set) — kept for safety.
+      this.registerToEvent();
     }).catch((err) => {
       console.error('[CustomerInfo] Error creating customer:', err);
       this.showToast('Failed to save customer info. Please try again.', 'error');
     });
+  }
+
+  // Side-effects to run once a registration is APPROVED and the customer can
+  // place orders. Idempotent so it's safe to call from every approval site
+  // (synchronous APPROVED, polling-based PENDING→APPROVED, matched-cookie
+  // bootstrap, …).
+  private afterApproved(): void {
+    this.loadOrders();
+    if (this.orderPointPayLater && this.orderPointId) {
+      this.connectWebSocket();
+      this.loadTeamPendingRegistrations();
+    }
   }
 
   private registerToEventAndThen(callback: () => void): void {
@@ -883,43 +948,21 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   }
 
   increaseQuantity(item: MenuItem): void {
-    // Require registration before adding items (for all order points)
-    if (!this.registrationResponse) {
-      const customerId = this.getStoredCustomerId();
-      if (customerId) {
-        // Customer ID exists - fetch customer data and register directly
-        console.log('[Menu] No registration but customerId exists, fetching customer data');
-        this.pendingItemToAdd = item;
-        this.http.get<CustomerData>(`${environment.apiUrl}/api/customers/${customerId}`)
-          .subscribe({
-            next: (customer) => {
-              this.nickname = `${customer.firstName} ${customer.lastName}`;
-              this.registerToEventAndThen(() => {
-                // Add the pending item after successful registration
-                if (this.pendingItemToAdd) {
-                  const current = this.getQuantity(this.pendingItemToAdd.id);
-                  this.quantities.set(this.pendingItemToAdd.id, current + 1);
-                  console.log('[Register] Added pending item after registration:', this.pendingItemToAdd.name);
-                  this.pendingItemToAdd = null;
-                }
-                this.activeView = 'menu';
-              });
-            },
-            error: (err) => {
-              console.error('[Menu] Error fetching customer, showing form:', err);
-              // Customer might not exist anymore, clear ID and show form
-              this.deleteCookie('customerId');
-              this.activeView = 'customerInfo';
-              this.loadCustomerInfoToForm();
-            }
-          });
-      } else {
-        // No customer info - show form
-        console.log('[Menu] No registration yet, showing customer info form');
-        this.pendingItemToAdd = item;
-        this.activeView = 'customerInfo';
-        this.loadCustomerInfoToForm();
-      }
+    // Case 1a only — pay-later order point + event.requireValidation=true +
+    // no registration yet — must register up-front so the customer can be
+    // validated before anything else. All other cases (1b, 2, or already
+    // registered) just bump the cart; registration for those is deferred to
+    // the press-place-order moment in the checkout view.
+    const needsUpfrontRegistration =
+      this.orderPointPayLater &&
+      this.eventData?.requireValidation === true &&
+      !this.registrationResponse;
+
+    if (needsUpfrontRegistration) {
+      console.log('[Menu] Pay-later + requireValidation, deferring add until registration');
+      this.pendingItemToAdd = item;
+      this.activeView = 'customerInfo';
+      this.loadCustomerInfoToForm();
       return;
     }
 
@@ -966,12 +1009,14 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   goToCheckout(): void {
     const selectedItems = this.getSelectedItems();
+    console.log('[Checkout] Selected items:', selectedItems.length, 'menuItems:', this.menuItems.length);
     if (selectedItems.length === 0) {
       this.orderStatus = 'Please select at least one item';
       return;
     }
     this.orderStatus = '';
     this.orderConfirmed = false;
+    this.checkoutItems = selectedItems;
     this.activeView = 'checkout';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -987,9 +1032,11 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // For non-payLater order points, require registration before ordering
-    // (This is a safety check - normally registration happens when adding items)
-    if (!this.orderPointPayLater && !this.registrationResponse) {
+    // No registration yet → show the customer-info form (sub-table picker +
+    // name/phone). After submission, the server decides PENDING vs APPROVED.
+    // Either way the user comes back to the checkout view to actually press
+    // place-order again — we never auto-place from the registration form.
+    if (!this.registrationResponse) {
       console.log('[PlaceOrder] No registration, showing customer info form');
       this.pendingOrderAfterCustomerInfo = true;
       this.activeView = 'customerInfo';
@@ -997,22 +1044,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Check if pay later is enabled for this order point
-    if (this.registrationResponse?.orderPointPayLater) {
-      this.showPaymentChoice = true;
-      return;
-    }
-
-    // Otherwise proceed with normal payment flow
-    this.submitOrder(false);
-  }
-
-  closePaymentChoice(): void {
-    this.showPaymentChoice = false;
+    // Pay-later order points always submit as pay-later (settled at the
+    // counter). Non-pay-later goes through the Netopia flow inside submitOrder.
+    this.submitOrder(!!this.registrationResponse?.orderPointPayLater);
   }
 
   submitOrder(payLater: boolean): void {
-    this.showPaymentChoice = false;
 
     const selectedItems = this.getSelectedItems();
     const registrationResponse = this.getCookie('registrationResponse');
@@ -1054,7 +1091,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             this.placingOrder = false;
             this.activeView = 'menu';
 
-            this.showToast('Order placed! Pay at the counter.', 'success');
+            this.showToast('Order placed', 'success');
             this.loadOrders();
           } else {
             // Pay now: proceed with payment
@@ -1062,15 +1099,12 @@ export class RegistrationComponent implements OnInit, OnDestroy {
             this.setCookie('paymentEventId', this.eventId, 1);
             this.setCookie('paymentOrderPointId', this.orderPointId, 1);
 
-            const totalAmount = this.getTotalPrice();
-
             // Start payment with Netopia
             const returnUrl = `${window.location.origin}/payment/confirmed?eventId=${this.eventId}&orderPointId=${this.orderPointId}&orderId=${orderResponse.id}`;
             this.http.post<any>(`${environment.apiUrl}/api/payments/orders/${orderResponse.id}/start`, { returnUrl }).subscribe({
               next: (paymentResponse) => {
-                this.quantities.clear();
-
                 if (paymentResponse.payment?.paymentURL) {
+                  this.quantities.clear();
                   window.location.href = paymentResponse.payment.paymentURL;
                 } else {
                   this.orderStatus = 'Payment URL not received';
@@ -1125,12 +1159,102 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         next: (orders) => {
           console.log('[Orders] Loaded order point orders:', orders.length);
           this.orderPointOrders = orders;
+          this.updateCachedAggregatedItems();
         },
         error: (err) => {
           console.error('Error loading order point orders:', err);
         }
       });
   }
+
+  // Update cached aggregated items when orderPointOrders changes
+  private updateCachedAggregatedItems(): void {
+    this.cachedAggregatedActiveItems = this.getAggregatedItems(this.orderPointOrders, true);
+    this.cachedAggregatedAllItems = this.getAggregatedItems(this.orderPointOrders, false);
+    this.cachedPaidItems = this.getPaidAggregatedItems(this.orderPointOrders);
+    // Display items: show unpaid if there are unpaid items, otherwise show all
+    this.cachedPaymentsDisplayItems = this.hasAnyUnpaidItems()
+      ? this.cachedAggregatedActiveItems
+      : this.cachedAggregatedAllItems;
+
+    // Cache guest orders with their aggregated items
+    const guestOrders = this.getOrderPointOrdersByGuest();
+    this.cachedGuestOrders = guestOrders.map(guest => {
+      const unpaidItems = this.getAggregatedItems(guest.orders, true);
+      const paidItems = this.getPaidAggregatedItems(guest.orders);
+      const allItems = this.getAggregatedItems(guest.orders, false);
+      const unpaidTotal = guest.orders.reduce((s, o) => s + this.getOrderUnpaidTotal(o), 0);
+      const paidTotal = guest.orders.reduce((s, o) => s + this.getOrderPaidTotal(o), 0);
+      return {
+        ...guest,
+        aggregatedItems: allItems,
+        unpaidItems,
+        paidItems,
+        unpaidTotal,
+        paidTotal
+      };
+    });
+  }
+
+  togglePaymentFilterDropdown(): void {
+    this.paymentFilterDropdownOpen = !this.paymentFilterDropdownOpen;
+  }
+
+  selectPaymentFilter(value: 'all' | 'paid' | 'unpaid'): void {
+    this.paymentFilter = value;
+    this.paymentFilterDropdownOpen = false;
+  }
+
+  getPaymentFilterLabel(): string {
+    return this.paymentFilterOptions.find(o => o.value === this.paymentFilter)?.label || 'All';
+  }
+
+  getFilteredOrderPointItems(): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    if (this.paymentFilter === 'paid') return this.cachedPaidItems;
+    if (this.paymentFilter === 'unpaid') return this.cachedAggregatedActiveItems;
+    return this.cachedAggregatedAllItems;
+  }
+
+  getFilteredOrderPointGroups(): { label: string | null; items: { name: string; quantity: number; totalPrice: number; paid: boolean }[] }[] {
+    if (this.paymentFilter === 'paid') return [{ label: null, items: this.cachedPaidItems }];
+    if (this.paymentFilter === 'unpaid') return [{ label: null, items: this.cachedAggregatedActiveItems }];
+    const groups: { label: string; items: { name: string; quantity: number; totalPrice: number; paid: boolean }[] }[] = [];
+    if (this.cachedAggregatedActiveItems.length) groups.push({ label: 'UNPAID', items: this.cachedAggregatedActiveItems });
+    if (this.cachedPaidItems.length) groups.push({ label: 'PAID', items: this.cachedPaidItems });
+    return groups;
+  }
+
+  getFilteredGuestGroups(guest: CachedGuestOrders): { label: string | null; items: { name: string; quantity: number; totalPrice: number; paid: boolean }[] }[] {
+    if (this.paymentFilter === 'paid') return [{ label: null, items: guest.paidItems }];
+    if (this.paymentFilter === 'unpaid') return [{ label: null, items: guest.unpaidItems }];
+    const groups: { label: string; items: { name: string; quantity: number; totalPrice: number; paid: boolean }[] }[] = [];
+    if (guest.unpaidItems.length) groups.push({ label: 'UNPAID', items: guest.unpaidItems });
+    if (guest.paidItems.length) groups.push({ label: 'PAID', items: guest.paidItems });
+    return groups;
+  }
+
+  getFilteredOrderPointTotal(): number {
+    if (this.paymentFilter === 'paid') return this.getPaidOrderPointTotal();
+    if (this.paymentFilter === 'unpaid') return this.getUnpaidOrderPointTotal();
+    return this.getOrderPointOrdersTotal();
+  }
+
+  getFilteredGuestItems(guest: CachedGuestOrders): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    if (this.paymentFilter === 'paid') return guest.paidItems;
+    if (this.paymentFilter === 'unpaid') return guest.unpaidItems;
+    return guest.aggregatedItems;
+  }
+
+  getVisibleGuests(): CachedGuestOrders[] {
+    return this.cachedGuestOrders.filter(guest => this.getFilteredGuestItems(guest).length > 0);
+  }
+
+  getFilteredGuestTotal(guest: CachedGuestOrders): number {
+    if (this.paymentFilter === 'paid') return guest.paidTotal;
+    if (this.paymentFilter === 'unpaid') return guest.unpaidTotal;
+    return guest.total;
+  }
+
 
   getStatusColor(status: string): string {
     switch (status) {
@@ -1215,6 +1339,9 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   // Order point orders methods (for payLater)
   setOrdersGroupMode(mode: 'table' | 'guest'): void {
     this.ordersGroupMode = mode;
+    // Reset the paid/unpaid filter to its default whenever the user toggles between tabs.
+    this.paymentFilter = 'unpaid';
+    this.paymentFilterDropdownOpen = false;
   }
 
   setOrdersViewMode(mode: 'total' | 'order'): void {
@@ -1250,34 +1377,61 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     }));
   }
 
-  // Aggregates only active (non-paid, non-cancelled) items for total view
-  getAggregatedActiveItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number }[] {
-    const itemMap = new Map<string, { quantity: number; totalPrice: number }>();
+  // Aggregates only active (non-paid, non-cancelled) items for unpaid view
+  getAggregatedActiveItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    return this.getAggregatedItems(orders, true);
+  }
+
+  // Aggregates all items (excluding cancelled) for total view
+  getAggregatedAllItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number }[] {
+    return this.getAggregatedItems(orders, false);
+  }
+
+  // Helper to aggregate items with optional unpaid-only filter
+  private getAggregatedItems(orders: ApiOrder[], unpaidOnly: boolean): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    return this.aggregateItemsBy(orders, item => !(unpaidOnly && item.paid));
+  }
+
+  private getPaidAggregatedItems(orders: ApiOrder[]): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    return this.aggregateItemsBy(orders, item => !!item.paid);
+  }
+
+  private aggregateItemsBy(orders: ApiOrder[], predicate: (item: ApiOrderItem) => boolean): { name: string; quantity: number; totalPrice: number; paid: boolean }[] {
+    const itemMap = new Map<string, { name: string; quantity: number; totalPrice: number; paid: boolean }>();
 
     for (const order of orders) {
+      if (!order.items || !Array.isArray(order.items)) {
+        continue;
+      }
       for (const item of order.items) {
-        // Only include non-paid, non-cancelled items
-        if (item.paid || item.status === 'CANCELLED') {
+        if (item.status === 'CANCELLED') {
           continue;
         }
-        const existing = itemMap.get(item.name);
+        if (!predicate(item)) {
+          continue;
+        }
+        const isPaid = !!item.paid;
+        const key = `${item.name} ${isPaid}`;
+        const existing = itemMap.get(key);
         if (existing) {
           existing.quantity += item.quantity;
           existing.totalPrice += item.price * item.quantity;
         } else {
-          itemMap.set(item.name, {
+          itemMap.set(key, {
+            name: item.name,
             quantity: item.quantity,
-            totalPrice: item.price * item.quantity
+            totalPrice: item.price * item.quantity,
+            paid: isPaid
           });
         }
       }
     }
 
-    return Array.from(itemMap.entries()).map(([name, data]) => ({
-      name,
-      quantity: data.quantity,
-      totalPrice: data.totalPrice
-    }));
+    return Array.from(itemMap.values()).sort((a, b) => {
+      // Unpaid first, then paid; stable within each group
+      if (a.paid === b.paid) return 0;
+      return a.paid ? 1 : -1;
+    });
   }
 
   getOrderPointOrdersByGuest(): GuestOrders[] {
@@ -1324,6 +1478,16 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   getUnpaidOrderPointTotal(): number {
     return this.orderPointOrders.reduce((sum, o) => sum + this.getOrderUnpaidTotal(o), 0);
+  }
+
+  getPaidOrderPointTotal(): number {
+    return this.orderPointOrders.reduce((sum, o) => sum + this.getOrderPaidTotal(o), 0);
+  }
+
+  getOrderPaidTotal(order: ApiOrder): number {
+    return order.items
+      .filter(item => item.paid && item.status !== 'CANCELLED')
+      .reduce((sum, item) => sum + (item.price * item.quantity), 0);
   }
 
   getGuestOrdersWithUnpaidItems(guest: GuestOrders): ApiOrder[] {
@@ -1628,100 +1792,8 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // WebSocket methods (for team/orderpoint features only)
   private connectWebSocket(): void {
-    if (this.stompClient?.active) {
-      console.log('[WebSocket] Already connected');
-      return;
-    }
-    if (!this.orderPointId) {
-      console.log('[WebSocket] No order point ID, skipping WebSocket connection');
-      return;
-    }
-
-    console.log('[WebSocket] Connecting for orderpoint:', this.orderPointId);
-
-    // Setup wake-up listeners if not already done
-    if (!this.visibilityHandler) {
-      this.setupWakeUpListeners();
-    }
-
-    this.stompClient = new Client({
-      webSocketFactory: () => new (SockJS as any)(`${environment.apiUrl}/ws`),
-      // Heartbeat: send every 10s, expect every 10s
-      heartbeatIncoming: 10000,
-      heartbeatOutgoing: 10000,
-      // Auto reconnect with increasing delay (1s, 2s, 4s... max 30s)
-      reconnectDelay: 2000,
-      onConnect: () => {
-        this.connected = true;
-
-        // Subscribe to order point registration updates (for team page)
-        if (this.orderPointId) {
-          console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/registrations');
-          this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/registrations`, (message) => {
-            console.log('[WebSocket] Received registration update:', message.body);
-            const data = JSON.parse(message.body);
-            if (data.type === 'REGISTRATION_APPROVED') {
-              // Remove the approved registration from the team pending list
-              this.teamPendingRegistrations = this.teamPendingRegistrations.filter(r => r.id !== data.registrationId);
-            }
-          });
-
-          // Subscribe to validation requests (when someone new needs approval)
-          console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/validation-requests');
-          this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/validation-requests`, (message) => {
-            console.log('[WebSocket] Received validation request:', message.body);
-            const data = JSON.parse(message.body);
-            if (data.type === 'VALIDATION_REQUESTED' && data.registrationId !== this.registrationResponse?.id) {
-              // Add the new pending registration to the list (use spread to trigger change detection)
-              const newRegistration: PendingTeamRegistration = {
-                id: data.registrationId,
-                orderPointId: data.orderPointId || this.orderPointId,
-                orderPointName: data.orderPointName || '',
-                validationStatus: 'PENDING',
-                createdAt: new Date().toISOString(),
-                nickname: data.nickname
-              };
-              // Check if not already in the list
-              if (!this.teamPendingRegistrations.find(r => r.id === data.registrationId)) {
-                this.teamPendingRegistrations = [...this.teamPendingRegistrations, newRegistration];
-              }
-            }
-          });
-
-          // Subscribe to order updates for real-time table orders (order point specific)
-          if (this.orderPointPayLater) {
-            console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/orders for table order updates');
-            this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/orders`, (message) => {
-              console.log('[WebSocket] Received order point order update:', message.body);
-              // Reload order point orders when any order update is received
-              this.loadOrderPointOrders();
-            });
-
-            // Also subscribe to payment updates for this order point
-            console.log('[WebSocket] Subscribing to /topic/orderpoint/' + this.orderPointId + '/payments for payment updates');
-            this.stompClient?.subscribe(`/topic/orderpoint/${this.orderPointId}/payments`, (message) => {
-              console.log('[WebSocket] Received payment update:', message.body);
-              // Reload order point orders when payment status changes
-              this.loadOrderPointOrders();
-            });
-          }
-        }
-      },
-      onStompError: (error) => {
-        console.error('[WebSocket] STOMP error:', error);
-        this.connected = false;
-      },
-      onDisconnect: () => {
-        console.log('[WebSocket] Disconnected');
-        this.connected = false;
-      },
-      onWebSocketClose: () => {
-        console.log('[WebSocket] Connection closed');
-        this.connected = false;
-      }
-    });
-
-    this.stompClient.activate();
+    // Customer-facing app no longer subscribes to any WebSocket topics —
+    // menu, orders, and payments views are fed exclusively by HTTP requests.
   }
 
   private disconnectWebSocket(): void {

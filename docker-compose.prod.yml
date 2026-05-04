@@ -23,46 +23,6 @@ services:
     restart: unless-stopped
 
   # ===========================================
-  # MESSAGE BROKER (ElasticMQ - SQS compatible)
-  # ===========================================
-
-  elasticmq:
-    image: softwaremill/elasticmq-native:1.5.7
-    container_name: servio-elasticmq
-    volumes:
-      - ./elasticmq.conf:/opt/elasticmq.conf
-    ports:
-      - "9324:9324"
-      - "9325:9325"
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9324"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ===========================================
-  # REDIS
-  # ===========================================
-
-  redis:
-    image: redis:7-alpine
-    container_name: servio-redis
-    command: redis-server --appendonly yes
-    volumes:
-      - redis-data:/data
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ===========================================
   # OBJECT STORAGE (MinIO)
   # ===========================================
 
@@ -104,45 +64,7 @@ services:
       - servio-network
 
   # ===========================================
-  # API GATEWAY
-  # ===========================================
-
-  gateway:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
-    container_name: servio-gateway
-    depends_on:
-      redis:
-        condition: service_healthy
-      elasticmq:
-        condition: service_healthy
-      event-api:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8080
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      SQS_ENDPOINT: http://elasticmq:9324
-      EVENT_API_URL: http://event-api:8081
-      ORDER_SERVICE_URL: http://order-service:8082
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-    ports:
-      - "8080:8080"
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # ===========================================
-  # EVENT API
+  # EVENT API (Unified Backend)
   # ===========================================
 
   event-api:
@@ -153,17 +75,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      elasticmq:
-        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     environment:
-      SERVER_PORT: 8081
+      SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: prod
       DATABASE_URL: jdbc:postgresql://postgres:5432/servio?currentSchema=event
       DATABASE_USERNAME: servio
       DATABASE_PASSWORD: ${DB_PASSWORD}
-      SQS_ENDPOINT: http://elasticmq:9324
       AWS_S3_ENDPOINT: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD}
@@ -176,47 +95,12 @@ services:
       NETOPIA_POS_SIGNATURE: ${NETOPIA_POS_SIGNATURE}
       NETOPIA_NOTIFY_URL: ${NETOPIA_NOTIFY_URL}
       NETOPIA_REDIRECT_URL: ${NETOPIA_REDIRECT_URL}
+    ports:
+      - "8080:8080"
     networks:
       - servio-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # ===========================================
-  # ORDER SERVICE
-  # ===========================================
-
-  order-service:
-    build:
-      context: ./order
-      dockerfile: Dockerfile
-    container_name: servio-order-service
-    depends_on:
-      postgres:
-        condition: service_healthy
-      elasticmq:
-        condition: service_healthy
-      event-api:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8082
-      SPRING_PROFILES_ACTIVE: prod
-      DATABASE_URL: jdbc:postgresql://postgres:5432/servio?currentSchema=orders
-      DATABASE_USERNAME: servio
-      DATABASE_PASSWORD: ${DB_PASSWORD}
-      SQS_ENDPOINT: http://elasticmq:9324
-      EVENT_API_URL: http://event-api:8081
-      NETOPIA_API_KEY: ${NETOPIA_API_KEY}
-      NETOPIA_POS_SIGNATURE: ${NETOPIA_POS_SIGNATURE}
-      NETOPIA_NOTIFY_URL: ${NETOPIA_NOTIFY_URL}
-      NETOPIA_REDIRECT_URL: ${NETOPIA_REDIRECT_URL}
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -228,11 +112,11 @@ services:
 
   frontend:
     build:
-      context: ./unified
+      context: ./web
       dockerfile: Dockerfile
     container_name: servio-frontend
     depends_on:
-      gateway:
+      event-api:
         condition: service_healthy
     ports:
       - "4200:80"
@@ -242,7 +126,6 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
   minio-data:
 
 networks:

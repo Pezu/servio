@@ -56,6 +56,17 @@ public class InternalController {
     }
 
     /**
+     * Gets the customer name for a registration.
+     * Returns ["firstName", "lastName"] or ["Guest", "Customer"] if no customer.
+     */
+    @GetMapping("/registrations/{registrationId}/customer-name")
+    public ResponseEntity<String[]> getCustomerNameByRegistrationId(@PathVariable UUID registrationId) {
+        log.debug("Getting customer name for registration: {}", registrationId);
+        String[] customerName = registrationService.getCustomerNameByRegistrationId(registrationId);
+        return ResponseEntity.ok(customerName);
+    }
+
+    /**
      * Handles payment completion for a single order.
      * Called by the Order Service when Netopia IPN confirms payment.
      */

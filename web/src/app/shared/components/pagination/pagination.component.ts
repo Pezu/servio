@@ -1,45 +1,48 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { APP_CONFIG } from '../../constants';
 
 @Component({
   selector: 'app-pagination',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
-    <div class="pagination-container" *ngIf="totalPages > 1">
-      <div class="pagination-info" *ngIf="showInfo">
-        Showing {{ startItem }}-{{ endItem }} of {{ totalItems }}
+    @if (totalPages > 1) {
+      <div class="pagination-container">
+        @if (showInfo) {
+          <div class="pagination-info">
+            Showing {{ startItem }}-{{ endItem }} of {{ totalItems }}
+          </div>
+        }
+        <div class="pagination-controls">
+          <button
+            class="page-btn"
+            [disabled]="currentPage === 0"
+            (click)="onPageChange(currentPage - 1)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          @for (page of visiblePages; track page) {
+            <button
+              class="page-btn page-number"
+              [class.active]="page === currentPage"
+              (click)="onPageChange(page)">
+              {{ page + 1 }}
+            </button>
+          }
+          <button
+            class="page-btn"
+            [disabled]="currentPage === totalPages - 1"
+            (click)="onPageChange(currentPage + 1)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="pagination-controls">
-        <button
-          class="page-btn"
-          [disabled]="currentPage === 0"
-          (click)="onPageChange(currentPage - 1)">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
-          </svg>
-        </button>
-
-        <button
-          *ngFor="let page of visiblePages"
-          class="page-btn page-number"
-          [class.active]="page === currentPage"
-          (click)="onPageChange(page)">
-          {{ page + 1 }}
-        </button>
-
-        <button
-          class="page-btn"
-          [disabled]="currentPage === totalPages - 1"
-          (click)="onPageChange(currentPage + 1)">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  `,
+    }
+    `,
   styles: [`
     .pagination-container {
       display: flex;
@@ -67,7 +70,7 @@ import { APP_CONFIG } from '../../constants';
       padding: 0 8px;
       border: 1px solid var(--border-color, #e5e7eb);
       background: var(--card-bg, #fff);
-      border-radius: 6px;
+      border-radius: 0;
       font-size: 13px;
       font-weight: 500;
       color: var(--text-primary, #1e293b);

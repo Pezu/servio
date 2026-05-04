@@ -14,10 +14,11 @@ import {
   IonButtons,
   IonCard,
   IonCardContent,
+  IonMenuButton,
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { logOutOutline, calendarOutline, chevronForwardOutline } from 'ionicons/icons';
+import { logOutOutline, calendarOutline, chevronForwardOutline, menuOutline } from 'ionicons/icons';
 import { EventService, Event } from '../../services/event.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -37,17 +38,16 @@ import { AuthService } from '../../services/auth.service';
     IonIcon,
     IonButtons,
     IonCard,
-    IonCardContent
+    IonCardContent,
+    IonMenuButton
   ],
   template: `
-    <ion-header>
+    <ion-header class="ion-no-border">
       <ion-toolbar>
-        <ion-title>My Events</ion-title>
-        <ion-buttons slot="end">
-          <ion-button (click)="logout()" color="light">
-            <ion-icon name="log-out-outline"></ion-icon>
-          </ion-button>
+        <ion-buttons slot="start">
+          <ion-menu-button autoHide="false"></ion-menu-button>
         </ion-buttons>
+        <ion-title>Active Events</ion-title>
       </ion-toolbar>
     </ion-header>
 
@@ -88,8 +88,21 @@ import { AuthService } from '../../services/auth.service';
   `,
   styles: [`
     ion-toolbar {
-      --background: var(--ion-color-primary);
-      --color: white;
+      --background: #ffffff;
+      --color: #1e293b;
+      --border-color: #e2e8f0;
+      --border-width: 0 0 1px 0;
+      --border-style: solid;
+    }
+
+    ion-toolbar ion-button,
+    ion-toolbar ion-menu-button {
+      --color: #1e293b;
+      color: #1e293b;
+    }
+
+    ion-content {
+      --background: #ffffff;
     }
 
     .loading-container {
@@ -140,9 +153,10 @@ import { AuthService } from '../../services/auth.service';
     }
 
     .event-card {
-      margin-bottom: 12px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      margin: 0 0 12px 0;
+      border-radius: 0;
+      box-shadow: none;
+      border: 1px solid #e2e8f0;
       cursor: pointer;
     }
 

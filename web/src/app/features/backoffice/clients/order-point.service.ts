@@ -42,7 +42,19 @@ export class OrderPointService {
     return this.http.post<OrderPoint>(`${this.apiUrl}/location/${locationId}`, { name, payLater, menuId });
   }
 
+  createOrderPointsBatch(locationId: string, count: number, payLater: boolean = false, menuId?: string): Observable<OrderPoint[]> {
+    return this.http.post<OrderPoint[]>(`${this.apiUrl}/location/${locationId}/batch`, { count, payLater, menuId });
+  }
+
   updateOrderPoint(id: string, name: string, locationId: string, payLater: boolean = false, menuId?: string): Observable<OrderPoint> {
     return this.http.put<OrderPoint>(`${this.apiUrl}/${id}`, { name, locationId, payLater, menuId });
+  }
+
+  deleteOrderPoint(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
+  splitOrderPoint(id: string): Observable<OrderPoint> {
+    return this.http.post<OrderPoint>(`${this.apiUrl}/${id}/split`, {});
   }
 }

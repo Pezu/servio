@@ -1,5 +1,7 @@
 package com.servio.event.web;
 
+import com.servio.event.dto.CashRegisterReceiptRequest;
+import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.MarkPaidRequest;
 import com.servio.event.dto.Order;
 import com.servio.event.dto.OrderItem;
@@ -8,6 +10,7 @@ import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.mapper.OrderMapper;
+import com.servio.event.service.CashRegisterService;
 import com.servio.event.service.OrderDtoEnricher;
 import com.servio.event.service.OrderService;
 import jakarta.validation.Valid;
@@ -34,6 +37,7 @@ public class OrderController {
     private final OrderService orderService;
     private final OrderMapper orderMapper;
     private final OrderDtoEnricher orderDtoEnricher;
+    private final CashRegisterService cashRegisterService;
 
     @PostMapping
     public ResponseEntity<Order> receiveOrder(@Valid @RequestBody ReceiveOrderRequest request) {
@@ -49,9 +53,14 @@ public class OrderController {
     public ResponseEntity<Page<Order>> getAllOrders(
             @PageableDefault(size = 20, sort = "orderNo") Pageable pageable,
             @RequestParam(required = false) LocalDateTime startDate,
-            @RequestParam(required = false) LocalDateTime endDate) {
+            @RequestParam(required = false) LocalDateTime endDate,
+            @RequestParam(required = false) UUID eventId) {
         Page<OrderEntity> orders;
-        if (startDate != null && endDate != null) {
+        if (eventId != null && startDate != null && endDate != null) {
+            orders = orderService.getOrdersByEventIdAndDateRange(eventId, startDate, endDate, pageable);
+        } else if (eventId != null) {
+            orders = orderService.getOrdersByEventIdPaged(eventId, pageable);
+        } else if (startDate != null && endDate != null) {
             orders = orderService.getOrdersByDateRange(startDate, endDate, pageable);
         } else {
             orders = orderService.getAllOrders(pageable);
@@ -104,6 +113,15 @@ public class OrderController {
         return ResponseEntity.ok(orderMapper.toDto(orderItem));
     }
 
+    @DeleteMapping("/items/{itemId}")
+    public ResponseEntity<Void> deleteOrderItem(@PathVariable UUID itemId) {
+        OrderEntity order = orderService.deleteOrderItem(itemId);
+        // Re-broadcast the surviving order so connected dashboards refresh.
+        Order dto = orderDtoEnricher.enrich(orderMapper.toDto(order), order);
+        messagingTemplate.convertAndSend("/topic/event/" + order.getEventId() + "/orders", dto);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<Order> updateOrderStatus(
             @PathVariable UUID orderId,
@@ -119,6 +137,23 @@ public class OrderController {
         var order = orderService.completeOrder(orderId);
         messagingTemplate.convertAndSend("/topic/orders", "order-completed");
         return ResponseEntity.ok(orderDtoEnricher.enrich(orderMapper.toDto(order), order));
+    }
+
+    /**
+     * Updates every non-terminal order in a group atomically. The kanban "table card"
+     * uses this so dragging a card with N orders to a new column produces a single
+     * commit + a single broadcast — not N interleaved transactions that flash a
+     * half-moved group on the dashboard.
+     */
+    @PatchMapping("/groups/{groupId}/status")
+    public ResponseEntity<List<Order>> updateGroupStatus(
+            @PathVariable UUID groupId,
+            @RequestParam OrderStatus status,
+            @RequestParam(required = false) String user) {
+        var orders = orderService.updateGroupStatus(groupId, status, user);
+        messagingTemplate.convertAndSend("/topic/orders", "group-updated");
+        var dtos = orderMapper.toDtoList(orders);
+        return ResponseEntity.ok(orderDtoEnricher.enrichBatch(dtos, orders));
     }
 
     @PostMapping("/{orderId}/confirm")
@@ -143,5 +178,16 @@ public class OrderController {
         log.info("Marked {} items as paid for order {} via {} by {}", itemsMarked, orderId, paymentMethod, paidBy);
         var order = orderService.getOrderById(orderId);
         return ResponseEntity.ok(orderDtoEnricher.enrich(orderMapper.toDto(order), order));
+    }
+
+    /**
+     * Forwards the selected orders to the (mock) fiscal cash register and returns
+     * the device's response — receipt number, fiscal id, status. Real integration
+     * will replace the mock inside CashRegisterService.printReceipt.
+     */
+    @PostMapping("/cash-register/receipt")
+    public ResponseEntity<CashRegisterReceiptResponse> printCashRegisterReceipt(
+            @RequestBody CashRegisterReceiptRequest request) {
+        return ResponseEntity.ok(cashRegisterService.printReceipt(request));
     }
 }

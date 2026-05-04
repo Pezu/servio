@@ -1,0 +1,2 @@
+ALTER TABLE events
+    ADD COLUMN require_validation BOOLEAN NOT NULL DEFAULT FALSE;

@@ -14,6 +14,7 @@ export interface Event {
   userIds?: string[];
   paymentTypeIds?: string[];
   menuItemIds?: string[];
+  requireValidation?: boolean;
 }
 
 export interface CashRegister {
@@ -21,6 +22,7 @@ export interface CashRegister {
   tempId?: string;
   name: string;
   ip: string;
+  sharedToken?: string;
 }
 
 export interface PageResponse<T> {
@@ -46,6 +48,13 @@ export class EventService {
     return this.http.get<PageResponse<Event>>(`${this.apiUrl}/location/${locationId}`, { params });
   }
 
+  getMyEvents(page: number = 0, size: number = 100): Observable<PageResponse<Event>> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('size', size.toString());
+    return this.http.get<PageResponse<Event>>(`${this.apiUrl}/my-events`, { params });
+  }
+
   getEventsByClientId(clientId: string, page: number = 0, size: number = 20): Observable<PageResponse<Event>> {
     const params = new HttpParams()
       .set('page', page.toString())
@@ -57,11 +66,11 @@ export class EventService {
     return this.http.get<Event>(`${this.apiUrl}/${id}`);
   }
 
-  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[] }): Observable<Event> {
+  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean }): Observable<Event> {
     return this.http.post<Event>(`${this.apiUrl}/location/${locationId}`, event);
   }
 
-  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[] }): Observable<Event> {
+  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean }): Observable<Event> {
     return this.http.put<Event>(`${this.apiUrl}/${id}`, event);
   }
 

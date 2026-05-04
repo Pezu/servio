@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LoginService } from './login.service';
@@ -7,7 +7,7 @@ import { LoginService } from './login.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   template: `
     <main class="auth-wrapper">
       <div class="auth-inner">
@@ -25,7 +25,7 @@ import { LoginService } from './login.service';
             <h2 class="title">Login</h2>
             <h4 class="subtitle">Login to your account</h4>
             <p class="description">Welcome back to the Event Management backoffice. Please enter your credentials to continue.</p>
-
+    
             <form class="login-form" (ngSubmit)="onLogin()" #loginForm="ngForm">
               <div class="form-group">
                 <input
@@ -50,15 +50,17 @@ import { LoginService } from './login.service';
                   {{ isLoading ? 'Logging in...' : 'Login' }}
                 </button>
               </div>
-              <div *ngIf="errorMessage" class="error-message">
-                {{ errorMessage }}
-              </div>
+              @if (errorMessage) {
+                <div class="error-message">
+                  {{ errorMessage }}
+                </div>
+              }
             </form>
           </div>
         </div>
       </div>
     </main>
-  `,
+    `,
   styles: [`
     .auth-wrapper {
       min-height: 100vh;

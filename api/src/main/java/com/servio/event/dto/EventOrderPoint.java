@@ -16,6 +16,9 @@ public class EventOrderPoint {
     private UUID orderPointId;
     private String orderPointName;
     private String sublocationName;
+    private UUID userId;
+    private String userName;
+    private String userLogin;
     private BigDecimal prepaid;
     private String clientName;
     private String email;

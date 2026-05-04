@@ -12,5 +12,6 @@ public interface RegistrationMapper {
     @Mapping(source = "orderPoint.name", target = "orderPointName")
     @Mapping(source = "orderPoint.payLater", target = "orderPointPayLater")
     @Mapping(source = "nickname", target = "nickname")
+    @Mapping(source = "customer.id", target = "customerId")
     Registration toDto(RegistrationEntity entity);
 }

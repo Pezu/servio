@@ -8,11 +8,14 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.itextpdf.io.image.ImageDataFactory;
+import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.action.PdfAction;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Image;
+import com.itextpdf.layout.element.Link;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.HorizontalAlignment;
@@ -20,8 +23,10 @@ import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import com.servio.event.entity.EventEntity;
 import com.servio.event.entity.LocationEntity;
+import com.servio.event.entity.OrderPointEntity;
 import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.OrderPointRepository;
+import com.servio.event.util.OrderPointNameComparator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,10 +39,16 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -51,13 +62,25 @@ public class PdfGenerationService {
     @Value("${application.base-url}")
     private String baseUrl;
 
+    private static final Pattern PAY_LATER_GROUP = Pattern.compile("^([A-Za-z]+\\d+)\\.\\d+$");
+
     public byte[] generateOrderPointsQrPdf(UUID eventId) throws IOException, WriterException {
         EventEntity event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Event not found with id: " + eventId));
 
-        // Get order points from the event's location AND all its sublocations
-        List<com.servio.event.entity.OrderPointEntity> orderPoints =
-                orderPointRepository.findByLocationIdIncludingSublocations(event.getLocation().getId());
+        // Match the locations list ordering (alphabetical by location name) and use natural
+        // order-point name ordering (so M2 < M10), the same comparator used by EventOrderPointService.
+        Comparator<OrderPointEntity> locationThenName = Comparator
+                .comparing((OrderPointEntity op) -> op.getLocation().getName(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(OrderPointNameComparator.by(OrderPointEntity::getName));
+
+        List<OrderPointEntity> orderPoints = orderPointRepository
+                .findByLocationIdIncludingSublocations(event.getLocation().getId())
+                .stream()
+                .sorted(locationThenName)
+                .toList();
+
+        List<QrCell> cells = buildQrCells(orderPoints);
 
         // Load logo image if available
         BufferedImage logoImage = loadEventLogo(event);
@@ -78,32 +101,35 @@ public class PdfGenerationService {
         Table table = new Table(UnitValue.createPercentArray(new float[]{33.33f, 33.33f, 33.33f}));
         table.setWidth(UnitValue.createPercentValue(100));
 
-        for (com.servio.event.entity.OrderPointEntity orderPoint : orderPoints) {
-            String url = baseUrl + "/event/customer/" + eventId + "/order-points/" + orderPoint.getId();
+        for (QrCell c : cells) {
+            String url = baseUrl + "/event/customer/" + eventId + "/order-points/" + c.linkOrderPointId;
 
             byte[] qrCodeImage = generateQRCodeWithLogo(url, 300, 300, logoImage);
             Image image = new Image(ImageDataFactory.create(qrCodeImage));
             image.setWidth(150);
             image.setHorizontalAlignment(HorizontalAlignment.CENTER);
 
-            // Build label: Location - Order Point (using the order point's actual location)
-            String locationLabel = buildLocationLabel(orderPoint.getLocation());
-            String cellLabel = locationLabel + " - " + orderPoint.getName();
+            String cellLabel = c.locationLabel + " - " + c.label;
 
-            // Create cell with location-order point label and QR code
             Cell cell = new Cell();
             cell.add(new Paragraph(cellLabel)
                     .setFontSize(10)
                     .setBold()
                     .setTextAlignment(TextAlignment.CENTER));
             cell.add(image);
+            // TODO: remove — temporary clickable URL under each QR for testing
+            Link link = new Link(url, PdfAction.createURI(url));
+            link.setFontColor(ColorConstants.BLUE);
+            cell.add(new Paragraph(link)
+                    .setFontSize(6)
+                    .setTextAlignment(TextAlignment.CENTER));
             cell.setTextAlignment(TextAlignment.CENTER);
 
             table.addCell(cell);
         }
 
         // Fill remaining cells if the last row is incomplete
-        int remainingCells = orderPoints.size() % 3;
+        int remainingCells = cells.size() % 3;
         if (remainingCells != 0) {
             for (int i = 0; i < (3 - remainingCells); i++) {
                 table.addCell(new Cell());
@@ -114,6 +140,31 @@ public class PdfGenerationService {
         document.close();
         return baos.toByteArray();
     }
+
+    private List<QrCell> buildQrCells(List<OrderPointEntity> sortedOrderPoints) {
+        List<QrCell> cells = new ArrayList<>(sortedOrderPoints.size());
+        Set<String> seenGroups = new HashSet<>();
+        for (OrderPointEntity op : sortedOrderPoints) {
+            String label = op.getName();
+            if (op.isPayLater()) {
+                Matcher m = PAY_LATER_GROUP.matcher(op.getName());
+                if (m.matches()) {
+                    String groupKey = op.getLocation().getId() + "::" + m.group(1);
+                    // Sorted input means the lowest-suffix sub-table comes first; emit one
+                    // QR for the whole group, pointing to that sub-table's id. The scan flow
+                    // already presents a picker via /group when the name matches M{n}.{m}.
+                    if (!seenGroups.add(groupKey)) {
+                        continue;
+                    }
+                    label = m.group(1);
+                }
+            }
+            cells.add(new QrCell(op.getId(), label, buildLocationLabel(op.getLocation())));
+        }
+        return cells;
+    }
+
+    private record QrCell(UUID linkOrderPointId, String label, String locationLabel) {}
 
     private String buildLocationLabel(LocationEntity location) {
         if (location.getParent() != null) {

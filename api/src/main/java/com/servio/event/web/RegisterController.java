@@ -1,5 +1,6 @@
 package com.servio.event.web;
 
+import com.servio.event.dto.RegisterRequest;
 import com.servio.event.dto.Registration;
 import com.servio.event.service.OrderPointService;
 import com.servio.event.service.RegistrationService;
@@ -27,6 +28,31 @@ public class RegisterController {
             @RequestParam(required = false) UUID orderPointId,
             @RequestParam(required = false) String nickname) {
         Registration response = registrationService.createRegistration(eventId, orderPointId, nickname);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/events/{eventId}/with-customer")
+    public ResponseEntity<Registration> registerWithCustomer(
+            @PathVariable UUID eventId,
+            @RequestBody RegisterRequest request) {
+        Registration response;
+        if (request.hasCustomerId()) {
+            // Use existing customer by ID
+            response = registrationService.createRegistrationWithCustomerId(
+                    eventId,
+                    request.getOrderPointId(),
+                    request.getNickname(),
+                    request.getCustomerId()
+            );
+        } else {
+            // Create or find customer from provided info
+            response = registrationService.createRegistration(
+                    eventId,
+                    request.getOrderPointId(),
+                    request.getNickname(),
+                    request.toCustomer()
+            );
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -75,6 +101,14 @@ public class RegisterController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{registrationId}/customer")
+    public ResponseEntity<Registration> updateRegistrationCustomer(
+            @PathVariable UUID registrationId,
+            @RequestBody RegisterRequest request) {
+        Registration response = registrationService.updateRegistrationCustomer(registrationId, request.toCustomer());
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/order-points/{orderPointId}/info")
     public ResponseEntity<Map<String, Object>> getOrderPointInfo(@PathVariable UUID orderPointId) {
         var orderPoint = orderPointService.getOrderPointById(orderPointId);
@@ -84,6 +118,23 @@ public class RegisterController {
         result.put("payLater", orderPoint.isPayLater());
         if (orderPoint.getMenuId() != null) {
             result.put("menuId", orderPoint.getMenuId().toString());
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/order-points/{orderPointId}/group")
+    public ResponseEntity<List<Map<String, Object>>> getOrderPointGroup(@PathVariable UUID orderPointId) {
+        var siblings = orderPointService.findGroupSiblings(orderPointId);
+        var result = new java.util.ArrayList<Map<String, Object>>(siblings.size());
+        for (var op : siblings) {
+            var entry = new java.util.HashMap<String, Object>();
+            entry.put("id", op.getId().toString());
+            entry.put("name", op.getName());
+            entry.put("payLater", op.isPayLater());
+            if (op.getMenuId() != null) {
+                entry.put("menuId", op.getMenuId().toString());
+            }
+            result.add(entry);
         }
         return ResponseEntity.ok(result);
     }

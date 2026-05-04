@@ -1,93 +1,239 @@
 package com.servio.event.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.servio.event.dto.ErrorResponse;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    private static final Set<String> PUBLIC_PATHS = Set.of(
+    private final ObjectMapper objectMapper;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
+
+    // Public endpoints that don't require authentication
+    private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
-            "/api/register",
-            "/api/payments",
-            "/api/images",
+            "/api/register/**",
+            "/api/customers/**",
+            "/api/payments/**",
+            "/api/images/**",
             "/api/events/customer",
             "/api/allergens/active",
-            "/ws"
+            "/api/events/*/menu",
+            "/api/menu/menus/*/tree",
+            "/api/orders/registrations/**",
+            "/api/orders/*/confirm",
+            "/api/orders/order-points/**",
+            "/api/orders/events/*/needs-payment",
+            "/ws/**",
+            "/api/internal/**",
+            "/health",
+            "/actuator/**"
     );
 
+    // Paths that allow GET without auth
+    private static final List<String> PUBLIC_GET_PATHS = List.of(
+            "/api/events/*"
+    );
+
+    // Paths that allow POST without auth
+    private static final List<String> PUBLIC_POST_PATHS = List.of(
+            "/api/orders"
+    );
+
+    private boolean isPublicPath(String path, String method) {
+        for (String pattern : PUBLIC_PATHS) {
+            if (pathMatcher.match(pattern, path)) {
+                return true;
+            }
+        }
+        if ("GET".equalsIgnoreCase(method)) {
+            for (String pattern : PUBLIC_GET_PATHS) {
+                if (pathMatcher.match(pattern, path)) {
+                    return true;
+                }
+            }
+        }
+        if ("POST".equalsIgnoreCase(method)) {
+            for (String pattern : PUBLIC_POST_PATHS) {
+                if (pathMatcher.match(pattern, path)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
 
-        // All security is handled at the gateway level.
-        // This filter only extracts user info from headers set by the gateway.
+        String path = request.getRequestURI();
+        String method = request.getMethod();
+        String authHeader = request.getHeader("Authorization");
 
-        String userId = request.getHeader("X-User-Id");
-        String username = request.getHeader("X-Username");
-        String role = request.getHeader("X-User-Role");
-        String clientId = request.getHeader("X-Client-Id");
+        boolean isPublic = isPublicPath(path, method);
+        log.debug("JwtFilter: path={} method={} isPublic={}", path, method, isPublic);
 
-        // Set request attributes for backward compatibility
-        if (username != null) {
-            request.setAttribute("username", username);
-        }
-        if (role != null) {
-            request.setAttribute("roles", List.of(role));
-        }
-        if (clientId != null) {
-            request.setAttribute("clientId", clientId);
+        // Allow public paths without authentication
+        if (isPublicPath(path, method)) {
+            // Still try to parse JWT if present (for optional auth)
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                trySetAuthentication(authHeader.substring(7), request);
+            }
+            filterChain.doFilter(request, response);
+            return;
         }
 
-        // Set Spring Security context if user info is present
-        if (userId != null && role != null) {
-            List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
+        // For protected paths, require valid JWT
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            writeUnauthorized(response, "Missing or invalid Authorization header");
+            return;
+        }
+
+        String token = authHeader.substring(7);
+
+        try {
+            SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            String userId = claims.getSubject();
+            String username = claims.get("username", String.class);
+            String clientId = claims.get("clientId", String.class);
+
+            // Handle both "role" (singular) and "roles" (array) formats
+            String role = claims.get("role", String.class);
+            if (role == null) {
+                @SuppressWarnings("unchecked")
+                List<String> roles = claims.get("roles", List.class);
+                if (roles != null && !roles.isEmpty()) {
+                    role = roles.get(0);
+                }
+            }
+
+            // Store in request attributes for downstream use
+            request.setAttribute("X-User-Id", userId);
+            request.setAttribute("X-Username", username != null ? username : userId);
+            request.setAttribute("X-User-Role", role);
+            request.setAttribute("username", username != null ? username : userId);
+            request.setAttribute("roles", role != null ? List.of(role) : List.of());
+            if (clientId != null) {
+                request.setAttribute("X-Client-Id", clientId);
+                request.setAttribute("clientId", clientId);
+            }
+
+            // Set Spring Security context
+            List<SimpleGrantedAuthority> authorities = role != null
+                    ? Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                    : Collections.emptyList();
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    userId,
+                    null,
+                    authorities
+            );
             SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            log.debug("JWT validated for user: {}, role: {}", username != null ? username : userId, role);
+
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT token expired");
+            writeUnauthorized(response, "Token expired");
+            return;
+        } catch (MalformedJwtException | SignatureException e) {
+            log.warn("Invalid JWT token");
+            writeUnauthorized(response, "Invalid token");
+            return;
+        } catch (Exception e) {
+            log.error("JWT validation error", e);
+            writeUnauthorized(response, "Authentication failed");
+            return;
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private void sendUnauthorizedResponse(HttpServletRequest request, HttpServletResponse response, String message) throws IOException {
-        // Add CORS headers so the browser allows the frontend to read the 401 status
-        String origin = request.getHeader("Origin");
-        if (origin != null) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-            response.setHeader("Access-Control-Allow-Credentials", "true");
-        }
+    private void writeUnauthorized(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"message\":\"" + message + "\"}");
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        objectMapper.writeValue(response.getWriter(), new ErrorResponse(message));
     }
 
-    private boolean isPublicPath(String path) {
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+    private void trySetAuthentication(String token, HttpServletRequest request) {
+        try {
+            SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            String userId = claims.getSubject();
+            String username = claims.get("username", String.class);
+            String clientId = claims.get("clientId", String.class);
+
+            String role = claims.get("role", String.class);
+            if (role == null) {
+                @SuppressWarnings("unchecked")
+                List<String> roles = claims.get("roles", List.class);
+                if (roles != null && !roles.isEmpty()) {
+                    role = roles.get(0);
+                }
+            }
+
+            request.setAttribute("X-User-Id", userId);
+            request.setAttribute("X-Username", username != null ? username : userId);
+            request.setAttribute("X-User-Role", role);
+            request.setAttribute("username", username != null ? username : userId);
+            request.setAttribute("roles", role != null ? List.of(role) : List.of());
+            if (clientId != null) {
+                request.setAttribute("X-Client-Id", clientId);
+                request.setAttribute("clientId", clientId);
+            }
+
+            List<SimpleGrantedAuthority> authorities = role != null
+                    ? Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                    : Collections.emptyList();
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    userId, null, authorities);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (Exception e) {
+            // Ignore - optional auth on public paths
+            log.debug("Optional JWT parsing failed on public path: {}", e.getMessage());
+        }
     }
 }

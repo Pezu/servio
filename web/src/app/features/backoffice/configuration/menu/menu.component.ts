@@ -82,7 +82,7 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
                       }
                       <button class="btn-icon-action btn-icon-action-sm" (click)="editItem(item)" title="Edit">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                         </svg>
                       </button>
                       <button class="btn-icon-action btn-icon-action-sm btn-icon-delete" (click)="deleteItem(item)" title="Delete">
@@ -106,7 +106,7 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
                           <div class="menu-item-actions">
                             <button class="btn-icon-action btn-icon-action-sm" (click)="editItem(child, item)" title="Edit">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
                             <button class="btn-icon-action btn-icon-action-sm btn-icon-delete" (click)="deleteItem(child, item)" title="Delete">
@@ -140,7 +140,11 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingItem ? 'Edit' : 'Add' }} {{ formData.orderable ? 'Item' : 'Category' }}</h3>
-            <button class="close-btn" (click)="closeModal()">&times;</button>
+            <button class="close-btn" (click)="closeModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -178,21 +182,23 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
     .selectors-row { display: flex; gap: 16px; margin-bottom: 24px; }
     .selector-group { flex: 1; }
     .selector-group label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: var(--text-dark); }
-    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; color: var(--text-dark); background: #fff; }
+    .form-control { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 0; font-size: 14px; color: var(--text-dark); background: #fff; }
     .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     .form-control:disabled { background: var(--bg-light); cursor: not-allowed; }
 
-    .card { background: var(--white); border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); overflow: hidden; }
+    .card { background: var(--white); border-radius: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); overflow: hidden; }
     .card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
     .card-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-dark); }
     .card-body { padding: 20px; }
     .card-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; }
 
-    .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 8px; }
+    .btn { padding: 10px 20px; border: 1px solid transparent; border-radius: 0; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 8px; }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
-    .btn-secondary { background: var(--bg-light); color: var(--text-dark); }
+    .btn-primary { background: white; color: var(--primary); border-color: var(--primary); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+    .btn-primary:disabled { background: white; color: #94a3b8; border-color: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #64748b; border-color: var(--border-color); }
+    .btn-secondary:hover { background: white; color: #374151; border-color: #cbd5e1; }
     .btn-sm { padding: 8px 14px; font-size: 13px; }
     .btn-icon { width: 16px; height: 16px; }
 
@@ -212,21 +218,23 @@ import { MenuService, MenuItem } from '../../clients/menu.service';
     .tree-toggle svg.rotated { transform: rotate(90deg); }
     .tree-toggle-placeholder { width: 24px; }
 
-    .btn-icon-action { width: 28px; height: 28px; border: none; background: var(--bg-light); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: all 0.15s ease; }
+    .btn-icon-action { width: 28px; height: 28px; border: none; background: var(--bg-light); border-radius: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); transition: all 0.15s ease; }
     .btn-icon-action:hover { background: var(--primary-light); color: var(--primary); }
     .btn-icon-action svg { width: 14px; height: 14px; }
-    .btn-icon-action-sm { width: 26px; height: 26px; }
+    .btn-icon-action-sm { width: 34px; height: 34px; border-radius: 0; }
+    .btn-icon-action-sm svg { width: 17px; height: 17px; }
     .btn-icon-delete:hover { background: rgba(253, 84, 84, 0.1); color: var(--danger); }
 
     .py-4 { padding-top: 24px; padding-bottom: 24px; }
     .text-center { text-align: center; }
 
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1050; }
-    .modal { background: var(--white); border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); }
+    .modal { background: var(--white); border-radius: 0; width: 100%; max-width: 480px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); }
     .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
     .modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-dark); }
-    .close-btn { width: 32px; height: 32px; border: none; background: var(--bg-light); border-radius: 6px; font-size: 20px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .close-btn:hover { background: rgba(253, 84, 84, 0.1); color: var(--danger); }
+    .close-btn { width: 32px; height: 32px; border: 1px solid var(--border-color); background: transparent; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; padding: 0; }
+    .close-btn:hover { background: transparent; color: #374151; border-color: #cbd5e1; }
+    .close-btn svg { width: 16px; height: 16px; display: block; }
     .modal-body { padding: 20px; }
     .modal-footer { display: flex; gap: 12px; justify-content: flex-end; padding: 16px 20px; border-top: 1px solid var(--border-color); }
     .form-group { margin-bottom: 16px; }

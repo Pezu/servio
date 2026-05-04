@@ -24,46 +24,6 @@ services:
       retries: 5
 
   # ===========================================
-  # MESSAGE BROKER (ElasticMQ - SQS compatible)
-  # ===========================================
-
-  elasticmq:
-    image: softwaremill/elasticmq-native:1.5.7
-    container_name: servio-elasticmq
-    volumes:
-      - ./elasticmq.conf:/opt/elasticmq.conf
-    ports:
-      - "9324:9324"
-      - "9325:9325"
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9324"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ===========================================
-  # REDIS
-  # ===========================================
-
-  redis:
-    image: redis:7-alpine
-    container_name: servio-redis
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - servio-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ===========================================
   # OBJECT STORAGE (MinIO)
   # ===========================================
 
@@ -152,9 +112,27 @@ services:
     networks:
       - servio-network
 
+  # ===========================================
+  # NGROK (for Netopia callbacks in local dev)
+  # ===========================================
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: servio-ngrok
+    restart: unless-stopped
+    command:
+      - "http"
+      - "host.docker.internal:8080"
+      - "--log=stdout"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    networks:
+      - servio-network
+
 volumes:
   postgres-data:
-  redis-data:
   elasticsearch-data:
   minio-data:
 

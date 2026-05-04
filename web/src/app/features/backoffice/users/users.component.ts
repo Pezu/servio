@@ -1,5 +1,5 @@
 import { Component, OnInit, HostListener, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, Client } from '../clients/client.service';
@@ -10,7 +10,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule],
   template: `
     <div class="page-container">
       <!-- Client Selector -->
@@ -18,64 +18,83 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         <label class="selector-label">{{ 'CLIENTS.TITLE' | translate }}</label>
         <div class="selector-wrapper" [class.open]="dropdownOpen">
           <div class="selector-input" (click)="toggleDropdown()">
-            <div class="selected-client" *ngIf="selectedClient">
-              <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
-                    [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
-              <span class="client-name">{{ selectedClient.name }}</span>
-              <span class="client-details" *ngIf="selectedClient.email || selectedClient.phone">
-                ({{ selectedClient.email || selectedClient.phone }})
-              </span>
-            </div>
-            <div class="placeholder" *ngIf="!selectedClient">
-              {{ 'CLIENTS.SELECT_CLIENT' | translate }}
-            </div>
+            @if (selectedClient) {
+              <div class="selected-client">
+                <span class="status-bullet" [class.bg-success]="selectedClient.status === 'ACTIVE'"
+                [class.bg-danger]="selectedClient.status === 'INACTIVE'"></span>
+                <span class="client-name">{{ selectedClient.name }}</span>
+                @if (selectedClient.email || selectedClient.phone) {
+                  <span class="client-details">
+                    ({{ selectedClient.email || selectedClient.phone }})
+                  </span>
+                }
+              </div>
+            }
+            @if (!selectedClient) {
+              <div class="placeholder">
+                {{ 'CLIENTS.SELECT_CLIENT' | translate }}
+              </div>
+            }
             <span class="dropdown-arrow">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
             </span>
           </div>
-
-          <div class="selector-dropdown" *ngIf="dropdownOpen">
-            <div class="search-box">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input type="text"
-                     class="search-input"
-                     [placeholder]="'COMMON.SEARCH' | translate"
-                     [(ngModel)]="searchTerm"
-                     (input)="onSearch()"
-                     (click)="$event.stopPropagation()">
+    
+          @if (dropdownOpen) {
+            <div class="selector-dropdown">
+              <div class="search-box">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="search-icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text"
+                  class="search-input"
+                  [placeholder]="'COMMON.SEARCH' | translate"
+                  [(ngModel)]="searchTerm"
+                  (input)="onSearch()"
+                  (click)="$event.stopPropagation()">
+              </div>
+              <div class="client-list">
+                @if (loading) {
+                  <div class="loading-state">
+                    {{ 'COMMON.LOADING' | translate }}
+                  </div>
+                }
+                @if (!loading && clients.length === 0) {
+                  <div class="empty-state">
+                    {{ 'CLIENTS.NO_CLIENTS' | translate }}
+                  </div>
+                }
+                @for (client of clients; track client) {
+                  <div
+                    class="client-option"
+                    [class.selected]="selectedClient?.id === client.id"
+                    (click)="selectClient(client)">
+                    <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
+                    [class.bg-danger]="client.status === 'INACTIVE'"></span>
+                    <div class="client-info">
+                      <span class="client-name">{{ client.name }}</span>
+                      <span class="client-details">
+                        @if (client.email) {
+                          <span>{{ client.email }}</span>
+                        }
+                        @if (client.email && client.phone) {
+                          <span> · </span>
+                        }
+                        @if (client.phone) {
+                          <span>{{ client.phone }}</span>
+                        }
+                      </span>
+                    </div>
+                  </div>
+                }
+              </div>
             </div>
-
-            <div class="client-list">
-              <div *ngIf="loading" class="loading-state">
-                {{ 'COMMON.LOADING' | translate }}
-              </div>
-              <div *ngIf="!loading && clients.length === 0" class="empty-state">
-                {{ 'CLIENTS.NO_CLIENTS' | translate }}
-              </div>
-              <div *ngFor="let client of clients"
-                   class="client-option"
-                   [class.selected]="selectedClient?.id === client.id"
-                   (click)="selectClient(client)">
-                <span class="status-bullet" [class.bg-success]="client.status === 'ACTIVE'"
-                      [class.bg-danger]="client.status === 'INACTIVE'"></span>
-                <div class="client-info">
-                  <span class="client-name">{{ client.name }}</span>
-                  <span class="client-details">
-                    <span *ngIf="client.email">{{ client.email }}</span>
-                    <span *ngIf="client.email && client.phone"> · </span>
-                    <span *ngIf="client.phone">{{ client.phone }}</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          }
         </div>
       </div>
-
+    
       <!-- Users Table -->
       @if (selectedClient) {
         <div class="users-panel">
@@ -124,7 +143,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                           <td class="text-end">
                             <button class="btn-icon-action btn-icon-action-sm" (click)="editUser(user)" [title]="'USERS.EDIT_USER' | translate">
                               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
                           </td>
@@ -152,14 +171,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       }
     </div>
-
+    
     <!-- User Modal -->
     @if (showUserModal) {
       <div class="modal-overlay" (mousedown)="closeUserModal()">
         <div class="modal" (mousedown)="$event.stopPropagation()">
           <div class="modal-header">
             <h3>{{ editingUser ? ('USERS.EDIT_USER' | translate) : ('USERS.ADD_USER' | translate) }}</h3>
-            <button class="close-btn" (click)="closeUserModal()" title="Close">&times;</button>
+            <button class="close-btn" (click)="closeUserModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
           </div>
           <div class="modal-body">
             <div class="form-group">
@@ -212,7 +233,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
         </div>
       </div>
     }
-  `,
+    `,
   styles: [`
     :host {
       --primary: #3b82f6;
@@ -249,7 +270,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     /* Client Selector Styles */
     .card {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       overflow: visible;
     }
@@ -274,7 +295,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       justify-content: space-between;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       background: white;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -314,7 +335,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       right: 0;
       background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       z-index: 100;
       max-height: 350px;
@@ -519,7 +540,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       min-width: 32px;
       height: 32px;
       padding: 0 8px;
-      border-radius: 6px;
+      border-radius: 0;
       font-size: 13px;
       font-weight: 500;
       color: var(--text-muted);
@@ -549,7 +570,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 32px;
       border: 1px solid rgba(0, 0, 0, 0.08);
       background: transparent;
-      border-radius: 6px;
+      border-radius: 0;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -570,20 +591,24 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       height: 16px;
     }
     .btn-icon-action-sm {
-      width: 28px;
-      height: 28px;
+      width: 34px;
+      height: 34px;
+      border-radius: 0;
     }
     .btn-icon-action-sm svg {
-      width: 14px;
-      height: 14px;
+      width: 17px;
+      height: 17px;
     }
     .btn-icon-add {
-      background: #3b82f6;
-      color: white;
+      background: transparent;
+      border-color: rgba(0, 0, 0, 0.08);
+      color: #64748b;
+      border-radius: 0;
     }
     .btn-icon-add:hover {
-      background: #2563eb;
-      color: white;
+      background: rgba(0, 0, 0, 0.04);
+      border-color: rgba(0, 0, 0, 0.08);
+      color: #374151;
     }
 
     /* Modal Styles */
@@ -601,7 +626,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     }
     .modal {
       background: white;
-      border-radius: 12px;
+      border-radius: 0;
       width: 100%;
       max-width: 480px;
       max-height: 90vh;
@@ -624,20 +649,25 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .close-btn {
       width: 32px;
       height: 32px;
-      border: none;
-      background: #f1f5f9;
-      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      border-radius: 0;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #64748b;
-      font-size: 20px;
-      line-height: 1;
+      padding: 0;
     }
     .close-btn:hover {
-      background: #e2e8f0;
+      background: transparent;
       color: #374151;
+      border-color: #cbd5e1;
+    }
+    .close-btn svg {
+      width: 16px;
+      height: 16px;
+      display: block;
     }
     .modal-body {
       padding: 20px;
@@ -668,7 +698,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       width: 100%;
       padding: 10px 14px;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       color: #374151;
       transition: border-color 0.15s ease;
@@ -691,7 +721,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       padding: 10px 14px;
       background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       color: #374151;
       transition: all 0.2s ease;
@@ -730,11 +760,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
       right: 0;
       background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 10px;
+      border-radius: 0;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
       z-index: 1100;
       overflow: hidden;
       animation: dropdownFadeIn 0.15s ease;
+    }
+    .custom-select-option:first-child,
+    .custom-select-option:last-child,
+    .custom-select-option:only-child {
+      border-radius: 0;
     }
     .custom-select-options.open-upward {
       top: auto;
@@ -774,32 +809,35 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     }
     .btn {
       padding: 10px 20px;
-      border-radius: 8px;
+      border-radius: 0;
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .btn-secondary {
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
+      background: white;
       color: #64748b;
+      border: 1px solid var(--border-color);
     }
     .btn-secondary:hover {
-      background: #e2e8f0;
+      background: white;
       color: #374151;
+      border-color: #cbd5e1;
     }
     .btn-primary {
-      background: #3b82f6;
-      border: 1px solid #3b82f6;
-      color: white;
+      background: white;
+      color: var(--primary);
+      border: 1px solid var(--primary);
     }
     .btn-primary:hover {
-      background: #2563eb;
-      border-color: #2563eb;
+      background: var(--primary-light);
+      color: var(--primary);
+      border-color: var(--primary);
     }
     .btn-primary:disabled {
-      background: #94a3b8;
+      background: white;
+      color: #94a3b8;
       border-color: #94a3b8;
       cursor: not-allowed;
     }

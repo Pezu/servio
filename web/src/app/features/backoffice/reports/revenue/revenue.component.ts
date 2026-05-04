@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, ViewEncapsulation, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -68,7 +68,7 @@ const CUSTOM_DATE_FORMATS = {
     </div>
 
     <!-- Revenue Table -->
-    <div class="card">
+    <div class="card stretch">
       <div class="card-header">
         <h5 class="card-title">{{ 'REPORTS.REVENUE.ALL_PAYMENTS' | translate }}</h5>
         <div class="filter-section">
@@ -228,54 +228,74 @@ const CUSTOM_DATE_FORMATS = {
         </div>
       </div>
       <div class="card-footer">
-        @if (totalPages >= 1) {
+        <div class="pagination-container">
           <ul class="pagination-list">
-            <li>
-              <a href="javascript:void(0);" (click)="loadPage(currentPage - 1)" [class.disabled]="currentPage === 0">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </a>
-            </li>
-            @for (page of getPageNumbers(); track page) {
+            @if (totalPages > 1) {
               <li>
-                <a href="javascript:void(0);" [class.active]="page === currentPage" (click)="loadPage(page)">
-                  {{ page + 1 }}
+                <a href="javascript:void(0);" (click)="loadPage(currentPage - 1)" [class.disabled]="currentPage === 0">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </a>
+              </li>
+              @for (page of getPageNumbers(); track page) {
+                <li>
+                  <a href="javascript:void(0);" [class.active]="page === currentPage" (click)="loadPage(page)">
+                    {{ page + 1 }}
+                  </a>
+                </li>
+              }
+              <li>
+                <a href="javascript:void(0);" (click)="loadPage(currentPage + 1)" [class.disabled]="currentPage >= totalPages - 1">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
                 </a>
               </li>
             }
-            <li>
-              <a href="javascript:void(0);" (click)="loadPage(currentPage + 1)" [class.disabled]="currentPage >= totalPages - 1">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </a>
-            </li>
           </ul>
-        }
-        <div class="page-size-wrapper">
-          <select class="page-size-select" [(ngModel)]="pageSize" (change)="onPageSizeChange()">
-            <option [value]="10">10</option>
-            <option [value]="50">50</option>
-            <option [value]="100">100</option>
-          </select>
+          <div class="custom-select page-size-select-custom" [class.open]="pageSizeDropdownOpen" (click)="togglePageSizeDropdown(); $event.stopPropagation()">
+            <div class="custom-select-trigger">
+              <span class="selected-value">{{ pageSize }}</span>
+              <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            @if (pageSizeDropdownOpen) {
+              <div class="custom-select-options open-upward square">
+                @for (size of pageSizeOptions; track size) {
+                  <div class="custom-select-option" [class.selected]="pageSize === size" (click)="selectPageSize(size); $event.stopPropagation()">
+                    <span class="option-text">{{ size }}</span>
+                    @if (pageSize === size) {
+                      <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
       </div>
     </div>
   `,
   styles: [`
-    .card { background: var(--white); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
+    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    .page-header { flex: 0 0 auto; }
+    .card { background: var(--white); border-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .card.stretch { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
     .card-title { font-size: 15px; font-weight: 600; margin: 0; color: var(--text-dark); }
-    .card-body.p-0 { padding: 0 !important; }
-    .card-footer { padding: 10px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: center; align-items: center; position: relative; }
+    .card-body.p-0 { padding: 0 !important; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .card-footer { padding: 10px 20px; border-top: 1px solid var(--border-color); display: flex; align-items: center; flex-shrink: 0; }
 
-    .table-responsive { overflow-x: auto; }
+    .table-responsive { flex: 1; overflow-y: auto; min-height: 0; }
     .table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
-    .table thead th { padding: 10px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: var(--bg-light); border-bottom: 1px solid var(--border-color); white-space: nowrap; }
-    .table tbody td { padding: 10px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 13px; }
+    .table thead th { padding: 8px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: white; border-bottom: 1px solid var(--border-color); white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+    .table tbody td { padding: 8px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 13px; }
     .table tbody tr:last-child td { border-bottom: none; }
-    .table tfoot td { padding: 12px 16px; background: var(--bg-light); border-top: 1px solid var(--border-color); }
+    .table tfoot td { padding: 12px 16px; background: white; border-top: 1px solid var(--border-color); position: sticky; bottom: 0; }
 
     .fw-semibold { font-weight: 600; color: var(--text-dark); }
     .fw-bold { font-weight: 700; color: var(--text-dark); }
@@ -296,12 +316,60 @@ const CUSTOM_DATE_FORMATS = {
     .payment-method-badge.card { background: rgba(33, 150, 243, 0.15); color: #1565C0; }
     .payment-method-badge.online { background: rgba(156, 39, 176, 0.15); color: #7B1FA2; }
 
+    .pagination-container { display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 100%; }
     .pagination-list { list-style: none; display: flex; align-items: center; gap: 4px; margin: 0; padding: 0; }
-    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); text-decoration: none; background: var(--bg-light); transition: all 0.15s ease; }
-    .pagination-list li a:hover:not(.disabled) { background: var(--primary-light); color: var(--primary); }
+    .pagination-list li a { display: flex; align-items: center; justify-content: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 0; font-size: 13px; font-weight: 500; color: var(--text-muted); text-decoration: none; transition: all 0.15s ease; }
+    .pagination-list li a:hover:not(.disabled):not(.active) { background: var(--bg-light); color: var(--text-dark); }
     .pagination-list li a.active { background: var(--primary); color: white; }
-    .pagination-list li a.disabled { opacity: 0.5; cursor: not-allowed; }
-    .pagination-list li a svg { width: 12px; height: 12px; }
+    .pagination-list li a.disabled { opacity: 0.4; pointer-events: none; }
+    .pagination-list li a svg { width: 16px; height: 16px; }
+
+    /* Custom Select - square variant for page size */
+    .custom-select { position: relative; cursor: pointer; }
+    .custom-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      font-size: 13px;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+    }
+    .custom-select:hover .custom-select-trigger { border-color: #cbd5e1; }
+    .custom-select.open .custom-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .custom-select .selected-value { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+    .custom-select .dropdown-arrow { width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+    .custom-select.open .dropdown-arrow { transform: rotate(180deg); }
+    .custom-select-options {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+      z-index: 1100;
+      overflow: hidden;
+    }
+    .custom-select-options.open-upward { top: auto; bottom: calc(100% + 4px); }
+    .custom-select-options.square,
+    .custom-select-options.square .custom-select-option,
+    .custom-select-options.square .custom-select-option:first-child,
+    .custom-select-options.square .custom-select-option:last-child,
+    .custom-select-options.square .custom-select-option:only-child { border-radius: 0; }
+    .custom-select-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; color: var(--text-dark); cursor: pointer; transition: background 0.15s ease; }
+    .custom-select-option:hover { background: var(--bg-light); }
+    .custom-select-option.selected { background: rgba(59, 130, 246, 0.08); color: var(--primary); font-weight: 500; }
+    .custom-select-option .option-text { flex: 1; }
+    .custom-select-option .check-icon { width: 14px; height: 14px; color: var(--primary); margin-left: auto; }
+
+    .custom-select.page-size-select-custom { width: auto; min-width: 72px; flex: 0 0 auto; }
+    .custom-select.page-size-select-custom .custom-select-options { min-width: 100%; width: auto; }
 
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
     .page-header-left { display: flex; align-items: center; gap: 16px; }
@@ -318,20 +386,14 @@ const CUSTOM_DATE_FORMATS = {
     .filter-group { display: flex; align-items: center; gap: 8px; }
     .filter-label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
 
-    /* Pagination Wrapper */
-    .page-size-wrapper { position: absolute; right: 20px; }
-    .page-size-select { height: 28px; padding: 0 8px; border: none; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--text-muted); background: var(--bg-light); cursor: pointer; transition: all 0.15s ease; }
-    .page-size-select:hover { background: var(--primary-light); color: var(--primary); }
-    .page-size-select:focus { outline: none; background: var(--primary-light); color: var(--primary); }
-
     /* Date picker styles */
     .date-field { width: 140px; }
     .date-field .mat-mdc-form-field-subscript-wrapper { display: none; }
-    .date-field .mdc-text-field--outlined { height: 36px !important; background: transparent !important; border-radius: 8px !important; }
+    .date-field .mdc-text-field--outlined { height: 36px !important; background: transparent !important; border-radius: 0 !important; }
     .date-field .mat-mdc-form-field-flex { height: 36px !important; align-items: center !important; }
-    .date-field .mdc-notched-outline__leading { border-radius: 8px 0 0 8px !important; border-color: var(--border-color) !important; }
+    .date-field .mdc-notched-outline__leading { border-radius: 0 !important; border-color: var(--border-color) !important; }
     .date-field .mdc-notched-outline__notch { border-color: var(--border-color) !important; }
-    .date-field .mdc-notched-outline__trailing { border-radius: 0 8px 8px 0 !important; border-color: var(--border-color) !important; }
+    .date-field .mdc-notched-outline__trailing { border-radius: 0 !important; border-color: var(--border-color) !important; }
     .date-field .mat-mdc-form-field-infix { padding-top: 8px !important; padding-bottom: 8px !important; padding-left: 10px !important; min-height: unset !important; width: auto !important; }
     .date-field input.mat-mdc-input-element { font-size: 13px !important; font-weight: 500 !important; color: var(--text-dark) !important; }
     .date-field .mat-mdc-form-field-icon-suffix { padding-right: 4px !important; }
@@ -360,9 +422,9 @@ const CUSTOM_DATE_FORMATS = {
     .filter-icon.active { color: var(--primary); }
     .filter-header-content:hover .filter-icon { color: var(--primary); }
 
-    .filter-dropdown { position: absolute; top: 100%; left: 0; min-width: 180px; background: var(--white); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; margin-top: 4px; }
+    .filter-dropdown { position: absolute; top: 100%; left: 0; min-width: 180px; background: var(--white); border: 1px solid var(--border-color); border-radius: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; margin-top: 4px; }
     .filter-actions { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border-color); }
-    .filter-action-btn { background: none; border: none; padding: 4px 8px; font-size: 11px; font-weight: 500; color: var(--primary); cursor: pointer; border-radius: 4px; }
+    .filter-action-btn { background: none; border: none; padding: 4px 8px; font-size: 11px; font-weight: 500; color: var(--primary); cursor: pointer; border-radius: 0; }
     .filter-action-btn:hover { background: var(--primary-light); }
     .filter-options { padding: 8px 0; max-height: 200px; overflow-y: auto; }
     .filter-option { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 400; color: var(--text-dark); }
@@ -379,6 +441,8 @@ export class RevenueComponent implements OnInit {
   currentPage = 0;
   totalPages = 0;
   pageSize = 10;
+  pageSizeOptions = [10, 50, 100];
+  pageSizeDropdownOpen = false;
   startDate: Date | null = null;
   endDate: Date | null = null;
 
@@ -395,8 +459,27 @@ export class RevenueComponent implements OnInit {
   showOperatorFilter = false;
   showStatusFilter = false;
 
-  constructor(private orderService: OrderService) {
+  constructor(private orderService: OrderService, private elementRef: ElementRef) {
     this.initDateFilters();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const pageSizeSelect = this.elementRef.nativeElement.querySelector('.page-size-select-custom');
+    if (pageSizeSelect && !pageSizeSelect.contains(event.target)) {
+      this.pageSizeDropdownOpen = false;
+    }
+  }
+
+  togglePageSizeDropdown(): void {
+    this.pageSizeDropdownOpen = !this.pageSizeDropdownOpen;
+  }
+
+  selectPageSize(size: number): void {
+    this.pageSizeDropdownOpen = false;
+    this.pageSize = size;
+    this.currentPage = 0;
+    this.loadOrders();
   }
 
   ngOnInit(): void {

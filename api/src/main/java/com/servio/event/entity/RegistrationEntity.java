@@ -34,6 +34,10 @@ public class RegistrationEntity {
     @JoinColumn(name = "order_point_id")
     private OrderPointEntity orderPoint;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private CustomerEntity customer;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ValidationStatus validationStatus = ValidationStatus.APPROVED;

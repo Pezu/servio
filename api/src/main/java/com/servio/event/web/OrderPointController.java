@@ -1,6 +1,7 @@
 package com.servio.event.web;
 
 import com.servio.event.dto.CreateOrderPointRequest;
+import com.servio.event.dto.CreateOrderPointsBatchRequest;
 import com.servio.event.dto.OrderPoint;
 import com.servio.event.dto.UpdateOrderPointRequest;
 import com.servio.event.service.OrderPointService;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -26,6 +28,14 @@ public class OrderPointController {
             @PathVariable UUID locationId,
             @RequestBody CreateOrderPointRequest request) {
         OrderPoint response = orderPointService.createOrderPoint(locationId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/location/{locationId}/batch")
+    public ResponseEntity<List<OrderPoint>> createOrderPointsBatch(
+            @PathVariable UUID locationId,
+            @RequestBody CreateOrderPointsBatchRequest request) {
+        List<OrderPoint> response = orderPointService.createOrderPointsBatch(locationId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -49,5 +59,17 @@ public class OrderPointController {
             @RequestBody UpdateOrderPointRequest request) {
         OrderPoint response = orderPointService.updateOrderPoint(id, request);
         return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteOrderPoint(@PathVariable UUID id) {
+        orderPointService.deleteOrderPoint(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/split")
+    public ResponseEntity<OrderPoint> splitOrderPoint(@PathVariable UUID id) {
+        OrderPoint response = orderPointService.splitOrderPoint(id);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

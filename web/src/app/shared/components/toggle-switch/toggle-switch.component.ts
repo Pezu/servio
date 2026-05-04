@@ -1,11 +1,11 @@
 import { Component, Input, Output, EventEmitter, forwardRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 @Component({
   selector: 'app-toggle-switch',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -17,13 +17,15 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     <label class="toggle-switch" [class.disabled]="disabled">
       <input
         type="checkbox"
+        class="toggle-checkbox"
         [checked]="checked"
         [disabled]="disabled"
         (change)="onToggle($event)">
-      <span class="toggle-slider"></span>
-      <span class="toggle-label" *ngIf="label">{{ label }}</span>
+      @if (label) {
+        <span class="toggle-label">{{ label }}</span>
+      }
     </label>
-  `,
+    `,
   styles: [`
     .toggle-switch {
       display: inline-flex;
@@ -35,34 +37,33 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
       cursor: not-allowed;
       opacity: 0.6;
     }
-    .toggle-switch input {
-      display: none;
-    }
-    .toggle-slider {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      background: #cbd5e1;
-      border-radius: 24px;
-      transition: all 0.2s ease;
-    }
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 20px;
-      height: 20px;
+    .toggle-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      border-radius: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid #cbd5e1;
       background: white;
-      border-radius: 50%;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-      transition: all 0.2s ease;
+      display: inline-grid;
+      place-content: center;
+      margin: 0;
+      flex-shrink: 0;
     }
-    input:checked + .toggle-slider {
-      background: #10b981;
+    .toggle-checkbox:checked {
+      background: white;
+      border-color: #cbd5e1;
     }
-    input:checked + .toggle-slider::before {
-      transform: translateX(20px);
+    .toggle-checkbox:checked::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: #475569;
+      clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    }
+    .toggle-checkbox:disabled {
+      cursor: not-allowed;
     }
     .toggle-label {
       font-size: 14px;

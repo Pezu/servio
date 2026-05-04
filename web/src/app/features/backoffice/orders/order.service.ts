@@ -52,7 +52,7 @@ export class OrderService {
 
   constructor(private http: HttpClient) {}
 
-  getOrders(page: number = 0, size: number = 20, startDate?: string, endDate?: string): Observable<PageResponse<Order>> {
+  getOrders(page: number = 0, size: number = 20, startDate?: string, endDate?: string, eventId?: string): Observable<PageResponse<Order>> {
     let params = new HttpParams()
       .set('page', page.toString())
       .set('size', size.toString());
@@ -61,6 +61,9 @@ export class OrderService {
     }
     if (endDate) {
       params = params.set('endDate', endDate);
+    }
+    if (eventId) {
+      params = params.set('eventId', eventId);
     }
     return this.http.get<PageResponse<Order>>(this.apiUrl, { params });
   }

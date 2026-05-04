@@ -9,6 +9,8 @@ export interface EventOrderPoint {
   orderPointId: string;
   orderPointName: string;
   sublocationName: string;
+  userId?: string | null;
+  userName?: string;
   prepaid: number;
   clientName?: string;
   email?: string;
