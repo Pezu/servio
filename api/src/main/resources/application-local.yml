@@ -14,13 +14,8 @@ cors:
 jwt:
   secret: phpauf1PhcHOqocdXY9O0Z6Bjn3jrsGu7kWG2yEqMbNkbPZxM0RFaFEG8NAReW6+
 
-# S3/MinIO local defaults (MinIO for local dev)
-aws:
-  s3:
-    endpoint: http://localhost:9000
-    access-key: minioadmin
-    secret-key: minioadmin
-    region: us-east-1
+# S3 credentials and endpoint come from environment (see local.env)
+# Defaults in application.yml point at GCS via the S3 XML API.
 
 # Netopia sandbox (local testing)
 # Using ngrok for callbacks - start with: docker compose -f docker-compose.infra.yml up ngrok -d

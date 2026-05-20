@@ -19,3 +19,6 @@ api/target/
 # Other
 duralux/
 start.bat
+
+# Local-only secrets (e.g. GCS HMAC keys)
+.env.local.secrets

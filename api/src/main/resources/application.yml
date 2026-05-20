@@ -61,10 +61,10 @@ cors:
 
 aws:
   s3:
-    endpoint: ${AWS_S3_ENDPOINT:http://localhost:9000}
-    access-key: ${AWS_ACCESS_KEY_ID:minioadmin}
-    secret-key: ${AWS_SECRET_ACCESS_KEY:minioadmin}
-    bucket: ${AWS_S3_BUCKET:images}
+    endpoint: ${AWS_S3_ENDPOINT:https://storage.googleapis.com}
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
+    bucket: ${AWS_S3_BUCKET:servio-order-app-uploads}
     region: ${AWS_REGION:us-east-1}
 
 netopia:

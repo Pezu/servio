@@ -70,8 +70,8 @@ jobs:
             --max-instances=4 \
             --timeout=300 \
             --allow-unauthenticated \
-            --set-env-vars="SPRING_PROFILES_ACTIVE=prod,SERVER_PORT=8080,DATABASE_URL=${DB_URL},DATABASE_USERNAME=servio_app" \
-            --set-secrets="DATABASE_PASSWORD=servio-db-password:latest,JWT_SECRET=jwt-secret:latest,NETOPIA_API_KEY=netopia-api-key:latest,NETOPIA_POS_SIGNATURE=netopia-pos-signature:latest"
+            --set-env-vars="SPRING_PROFILES_ACTIVE=prod,SERVER_PORT=8080,DATABASE_URL=${DB_URL},DATABASE_USERNAME=servio_app,AWS_S3_ENDPOINT=https://storage.googleapis.com,AWS_S3_BUCKET=servio-order-app-uploads,AWS_REGION=us-east-1" \
+            --set-secrets="DATABASE_PASSWORD=servio-db-password:latest,JWT_SECRET=jwt-secret:latest,NETOPIA_API_KEY=netopia-api-key:latest,NETOPIA_POS_SIGNATURE=netopia-pos-signature:latest,AWS_ACCESS_KEY_ID=servio-gcs-access-key:latest,AWS_SECRET_ACCESS_KEY=servio-gcs-secret-key:latest"
 
       - name: Show service URL
         run: gcloud run services describe ${{ env.SERVICE }} --region=${{ env.REGION }} --format='value(status.url)'
