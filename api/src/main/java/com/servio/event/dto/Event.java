@@ -28,6 +28,7 @@ public class Event {
     private String logoPath;
     private boolean requireValidation;
     private List<UUID> userIds;
+    private List<UUID> waiterUserIds;
     private List<UUID> paymentTypeIds;
     private List<UUID> menuItemIds;
 }

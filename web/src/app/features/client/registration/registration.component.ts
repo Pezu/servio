@@ -285,7 +285,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         }
 
         // Re-check validation status from server (in case it was approved)
-        this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}`)
+        this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}${this.orderPointId ? '?orderPointId=' + this.orderPointId : ''}`)
           .subscribe({
             next: (registration) => {
               this.registrationResponse = registration;
@@ -477,7 +477,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   private checkValidationStatus(): void {
     if (!this.registrationResponse?.id) return;
 
-    this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}`)
+    this.http.get<any>(`${environment.apiUrl}/api/register/${this.registrationResponse.id}${this.orderPointId ? '?orderPointId=' + this.orderPointId : ''}`)
       .subscribe({
         next: (registration) => {
           if (registration.validationStatus === 'APPROVED') {
@@ -1737,7 +1737,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     if (!this.registrationResponse?.id) return;
 
     this.http.post<PendingTeamRegistration>(
-      `${environment.apiUrl}/api/register/${registrationId}/approve-by-client?approverRegistrationId=${this.registrationResponse.id}`,
+      `${environment.apiUrl}/api/register/${registrationId}/approve-by-client?approverRegistrationId=${this.registrationResponse.id}&orderPointId=${this.orderPointId}`,
       {}
     ).subscribe({
       next: () => {

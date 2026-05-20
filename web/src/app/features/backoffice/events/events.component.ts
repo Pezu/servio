@@ -418,6 +418,42 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 </div>
               </div>
 
+              <!-- Waiter Users Selection -->
+              <div class="form-group">
+                <label>{{ 'EVENTS.WAITER_USERS' | translate }}</label>
+                <div class="multi-select-wrapper waiter-users-dropdown" [class.open]="waiterUsersDropdownOpen">
+                  <div class="multi-select-input" (click)="toggleWaiterUsersDropdown(); $event.stopPropagation()">
+                    @if (getSelectedWaiterUsersText()) {
+                      <span class="selected-text">{{ getSelectedWaiterUsersText() }}</span>
+                    }
+                    @if (!getSelectedWaiterUsersText()) {
+                      <span class="placeholder">{{ 'EVENTS.SELECT_USERS' | translate }}</span>
+                    }
+                    <span class="dropdown-arrow">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </span>
+                  </div>
+                  @if (waiterUsersDropdownOpen) {
+                    <div class="multi-select-dropdown open-upward" (click)="$event.stopPropagation()">
+                      @if (loadingUsers) {
+                        <div class="loading-state">{{ 'COMMON.LOADING' | translate }}</div>
+                      }
+                      @if (!loadingUsers && getWaiterUsers().length === 0) {
+                        <div class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
+                      }
+                      @for (user of getWaiterUsers(); track user) {
+                        <label class="checkbox-option">
+                          <input type="checkbox" [checked]="eventFormData.waiterUserIds.includes(user.id!)" (change)="toggleEventWaiterUser(user.id!, $event)">
+                          <span class="checkbox-label-text">{{ user.name }}</span>
+                        </label>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+
               <div class="form-group">
                 <label class="checkbox-label">
                   <input type="checkbox" [(ngModel)]="eventFormData.requireValidation">
@@ -484,7 +520,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <td class="user-cell">
                                 <select class="user-select" [ngModel]="table.userId || ''" (ngModelChange)="onUserChange(table, $event)">
                                   <option value="">-</option>
-                                  @for (u of serviceUsers; track u.id) {
+                                  @for (u of waiterUsers; track u.id) {
                                     <option [value]="u.id">{{ u.name }}</option>
                                   }
                                 </select>
@@ -1171,14 +1207,15 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; requireValidation: boolean } = {
-    name: '', startDate: '', endDate: '', userIds: [], requireValidation: false
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; waiterUserIds: string[]; requireValidation: boolean } = {
+    name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false
   };
 
   // Users
   users: User[] = [];
   loadingUsers = false;
   usersDropdownOpen = false;
+  waiterUsersDropdownOpen = false;
   pageSizeDropdownOpen = false;
 
 
@@ -1249,6 +1286,10 @@ export class EventsComponent implements OnInit {
     if (usersDropdown && !usersDropdown.contains(event.target)) {
       this.usersDropdownOpen = false;
     }
+    const waiterUsersDropdown = this.elementRef.nativeElement.querySelector('.waiter-users-dropdown');
+    if (waiterUsersDropdown && !waiterUsersDropdown.contains(event.target)) {
+      this.waiterUsersDropdownOpen = false;
+    }
     const pageSizeDropdown = this.elementRef.nativeElement.querySelector('.page-size-select-custom');
     if (pageSizeDropdown && !pageSizeDropdown.contains(event.target)) {
       this.pageSizeDropdownOpen = false;
@@ -1257,6 +1298,10 @@ export class EventsComponent implements OnInit {
 
   toggleUsersDropdown(): void {
     this.usersDropdownOpen = !this.usersDropdownOpen;
+  }
+
+  toggleWaiterUsersDropdown(): void {
+    this.waiterUsersDropdownOpen = !this.waiterUsersDropdownOpen;
   }
 
   togglePageSizeDropdown(): void {
@@ -1439,7 +1484,7 @@ export class EventsComponent implements OnInit {
   openEventModal(): void {
     this.editingEvent = null;
     this.eventModalTab = 'details';
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], requireValidation: false };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1457,6 +1502,7 @@ export class EventsComponent implements OnInit {
       startDate: '',
       endDate: '',
       userIds: event.userIds || [],
+      waiterUserIds: event.waiterUserIds || [],
       requireValidation: !!event.requireValidation
     };
     // Set Material datepicker Date values
@@ -1475,6 +1521,7 @@ export class EventsComponent implements OnInit {
     this.showEventModal = false;
     this.editingEvent = null;
     this.usersDropdownOpen = false;
+    this.waiterUsersDropdownOpen = false;
     this.cashRegisters = [];
   }
 
@@ -1492,6 +1539,7 @@ export class EventsComponent implements OnInit {
       startDate: this.dateToApiFormat(this.startDate),
       endDate: this.dateToApiFormat(this.endDate),
       userIds: this.eventFormData.userIds,
+      waiterUserIds: this.eventFormData.waiterUserIds,
       menuItemIds,
       requireValidation: this.eventFormData.requireValidation
     };
@@ -1517,6 +1565,7 @@ export class EventsComponent implements OnInit {
       endDate: event.endDate,
       locationId: event.locationId,
       userIds: event.userIds,
+      waiterUserIds: event.waiterUserIds,
       paymentTypeIds: event.paymentTypeIds,
       menuItemIds: event.menuItemIds,
       requireValidation: newValue
@@ -1587,9 +1636,21 @@ export class EventsComponent implements OnInit {
     return this.users.filter(u => u.roles && u.roles.includes('SERVICE'));
   }
 
+  getWaiterUsers(): User[] {
+    return this.users.filter(u => u.roles && u.roles.includes('WAITER'));
+  }
+
   getSelectedUsersText(): string {
     const serviceUsers = this.getServiceUsers();
     const selectedUsers = serviceUsers.filter(u => this.eventFormData.userIds.includes(u.id!));
+    if (selectedUsers.length === 0) return '';
+    if (selectedUsers.length <= 2) return selectedUsers.map(u => u.name).join(', ');
+    return `${selectedUsers.length} users selected`;
+  }
+
+  getSelectedWaiterUsersText(): string {
+    const waiterUsers = this.getWaiterUsers();
+    const selectedUsers = waiterUsers.filter(u => this.eventFormData.waiterUserIds.includes(u.id!));
     if (selectedUsers.length === 0) return '';
     if (selectedUsers.length <= 2) return selectedUsers.map(u => u.name).join(', ');
     return `${selectedUsers.length} users selected`;
@@ -1603,6 +1664,17 @@ export class EventsComponent implements OnInit {
       }
     } else {
       this.eventFormData.userIds = this.eventFormData.userIds.filter(id => id !== userId);
+    }
+  }
+
+  toggleEventWaiterUser(userId: string, event: globalThis.Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      if (!this.eventFormData.waiterUserIds.includes(userId)) {
+        this.eventFormData.waiterUserIds.push(userId);
+      }
+    } else {
+      this.eventFormData.waiterUserIds = this.eventFormData.waiterUserIds.filter(id => id !== userId);
     }
   }
 
@@ -1738,6 +1810,10 @@ export class EventsComponent implements OnInit {
 
   get serviceUsers(): User[] {
     return this.users.filter(u => u.roles?.includes('SERVICE'));
+  }
+
+  get waiterUsers(): User[] {
+    return this.users.filter(u => u.roles?.includes('WAITER'));
   }
 
   onUserChange(table: EventOrderPoint, userId: string): void {

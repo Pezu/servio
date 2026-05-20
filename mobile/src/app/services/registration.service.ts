@@ -44,6 +44,13 @@ export class RegistrationService {
     );
   }
 
+  getMyWaiterRegistration(eventId: string): Observable<Registration> {
+    return this.http.get<Registration>(
+      `${environment.apiUrl}/register/events/${eventId}/my-waiter`,
+      { headers: this.getHeaders() }
+    );
+  }
+
   approveRegistration(registrationId: string): Observable<Registration> {
     return this.http.post<Registration>(
       `${environment.apiUrl}/register/${registrationId}/approve`,

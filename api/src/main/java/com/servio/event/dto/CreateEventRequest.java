@@ -18,6 +18,7 @@ public class CreateEventRequest {
     private LocalDate endDate;
 
     private List<UUID> userIds;
+    private List<UUID> waiterUserIds;
     private List<UUID> paymentTypeIds;
     private List<UUID> menuItemIds;
     private boolean requireValidation;

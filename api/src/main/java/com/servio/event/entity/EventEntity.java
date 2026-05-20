@@ -55,6 +55,14 @@ public class EventEntity {
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
+            name = "event_waiters",
+            joinColumns = @JoinColumn(name = "event_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<UserEntity> waiters = new HashSet<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
             name = "event_payment_types",
             joinColumns = @JoinColumn(name = "event_id"),
             inverseJoinColumns = @JoinColumn(name = "payment_type_id")

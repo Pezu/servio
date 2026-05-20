@@ -9,6 +9,7 @@ import com.servio.event.entity.EventEntity;
 import com.servio.event.entity.LocationEntity;
 import com.servio.event.entity.MenuItemEntity;
 import com.servio.event.entity.PaymentTypeEntity;
+import com.servio.event.entity.RegistrationEntity;
 import com.servio.event.entity.UserEntity;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.EventMapper;
@@ -17,6 +18,7 @@ import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.LocationRepository;
 import com.servio.event.repository.MenuItemRepository;
 import com.servio.event.repository.PaymentTypeRepository;
+import com.servio.event.repository.RegistrationRepository;
 import com.servio.event.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +32,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -44,6 +47,7 @@ public class EventService {
     private final PaymentTypeRepository paymentTypeRepository;
     private final MenuItemRepository menuItemRepository;
     private final CashRegisterRepository cashRegisterRepository;
+    private final RegistrationRepository registrationRepository;
     private final EventMapper eventMapper;
     private final ImageService imageService;
 
@@ -65,6 +69,12 @@ public class EventService {
                 .map(HashSet::new)
                 .ifPresent(eventEntity::setUsers);
 
+        Optional.ofNullable(request.getWaiterUserIds())
+                .filter(ids -> !ids.isEmpty())
+                .map(userRepository::findAllById)
+                .map(HashSet::new)
+                .ifPresent(eventEntity::setWaiters);
+
         Optional.ofNullable(request.getPaymentTypeIds())
                 .filter(ids -> !ids.isEmpty())
                 .map(paymentTypeRepository::findAllById)
@@ -78,6 +88,7 @@ public class EventService {
                 .ifPresent(eventEntity::setMenuItems);
 
         EventEntity savedEvent = eventRepository.save(eventEntity);
+        ensureWaiterRegistrations(savedEvent);
         return eventMapper.toDto(savedEvent);
     }
 
@@ -109,8 +120,7 @@ public class EventService {
 
     public Page<Event> getActiveEventsByUsername(String username, Pageable pageable) {
         LocalDate now = LocalDate.now();
-        return eventRepository.findByUsersUsernameAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
-                username, now, now, pageable)
+        return eventRepository.findActiveByOrderPointUserUsername(username, now, pageable)
                 .map(eventMapper::toDto);
     }
 
@@ -135,11 +145,34 @@ public class EventService {
 
         // Functional approach: update or clear collections
         updateCollection(request.getUserIds(), userRepository::findAllById, eventEntity::setUsers, eventEntity.getUsers());
+        updateCollection(request.getWaiterUserIds(), userRepository::findAllById, eventEntity::setWaiters, eventEntity.getWaiters());
         updateCollection(request.getPaymentTypeIds(), paymentTypeRepository::findAllById, eventEntity::setPaymentTypes, eventEntity.getPaymentTypes());
         updateCollection(request.getMenuItemIds(), menuItemRepository::findAllById, eventEntity::setMenuItems, eventEntity.getMenuItems());
 
         EventEntity updatedEvent = eventRepository.save(eventEntity);
+        ensureWaiterRegistrations(updatedEvent);
         return eventMapper.toDto(updatedEvent);
+    }
+
+    /**
+     * Provisions a registration for every waiter attached to the event so that
+     * waiters can place orders against a stable registration id from the mobile
+     * app. Existing registrations are reused; we never delete (orders reference
+     * registration_id, so removing one would orphan history).
+     */
+    private void ensureWaiterRegistrations(EventEntity event) {
+        Set<UserEntity> waiters = event.getWaiters();
+        if (waiters == null || waiters.isEmpty()) return;
+        for (UserEntity waiter : waiters) {
+            if (registrationRepository.findByEventIdAndUserId(event.getId(), waiter.getId()).isPresent()) {
+                continue;
+            }
+            RegistrationEntity registration = new RegistrationEntity();
+            registration.setEvent(event);
+            registration.setUser(waiter);
+            registration.setNickname(waiter.getName());
+            registrationRepository.save(registration);
+        }
     }
 
     private <T, ID> void updateCollection(List<ID> ids,

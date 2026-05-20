@@ -4,10 +4,11 @@ import com.servio.event.dto.WebSocketNotification;
 import com.servio.event.dto.sqs.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.UUID;
 
@@ -19,7 +20,7 @@ public class NotificationEventListener {
     private final SimpMessagingTemplate messagingTemplate;
 
     @Async("eventExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleOrderCreated(OrderCreatedEvent event) {
         log.info("Handling order created event: orderId={}, orderNo={}", event.getOrderId(), event.getOrderNo());
 
@@ -38,7 +39,7 @@ public class NotificationEventListener {
     }
 
     @Async("eventExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleOrderStatusChanged(OrderStatusChangedEvent event) {
         log.info("Handling order status changed: orderId={}, {} -> {}",
                 event.getOrderId(), event.getPreviousStatus(), event.getNewStatus());
@@ -89,7 +90,7 @@ public class NotificationEventListener {
     }
 
     @Async("eventExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleOrderItemStatusChanged(OrderItemStatusChangedEvent event) {
         log.info("Handling order item status changed: itemId={}, {} -> {}",
                 event.getItemId(), event.getPreviousStatus(), event.getNewStatus());
@@ -116,7 +117,7 @@ public class NotificationEventListener {
     }
 
     @Async("eventExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handlePaymentCompleted(PaymentCompletedEvent event) {
         log.info("Handling payment completed: eventId={}, orderPointId={}, itemsPaid={}",
                 event.getEventId(), event.getOrderPointId(), event.getItemsMarkedPaid());
@@ -132,7 +133,7 @@ public class NotificationEventListener {
     }
 
     @Async("eventExecutor")
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleValidationRequested(ValidationRequestedEvent event) {
         log.info("Handling validation requested: registrationId={}, orderPointId={}",
                 event.getRegistrationId(), event.getOrderPointId());

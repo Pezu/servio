@@ -73,7 +73,7 @@ public class EventController {
     }
 
     @GetMapping("/active")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER','SERVICE')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER','SERVICE','WAITER')")
     public ResponseEntity<Page<Event>> getAllActiveEvents(
             @PageableDefault(size = 100, sort = "name") Pageable pageable) {
         Page<Event> events = eventService.getAllActiveEvents(pageable);

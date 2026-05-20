@@ -31,22 +31,12 @@ public class RegistrationEntity {
     private EventEntity event;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_point_id")
-    private OrderPointEntity orderPoint;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     private CustomerEntity customer;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ValidationStatus validationStatus = ValidationStatus.APPROVED;
-
-    @Column(name = "approved_by")
-    private String approvedBy;
-
-    @Column(name = "approved_at")
-    private LocalDateTime approvedAt;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

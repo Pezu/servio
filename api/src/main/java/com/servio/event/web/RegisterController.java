@@ -37,7 +37,6 @@ public class RegisterController {
             @RequestBody RegisterRequest request) {
         Registration response;
         if (request.hasCustomerId()) {
-            // Use existing customer by ID
             response = registrationService.createRegistrationWithCustomerId(
                     eventId,
                     request.getOrderPointId(),
@@ -45,7 +44,6 @@ public class RegisterController {
                     request.getCustomerId()
             );
         } else {
-            // Create or find customer from provided info
             response = registrationService.createRegistration(
                     eventId,
                     request.getOrderPointId(),
@@ -57,8 +55,18 @@ public class RegisterController {
     }
 
     @GetMapping("/{registrationId}")
-    public ResponseEntity<Registration> getRegistration(@PathVariable UUID registrationId) {
-        Registration response = registrationService.getRegistration(registrationId);
+    public ResponseEntity<Registration> getRegistration(
+            @PathVariable UUID registrationId,
+            @RequestParam(required = false) UUID orderPointId) {
+        Registration response = registrationService.getRegistration(registrationId, orderPointId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/events/{eventId}/my-waiter")
+    public ResponseEntity<Registration> getMyWaiterRegistration(
+            @PathVariable UUID eventId,
+            Authentication authentication) {
+        Registration response = registrationService.getWaiterRegistration(eventId, authentication.getName());
         return ResponseEntity.ok(response);
     }
 
@@ -71,9 +79,10 @@ public class RegisterController {
     @PostMapping("/{registrationId}/approve")
     public ResponseEntity<Registration> approveRegistration(
             @PathVariable UUID registrationId,
+            @RequestParam UUID orderPointId,
             Authentication authentication) {
         String approvedBy = authentication != null ? authentication.getName() : "unknown";
-        Registration response = registrationService.approveRegistration(registrationId, approvedBy);
+        Registration response = registrationService.approveRegistration(registrationId, orderPointId, approvedBy);
         return ResponseEntity.ok(response);
     }
 
@@ -96,8 +105,9 @@ public class RegisterController {
     @PostMapping("/{registrationId}/approve-by-client")
     public ResponseEntity<Registration> approveRegistrationByClient(
             @PathVariable UUID registrationId,
+            @RequestParam UUID orderPointId,
             @RequestParam UUID approverRegistrationId) {
-        Registration response = registrationService.approveRegistrationByClient(registrationId, approverRegistrationId);
+        Registration response = registrationService.approveRegistrationByClient(registrationId, orderPointId, approverRegistrationId);
         return ResponseEntity.ok(response);
     }
 

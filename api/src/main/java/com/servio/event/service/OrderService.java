@@ -7,6 +7,7 @@ import com.servio.event.entity.OrderGroupEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.RegistrationEntity;
+import com.servio.event.entity.RegistrationOrderPointEntity;
 import com.servio.event.exception.BusinessException;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.OrderMapper;
@@ -15,6 +16,7 @@ import com.servio.event.repository.MenuItemRepository;
 import com.servio.event.repository.OrderGroupRepository;
 import com.servio.event.repository.OrderItemRepository;
 import com.servio.event.repository.OrderRepository;
+import com.servio.event.repository.RegistrationOrderPointRepository;
 import com.servio.event.repository.RegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final OrderGroupRepository orderGroupRepository;
     private final RegistrationRepository registrationRepository;
+    private final RegistrationOrderPointRepository registrationOrderPointRepository;
     private final EventRepository eventRepository;
     private final MenuItemRepository menuItemRepository;
     private final OrderNotificationService notificationService;
@@ -47,6 +50,18 @@ public class OrderService {
     public OrderEntity createOrder(ReceiveOrderRequest request) {
         RegistrationEntity registration = registrationRepository.findById(request.getRegistrationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Registration", request.getRegistrationId()));
+
+        // Customer registrations need an APPROVED junction at the OP they're
+        // ordering against. Waiter registrations (user != null) bypass per-OP
+        // validation — they place orders against any OP they're assigned to.
+        if (registration.getUser() == null) {
+            RegistrationOrderPointEntity junction = registrationOrderPointRepository
+                    .findByRegistrationIdAndOrderPointId(registration.getId(), request.getOrderPointId())
+                    .orElseThrow(() -> new BusinessException("Order point not registered for this customer"));
+            if (junction.getValidationStatus() != RegistrationEntity.ValidationStatus.APPROVED) {
+                throw new BusinessException("Order point is pending approval");
+            }
+        }
 
         UUID eventId = registration.getEvent().getId();
 
@@ -142,13 +157,9 @@ public class OrderService {
     }
 
     public List<OrderEntity> getOrdersByOrderPointIdForRegistration(UUID orderPointId, UUID registrationId) {
-        // Validate that the registration belongs to this order point
-        RegistrationEntity registration = registrationRepository.findById(registrationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Registration", registrationId));
-
-        if (!orderPointId.equals(registration.getOrderPoint().getId())) {
-            throw new BusinessException("Registration does not belong to this order point");
-        }
+        // The caller must already be registered at this OP via a junction row.
+        registrationOrderPointRepository.findByRegistrationIdAndOrderPointId(registrationId, orderPointId)
+                .orElseThrow(() -> new BusinessException("Registration is not associated with this order point"));
 
         return orderRepository.findByOrderPointIdAndStatusNotIn(orderPointId, List.of(OrderStatus.DRAFT, OrderStatus.CANCELLED));
     }

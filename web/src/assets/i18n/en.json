@@ -125,6 +125,7 @@
     "END_DATE": "End Date",
     "ASSIGNED_USERS": "Assigned Users",
     "SERVICE_USERS": "Service Users",
+    "WAITER_USERS": "Waiter Users",
     "SELECT_USERS": "Select users",
     "PAYMENT_TYPES": "Payment Types",
     "SELECT_PAYMENT_TYPES": "Select payment types",

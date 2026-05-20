@@ -45,6 +45,40 @@ export interface EventOrderPoint {
   creditValue?: number;
 }
 
+export interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+  orderable: boolean;
+  description?: string;
+  imagePath?: string;
+  children?: MenuItem[];
+  allergenIds?: string[];
+  vatTypeId?: string;
+}
+
+export interface OrderPoint {
+  id: string;
+  name: string;
+  menuId?: string;
+}
+
+export interface CreateOrderItem {
+  menuItemId: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+export interface CreateOrderRequest {
+  registrationId?: string;
+  orderPointId: string;
+  note?: string;
+  payLater: boolean;
+  nickname?: string;
+  orderItems: CreateOrderItem[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrderService {
   constructor(private http: HttpClient, private authService: AuthService) {}
@@ -118,6 +152,28 @@ export class OrderService {
     return this.http.post(
       `${environment.apiUrl}/orders/cash-register/receipt`,
       payload,
+      { headers: this.headers() }
+    );
+  }
+
+  getOrderPoint(orderPointId: string): Observable<OrderPoint> {
+    return this.http.get<OrderPoint>(
+      `${environment.apiUrl}/order-points/${orderPointId}`,
+      { headers: this.headers() }
+    );
+  }
+
+  getMenuItems(menuId: string): Observable<MenuItem[]> {
+    return this.http.get<MenuItem[]>(
+      `${environment.apiUrl}/menu/menus/${menuId}/tree`,
+      { headers: this.headers() }
+    );
+  }
+
+  createOrder(request: CreateOrderRequest): Observable<Order> {
+    return this.http.post<Order>(
+      `${environment.apiUrl}/orders`,
+      request,
       { headers: this.headers() }
     );
   }

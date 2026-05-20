@@ -20,7 +20,8 @@ import {
   logOutOutline,
   receiptOutline,
   cardOutline,
-  arrowBackOutline
+  arrowBackOutline,
+  storefrontOutline
 } from 'ionicons/icons';
 import { AuthService } from '../../services/auth.service';
 import { EventService } from '../../services/event.service';
@@ -53,6 +54,10 @@ import { WebSocketService } from '../../services/websocket.service';
       </ion-header>
       <ion-content>
         <ion-list lines="none">
+          <ion-item button (click)="navigateTo('tables')">
+            <ion-icon name="storefront-outline" slot="start"></ion-icon>
+            <ion-label>Tables</ion-label>
+          </ion-item>
           <ion-item button (click)="navigateTo('orders')">
             <ion-icon name="receipt-outline" slot="start"></ion-icon>
             <ion-label>Orders</ion-label>
@@ -153,7 +158,8 @@ export class EventPage implements OnInit, OnDestroy {
       logOutOutline,
       receiptOutline,
       cardOutline,
-      arrowBackOutline
+      arrowBackOutline,
+      storefrontOutline
     });
   }
 

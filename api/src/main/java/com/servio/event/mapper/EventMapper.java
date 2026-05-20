@@ -22,6 +22,7 @@ public interface EventMapper {
     @Mapping(source = "location.name", target = "locationName")
     @Mapping(source = "location.client.name", target = "clientName")
     @Mapping(source = "users", target = "userIds", qualifiedByName = "usersToUserIds")
+    @Mapping(source = "waiters", target = "waiterUserIds", qualifiedByName = "usersToUserIds")
     @Mapping(source = "paymentTypes", target = "paymentTypeIds", qualifiedByName = "paymentTypesToIds")
     @Mapping(source = "menuItems", target = "menuItemIds", qualifiedByName = "menuItemsToIds")
     Event toDto(EventEntity entity);

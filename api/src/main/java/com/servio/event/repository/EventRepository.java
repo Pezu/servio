@@ -47,4 +47,10 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     @EntityGraph(attributePaths = {"users"})
     Page<EventEntity> findByStartDateLessThanEqualAndEndDateGreaterThanEqual(
             LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e WHERE eop.user.username = :username")
+    Page<EventEntity> findByOrderPointUserUsername(@Param("username") String username, Pageable pageable);
+
+    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e WHERE eop.user.username = :username AND e.startDate <= :now AND e.endDate >= :now")
+    Page<EventEntity> findActiveByOrderPointUserUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
 }

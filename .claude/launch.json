@@ -6,6 +6,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "cd /Users/radu/Projects/event/mobile && npx ng serve --port 4201 --host 0.0.0.0"],
       "port": 4201
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/radu/Projects/event/web && npx ng serve --port 4202 --host 0.0.0.0"],
+      "port": 4202
     }
   ]
 }
