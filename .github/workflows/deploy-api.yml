@@ -1,0 +1,77 @@
+name: Deploy API to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: servio-order-app
+  PROJECT_NUMBER: '397450696813'
+  REGION: europe-west1
+  AR_HOST: europe-west1-docker.pkg.dev
+  AR_REPO: servio-api
+  SERVICE: servio-api
+  RUNTIME_SA: servio-api-runtime@servio-order-app.iam.gserviceaccount.com
+  CLOUDSQL_INSTANCE: servio-order-app:europe-west1:servio-db
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via WIF
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/397450696813/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: gh-deployer@servio-order-app.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.AR_HOST }} --quiet
+
+      - name: Build image
+        run: |
+          IMAGE="${{ env.AR_HOST }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}"
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" api
+
+      - name: Push image
+        run: |
+          IMAGE="${{ env.AR_HOST }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}"
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE="${{ env.AR_HOST }}/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}:${{ github.sha }}"
+          DB_URL='jdbc:postgresql:///servio?cloudSqlInstance=${{ env.CLOUDSQL_INSTANCE }}&socketFactory=com.google.cloud.sql.postgres.SocketFactory&currentSchema=event'
+          gcloud run deploy "${{ env.SERVICE }}" \
+            --image="$IMAGE" \
+            --region="${{ env.REGION }}" \
+            --platform=managed \
+            --service-account="${{ env.RUNTIME_SA }}" \
+            --add-cloudsql-instances="${{ env.CLOUDSQL_INSTANCE }}" \
+            --port=8080 \
+            --memory=1Gi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=4 \
+            --timeout=300 \
+            --allow-unauthenticated \
+            --set-env-vars="SPRING_PROFILES_ACTIVE=prod,SERVER_PORT=8080,DATABASE_URL=${DB_URL},DATABASE_USERNAME=servio_app" \
+            --set-secrets="DATABASE_PASSWORD=servio-db-password:latest,JWT_SECRET=jwt-secret:latest,NETOPIA_API_KEY=netopia-api-key:latest,NETOPIA_POS_SIGNATURE=netopia-pos-signature:latest"
+
+      - name: Show service URL
+        run: gcloud run services describe ${{ env.SERVICE }} --region=${{ env.REGION }} --format='value(status.url)'

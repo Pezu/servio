@@ -55,6 +55,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Cloud SQL connector for connecting to Cloud SQL Postgres from Cloud Run -->
+        <dependency>
+            <groupId>com.google.cloud.sql</groupId>
+            <artifactId>postgres-socket-factory</artifactId>
+            <version>1.21.0</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
