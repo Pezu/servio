@@ -20,6 +20,7 @@
 
     <properties>
         <java.version>21</java.version>
+        <flyway.version>10.20.1</flyway.version>
     </properties>
 
     <dependencies>
@@ -77,10 +78,15 @@
             <version>1.5.5.Final</version>
         </dependency>
 
-        <!-- Flyway -->
+        <!-- Flyway (10.x: per-database modules split from flyway-core; needs explicit Postgres dep) -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <version>${flyway.version}</version>
         </dependency>
 
         <!-- iText for PDF generation -->
