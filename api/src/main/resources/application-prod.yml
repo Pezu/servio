@@ -24,7 +24,7 @@ netopia:
   api-key: ${NETOPIA_API_KEY}
   pos-signature: ${NETOPIA_POS_SIGNATURE}
   base-url: ${NETOPIA_BASE_URL:https://secure.sandbox.netopia-payments.com}
-  notify-url: https://api.servioapp.ro/api/payments/netopia/notify
+  notify-url: https://servioapp.ro/api/payments/netopia/notify
   redirect-url: https://servioapp.ro/payment/confirmed
 
 # Production logging - less verbose
