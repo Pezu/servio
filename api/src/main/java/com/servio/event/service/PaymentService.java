@@ -3,12 +3,15 @@ package com.servio.event.service;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
+import com.servio.event.event.PaymentCompletedEvent;
 import com.servio.event.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,8 +20,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentService {
 
+    private static final String PAYMENT_METHOD_CARD = "CARD";
+
     private final OrderRepository orderRepository;
     private final OrderNotificationService orderNotificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // Payment reference prefixes
     // Format: ORDER-{orderId}
@@ -142,6 +148,7 @@ public class PaymentService {
             int itemsMarked = markOrderAsPaid(order);
             if (itemsMarked > 0) {
                 orderNotificationService.notifyPaymentComplete(order.getEventId(), order.getOrderPointId(), itemsMarked);
+                eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD));
             }
             return itemsMarked;
         }
@@ -158,8 +165,13 @@ public class PaymentService {
         int totalItemsMarked = 0;
         UUID orderPointId = null;
         UUID eventId = null;
+        List<UUID> paidOrderIds = new ArrayList<>();
         for (OrderEntity order : orders) {
-            totalItemsMarked += markOrderAsPaid(order);
+            int itemsMarked = markOrderAsPaid(order);
+            totalItemsMarked += itemsMarked;
+            if (itemsMarked > 0) {
+                paidOrderIds.add(order.getId());
+            }
             // Track order point ID and event ID (all orders for a registration should be at the same order point/event)
             if (orderPointId == null && order.getOrderPointId() != null) {
                 orderPointId = order.getOrderPointId();
@@ -172,6 +184,7 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0 && orderPointId != null) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD));
         }
         return totalItemsMarked;
     }
@@ -184,8 +197,13 @@ public class PaymentService {
         log.info("Found {} orders at order point {}", orders.size(), orderPointId);
         int totalItemsMarked = 0;
         UUID eventId = null;
+        List<UUID> paidOrderIds = new ArrayList<>();
         for (OrderEntity order : orders) {
-            totalItemsMarked += markOrderAsPaid(order);
+            int itemsMarked = markOrderAsPaid(order);
+            totalItemsMarked += itemsMarked;
+            if (itemsMarked > 0) {
+                paidOrderIds.add(order.getId());
+            }
             if (eventId == null && order.getEventId() != null) {
                 eventId = order.getEventId();
             }
@@ -194,6 +212,7 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD));
         }
         return totalItemsMarked;
     }

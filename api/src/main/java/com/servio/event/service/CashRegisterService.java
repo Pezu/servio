@@ -81,12 +81,6 @@ public class CashRegisterService {
         // Stamp a unique requestId so the agent's eventual reply can be matched back.
         String requestId = UUID.randomUUID().toString();
 
-        // Build the structured payload that gets pushed to the ECR agent.
-        Map<String, Object> receiptPayload = buildReceiptPayload(orders, request, requestId);
-        log.info("[CashRegister] Receipt payload (requestId={}):\n{}", requestId, pretty(receiptPayload));
-
-        BigDecimal totalAmount = (BigDecimal) ((Map<String, Object>) receiptPayload.get("totals")).get("total");
-
         // Resolve which ECR device to print on. The frontend sends the chosen
         // device's id; if missing we fall back to the first registered one
         // for this event (preserves backwards compatibility).
@@ -102,6 +96,14 @@ public class CashRegisterService {
         if (deviceOpt.isEmpty()) {
             deviceOpt = cashRegisterRepository.findByEventId(eventId).stream().findFirst();
         }
+
+        // Build the structured payload (includes the resolved device's IP so the
+        // bridge knows which physical printer to talk to).
+        Map<String, Object> receiptPayload = buildReceiptPayload(orders, request, requestId, deviceOpt.orElse(null));
+        log.info("[CashRegister] Receipt payload (requestId={}):\n{}", requestId, pretty(receiptPayload));
+
+        BigDecimal totalAmount = (BigDecimal) ((Map<String, Object>) receiptPayload.get("totals")).get("total");
+
         if (deviceOpt.isEmpty()) {
             log.warn("[CashRegister] No ECR agent registered for event {}; returning mock response.", eventId);
             return mockResponse(request, totalAmount);
@@ -159,7 +161,7 @@ public class CashRegisterService {
         return mock;
     }
 
-    private Map<String, Object> buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId) {
+    private Map<String, Object> buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId, CashRegisterEntity device) {
         OrderEntity first = orders.get(0);
         String orderPointName = orderPointRepository.findById(first.getOrderPointId())
                 .map(op -> op.getName())
@@ -223,6 +225,13 @@ public class CashRegisterService {
         totals.put("vat", totalVat);
         totals.put("total", totalGross);
 
+        Map<String, Object> cashRegister = new java.util.LinkedHashMap<>();
+        if (device != null) {
+            cashRegister.put("deviceId", device.getId());
+            cashRegister.put("name", device.getName());
+            cashRegister.put("ip", device.getIp());
+        }
+
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("requestId", requestId);
         payload.put("receiptType", "PAY_LATER");
@@ -230,6 +239,7 @@ public class CashRegisterService {
         payload.put("operator", request.getOperator());
         payload.put("issuedAt", LocalDateTime.now());
         payload.put("eventId", first.getEventId());
+        payload.put("cashRegister", cashRegister);
         payload.put("table", table);
         payload.put("orders", orderRefs);
         payload.put("lines", lines);
