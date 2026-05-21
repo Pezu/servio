@@ -7,6 +7,11 @@
 # - NETOPIA_API_KEY: Netopia payment API key (required)
 # - NETOPIA_POS_SIGNATURE: Netopia POS signature (required)
 
+# Public-facing base URL used for generated content (QR codes, callback links, etc.)
+# Must be the user-visible domain, never localhost or an internal Cloud Run URL.
+application:
+  base-url: https://servioapp.ro
+
 jwt:
   secret: ${JWT_SECRET}
 
@@ -19,7 +24,7 @@ netopia:
   api-key: ${NETOPIA_API_KEY}
   pos-signature: ${NETOPIA_POS_SIGNATURE}
   base-url: ${NETOPIA_BASE_URL:https://secure.sandbox.netopia-payments.com}
-  notify-url: https://servioapp.ro/api/payments/netopia/notify
+  notify-url: https://api.servioapp.ro/api/payments/netopia/notify
   redirect-url: https://servioapp.ro/payment/confirmed
 
 # Production logging - less verbose
