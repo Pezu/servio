@@ -15,6 +15,7 @@ env:
   AR_HOST: europe-west1-docker.pkg.dev
   AR_REPO: servio-web
   SERVICE: servio-web
+  RUNTIME_SA: servio-web-runtime@servio-order-app.iam.gserviceaccount.com
 
 permissions:
   contents: read
@@ -58,6 +59,7 @@ jobs:
             --image="$IMAGE" \
             --region="${{ env.REGION }}" \
             --platform=managed \
+            --service-account="${{ env.RUNTIME_SA }}" \
             --port=8080 \
             --memory=256Mi \
             --cpu=1 \
