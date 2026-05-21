@@ -22,3 +22,5 @@ start.bat
 
 # Local-only secrets (e.g. GCS HMAC keys)
 .env.local.secrets
+api/src/main/resources/application-local-secrets.yml
+api/src/main/resources/application-local-netopia.yml

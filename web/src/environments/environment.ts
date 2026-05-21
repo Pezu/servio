@@ -3,7 +3,7 @@
 export const environment = {
   production: false,
   // Gateway URL - all API calls go through the gateway
-  apiUrl: 'http://10.21.210.51:8080',
+  apiUrl: 'http://192.168.1.136:8080',
   // WebSocket URL - gateway proxies to WebSocket server
-  wsUrl: 'ws://10.21.210.51:8080/ws'
+  wsUrl: 'ws://192.168.1.136:8080/ws'
 };

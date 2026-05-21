@@ -25,13 +25,14 @@ public class EcrAgentController {
     @MessageMapping("/ecr/result")
     public void handleAgentResult(@Payload AgentReplyPayload reply, Principal principal) {
         String deviceId = principal != null ? principal.getName() : "unknown";
-        log.info("[ECR] Agent reply received from deviceId={} requestId={} status={}",
-                deviceId, reply.getRequestId(), reply.getResponse() != null ? reply.getResponse().getStatus() : "null");
-        if (reply.getRequestId() == null || reply.getResponse() == null) {
-            log.warn("[ECR] Malformed agent reply (missing requestId or response): {}", reply);
+        log.info("[ECR] Agent reply received from deviceId={} requestId={} eventId={} status={}",
+                deviceId, reply.getRequestId(), reply.getEventId(),
+                reply.getResponse() != null ? reply.getResponse().getStatus() : "null");
+        if (reply.getRequestId() == null || reply.getEventId() == null || reply.getResponse() == null) {
+            log.warn("[ECR] Malformed agent reply (missing requestId, eventId, or response): {}", reply);
             return;
         }
-        cashRegisterService.handleAgentReply(reply.getRequestId(), reply.getResponse());
+        cashRegisterService.handleAgentReply(reply.getRequestId(), reply.getEventId(), reply.getResponse());
     }
 
     @lombok.Data
@@ -39,6 +40,7 @@ public class EcrAgentController {
     @lombok.AllArgsConstructor
     public static class AgentReplyPayload {
         private String requestId;
+        private String eventId;
         private CashRegisterReceiptResponse response;
     }
 }

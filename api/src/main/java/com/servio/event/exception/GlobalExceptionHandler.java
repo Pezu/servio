@@ -1,5 +1,6 @@
 package com.servio.event.exception;
 
+import com.servio.event.dto.ApiError;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,32 +14,27 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Global exception handler for REST controllers.
- * Provides consistent error responses and prevents sensitive information leakage.
- */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+    public ResponseEntity<ApiError> handleResourceNotFound(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage(), "RESOURCE_NOT_FOUND");
     }
 
     @ExceptionHandler(ValidationException.class)
-    public ResponseEntity<Map<String, Object>> handleValidation(ValidationException ex) {
+    public ResponseEntity<ApiError> handleValidation(ValidationException ex) {
         log.warn("Validation error: {}", ex.getMessage());
-        Map<String, Object> response = buildResponseBody(HttpStatus.BAD_REQUEST, ex.getMessage(), "VALIDATION_ERROR");
-        if (ex.getField() != null) {
-            response.put("field", ex.getField());
-        }
+        ApiError response = baseError(HttpStatus.BAD_REQUEST, ex.getMessage(), "VALIDATION_ERROR")
+                .field(ex.getField())
+                .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiError> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = ((FieldError) error).getField();
@@ -48,54 +44,53 @@ public class GlobalExceptionHandler {
 
         log.warn("Validation failed: {}", fieldErrors);
 
-        Map<String, Object> response = buildResponseBody(HttpStatus.BAD_REQUEST, "Validation failed", "VALIDATION_ERROR");
-        response.put("errors", fieldErrors);
+        ApiError response = baseError(HttpStatus.BAD_REQUEST, "Validation failed", "VALIDATION_ERROR")
+                .errors(fieldErrors)
+                .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(UnauthorizedAccessException.class)
-    public ResponseEntity<Map<String, Object>> handleUnauthorizedAccess(UnauthorizedAccessException ex) {
+    public ResponseEntity<ApiError> handleUnauthorizedAccess(UnauthorizedAccessException ex) {
         log.warn("Unauthorized access attempt: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage(), "ACCESS_DENIED");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "Access denied", "ACCESS_DENIED");
     }
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException ex) {
+    public ResponseEntity<ApiError> handleBusinessException(BusinessException ex) {
         log.warn("Business rule violation: {}", ex.getMessage());
         String code = ex.getErrorCode() != null ? ex.getErrorCode() : "BUSINESS_ERROR";
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), code);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
         log.warn("Invalid argument: {}", ex.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), "INVALID_ARGUMENT");
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
-        // Log the full exception for debugging, but don't expose details to client
+    public ResponseEntity<ApiError> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", "INTERNAL_ERROR");
     }
 
-    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message, String code) {
-        return ResponseEntity.status(status).body(buildResponseBody(status, message, code));
+    private ResponseEntity<ApiError> buildResponse(HttpStatus status, String message, String code) {
+        return ResponseEntity.status(status).body(baseError(status, message, code).build());
     }
 
-    private Map<String, Object> buildResponseBody(HttpStatus status, String message, String code) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", status.value());
-        response.put("error", status.getReasonPhrase());
-        response.put("message", message);
-        response.put("code", code);
-        return response;
+    private ApiError.ApiErrorBuilder baseError(HttpStatus status, String message, String code) {
+        return ApiError.builder()
+                .timestamp(LocalDateTime.now().toString())
+                .status(status.value())
+                .error(status.getReasonPhrase())
+                .message(message)
+                .code(code);
     }
 }

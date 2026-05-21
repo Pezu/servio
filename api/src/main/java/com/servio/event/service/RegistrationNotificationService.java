@@ -1,5 +1,6 @@
 package com.servio.event.service;
 
+import com.servio.event.dto.RegistrationApprovedEvent;
 import com.servio.event.dto.sqs.ValidationRequestedEvent;
 import com.servio.event.entity.RegistrationEntity;
 import com.servio.event.entity.RegistrationOrderPointEntity;
@@ -9,7 +10,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -45,11 +45,11 @@ public class RegistrationNotificationService {
         UUID eventId = registration.getEvent().getId();
         UUID orderPointId = junction.getOrderPoint().getId();
 
-        Map<String, Object> event = Map.of(
-                "type", "REGISTRATION_APPROVED",
-                "registrationId", registrationId.toString(),
-                "eventId", eventId.toString(),
-                "orderPointId", orderPointId.toString()
+        RegistrationApprovedEvent event = new RegistrationApprovedEvent(
+                "REGISTRATION_APPROVED",
+                registrationId.toString(),
+                eventId.toString(),
+                orderPointId.toString()
         );
 
         String eventDestination = "/topic/event/" + eventId + "/registrations";

@@ -5,13 +5,14 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.servio.event.dto.CashRegisterReceiptRequest;
 import com.servio.event.dto.CashRegisterReceiptResponse;
+import com.servio.event.dto.ReceiptLine;
+import com.servio.event.dto.ReceiptPayload;
 import com.servio.event.entity.CashRegisterEntity;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.repository.CashRegisterRepository;
-import com.servio.event.repository.OrderPointRepository;
 import com.servio.event.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,14 +20,12 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -36,13 +35,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class CashRegisterService {
 
     private final OrderRepository orderRepository;
-    private final OrderPointRepository orderPointRepository;
     private final CashRegisterRepository cashRegisterRepository;
     private final SimpMessagingTemplate messagingTemplate;
-
-    /** requestId → context, so when an agent replies we know which event to push it to. */
-    private record PendingReceiptContext(UUID eventId, String deviceId) {}
-    private final ConcurrentHashMap<String, PendingReceiptContext> pendingReceipts = new ConcurrentHashMap<>();
 
     private static final ObjectMapper LOG_MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -97,12 +91,10 @@ public class CashRegisterService {
             deviceOpt = cashRegisterRepository.findByEventId(eventId).stream().findFirst();
         }
 
-        // Build the structured payload (includes the resolved device's IP so the
-        // bridge knows which physical printer to talk to).
-        Map<String, Object> receiptPayload = buildReceiptPayload(orders, request, requestId, deviceOpt.orElse(null));
+        ReceiptPayload receiptPayload = buildReceiptPayload(orders, request, requestId, eventId, deviceOpt.orElse(null));
         log.info("[CashRegister] Receipt payload (requestId={}):\n{}", requestId, pretty(receiptPayload));
 
-        BigDecimal totalAmount = (BigDecimal) ((Map<String, Object>) receiptPayload.get("totals")).get("total");
+        BigDecimal totalAmount = computeTotalAmount(orders);
 
         if (deviceOpt.isEmpty()) {
             log.warn("[CashRegister] No ECR agent registered for event {}; returning mock response.", eventId);
@@ -111,9 +103,8 @@ public class CashRegisterService {
 
         String deviceId = deviceOpt.get().getId().toString();
 
-        // True fire-and-forget. Publish to the agent and remember which event
-        // to broadcast the eventual reply on, then return PENDING immediately.
-        pendingReceipts.put(requestId, new PendingReceiptContext(eventId, deviceId));
+        // Fire-and-forget. The agent echoes eventId back in its reply,
+        // so we don't need to track the request server-side.
         log.info("[CashRegister] Dispatching receipt to agent deviceId={} (requestId={})", deviceId, requestId);
         messagingTemplate.convertAndSendToUser(deviceId, "/queue/ecr/print", receiptPayload);
         log.info("[CashRegister] Published to /user/{}/queue/ecr/print (requestId={})\n{}",
@@ -130,18 +121,17 @@ public class CashRegisterService {
 
     /**
      * Called by the WebSocket message handler when the agent posts /app/ecr/result.
-     * Pushes the agent's reply to /topic/event/{eventId}/cash-register-reply so the
-     * dashboard can react (toast / store fiscal number / mark order paid, etc.).
+     * The agent echoes the original eventId back, so we broadcast directly to
+     * /topic/event/{eventId}/cash-register-reply without any server-side state.
      */
-    public void handleAgentReply(String requestId, CashRegisterReceiptResponse response) {
-        PendingReceiptContext ctx = pendingReceipts.remove(requestId);
-        if (ctx == null) {
-            log.warn("[CashRegister] Agent replied for unknown/expired requestId={}; dropping.", requestId);
+    public void handleAgentReply(String requestId, String eventId, CashRegisterReceiptResponse response) {
+        if (eventId == null) {
+            log.warn("[CashRegister] Agent reply missing eventId (requestId={}); dropping.", requestId);
             return;
         }
-        log.info("[CashRegister] Broadcasting agent reply (requestId={}, deviceId={}, eventId={}): {}",
-                requestId, ctx.deviceId(), ctx.eventId(), response);
-        messagingTemplate.convertAndSend("/topic/event/" + ctx.eventId() + "/cash-register-reply", response);
+        log.info("[CashRegister] Broadcasting agent reply (requestId={}, eventId={}): {}",
+                requestId, eventId, response);
+        messagingTemplate.convertAndSend("/topic/event/" + eventId + "/cash-register-reply", response);
     }
 
     private CashRegisterReceiptResponse mockResponse(CashRegisterReceiptRequest request, BigDecimal totalAmount) {
@@ -161,89 +151,46 @@ public class CashRegisterService {
         return mock;
     }
 
-    private Map<String, Object> buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId, CashRegisterEntity device) {
-        OrderEntity first = orders.get(0);
-        String orderPointName = orderPointRepository.findById(first.getOrderPointId())
-                .map(op -> op.getName())
-                .orElse("");
+    private record LineKey(String name, BigDecimal unitPrice, BigDecimal vat) {}
 
-        List<Map<String, Object>> lines = new ArrayList<>();
-        BigDecimal totalGross = BigDecimal.ZERO;
-        BigDecimal totalNet = BigDecimal.ZERO;
-        BigDecimal totalVat = BigDecimal.ZERO;
-
+    private ReceiptPayload buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId, UUID eventId, CashRegisterEntity device) {
+        java.util.LinkedHashMap<LineKey, Integer> grouped = new java.util.LinkedHashMap<>();
         for (OrderEntity order : orders) {
             for (OrderItemEntity item : order.getItems()) {
                 if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
-                BigDecimal lineGross = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
-                BigDecimal vatRate = item.getVatRate() != null ? item.getVatRate() : BigDecimal.ZERO;
-                BigDecimal lineNet;
-                if (vatRate.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal divisor = BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
-                    lineNet = lineGross.divide(divisor, 2, RoundingMode.HALF_UP);
-                } else {
-                    lineNet = lineGross;
-                }
-                BigDecimal lineVat = lineGross.subtract(lineNet);
-
-                Map<String, Object> line = new java.util.LinkedHashMap<>();
-                line.put("orderId", order.getId());
-                line.put("orderNo", order.getOrderNo());
-                line.put("itemId", item.getId());
-                line.put("name", item.getName());
-                line.put("quantity", item.getQuantity());
-                line.put("unitPrice", item.getPrice());
-                line.put("vatRate", vatRate);
-                line.put("lineNet", lineNet);
-                line.put("lineVat", lineVat);
-                line.put("lineTotal", lineGross);
-                lines.add(line);
-
-                totalGross = totalGross.add(lineGross);
-                totalNet = totalNet.add(lineNet);
-                totalVat = totalVat.add(lineVat);
+                BigDecimal vat = item.getVatRate() != null ? item.getVatRate() : BigDecimal.ZERO;
+                LineKey key = new LineKey(item.getName(), item.getPrice(), vat);
+                grouped.merge(key, item.getQuantity(), Integer::sum);
             }
         }
 
-        List<Map<String, Object>> orderRefs = new ArrayList<>();
-        for (OrderEntity o : orders) {
-            Map<String, Object> ref = new java.util.LinkedHashMap<>();
-            ref.put("orderId", o.getId());
-            ref.put("orderNo", o.getOrderNo());
-            ref.put("nickname", o.getNickname());
-            ref.put("registrationId", o.getRegistrationId());
-            ref.put("groupId", o.getGroupId());
-            orderRefs.add(ref);
+        List<ReceiptLine> lines = new ArrayList<>();
+        for (Map.Entry<LineKey, Integer> e : grouped.entrySet()) {
+            lines.add(new ReceiptLine(
+                    e.getKey().name(),
+                    e.getValue(),
+                    e.getKey().unitPrice(),
+                    e.getKey().vat()
+            ));
         }
 
-        Map<String, Object> table = new java.util.LinkedHashMap<>();
-        table.put("orderPointId", first.getOrderPointId());
-        table.put("orderPointName", orderPointName);
+        return new ReceiptPayload(
+                requestId,
+                eventId.toString(),
+                request.getPaymentMethod(),
+                device != null ? device.getIp() : null,
+                lines
+        );
+    }
 
-        Map<String, Object> totals = new java.util.LinkedHashMap<>();
-        totals.put("net", totalNet);
-        totals.put("vat", totalVat);
-        totals.put("total", totalGross);
-
-        Map<String, Object> cashRegister = new java.util.LinkedHashMap<>();
-        if (device != null) {
-            cashRegister.put("deviceId", device.getId());
-            cashRegister.put("name", device.getName());
-            cashRegister.put("ip", device.getIp());
+    private BigDecimal computeTotalAmount(List<OrderEntity> orders) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (OrderEntity order : orders) {
+            for (OrderItemEntity item : order.getItems()) {
+                if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                total = total.add(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            }
         }
-
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("requestId", requestId);
-        payload.put("receiptType", "PAY_LATER");
-        payload.put("paymentMethod", request.getPaymentMethod());
-        payload.put("operator", request.getOperator());
-        payload.put("issuedAt", LocalDateTime.now());
-        payload.put("eventId", first.getEventId());
-        payload.put("cashRegister", cashRegister);
-        payload.put("table", table);
-        payload.put("orders", orderRefs);
-        payload.put("lines", lines);
-        payload.put("totals", totals);
-        return payload;
+        return total;
     }
 }

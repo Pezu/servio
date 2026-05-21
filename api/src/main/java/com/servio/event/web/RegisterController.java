@@ -1,5 +1,7 @@
 package com.servio.event.web;
 
+import com.servio.event.dto.OrderPoint;
+import com.servio.event.dto.OrderPointInfo;
 import com.servio.event.dto.RegisterRequest;
 import com.servio.event.dto.Registration;
 import com.servio.event.service.OrderPointService;
@@ -11,7 +13,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -120,32 +121,27 @@ public class RegisterController {
     }
 
     @GetMapping("/order-points/{orderPointId}/info")
-    public ResponseEntity<Map<String, Object>> getOrderPointInfo(@PathVariable UUID orderPointId) {
+    public ResponseEntity<OrderPointInfo> getOrderPointInfo(@PathVariable UUID orderPointId) {
         var orderPoint = orderPointService.getOrderPointById(orderPointId);
-        var result = new java.util.HashMap<String, Object>();
-        result.put("id", orderPoint.getId().toString());
-        result.put("name", orderPoint.getName());
-        result.put("payLater", orderPoint.isPayLater());
-        if (orderPoint.getMenuId() != null) {
-            result.put("menuId", orderPoint.getMenuId().toString());
+        return ResponseEntity.ok(toInfo(orderPoint));
+    }
+
+    @GetMapping("/order-points/{orderPointId}/group")
+    public ResponseEntity<List<OrderPointInfo>> getOrderPointGroup(@PathVariable UUID orderPointId) {
+        var siblings = orderPointService.findGroupSiblings(orderPointId);
+        var result = new java.util.ArrayList<OrderPointInfo>(siblings.size());
+        for (var op : siblings) {
+            result.add(toInfo(op));
         }
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/order-points/{orderPointId}/group")
-    public ResponseEntity<List<Map<String, Object>>> getOrderPointGroup(@PathVariable UUID orderPointId) {
-        var siblings = orderPointService.findGroupSiblings(orderPointId);
-        var result = new java.util.ArrayList<Map<String, Object>>(siblings.size());
-        for (var op : siblings) {
-            var entry = new java.util.HashMap<String, Object>();
-            entry.put("id", op.getId().toString());
-            entry.put("name", op.getName());
-            entry.put("payLater", op.isPayLater());
-            if (op.getMenuId() != null) {
-                entry.put("menuId", op.getMenuId().toString());
-            }
-            result.add(entry);
-        }
-        return ResponseEntity.ok(result);
+    private OrderPointInfo toInfo(OrderPoint op) {
+        return new OrderPointInfo(
+                op.getId().toString(),
+                op.getName(),
+                op.isPayLater(),
+                op.getMenuId() != null ? op.getMenuId().toString() : null
+        );
     }
 }
