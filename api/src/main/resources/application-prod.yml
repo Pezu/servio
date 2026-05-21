@@ -19,6 +19,10 @@ jwt:
 cors:
   allowed-origins: https://servioapp.ro,https://www.servioapp.ro
 
+# ECR bridge - require a real key in prod, no dev default fallback.
+bridge:
+  api-key: ${BRIDGE_API_KEY}
+
 # Netopia production settings
 netopia:
   api-key: ${NETOPIA_API_KEY}

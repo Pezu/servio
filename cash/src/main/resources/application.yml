@@ -1,0 +1,14 @@
+server:
+  port: 8085
+
+bridge:
+  # Servio API STOMP endpoint. SockJS exposes a raw WebSocket subpath at /ws/websocket.
+  server-url: wss://servioapp.ro/ws/websocket
+  # Must match bridge.api-key on the API side (api/application.yml).
+  api-key: dev-bridge-key-change-me
+  # Delay before the mock replies OK to a print request.
+  reply-delay-seconds: 5
+
+logging:
+  level:
+    com.servio.cash: DEBUG

@@ -38,6 +38,9 @@ public class CashRegisterService {
     private final CashRegisterRepository cashRegisterRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    @org.springframework.beans.factory.annotation.Value("${bridge.principal:bridge}")
+    private String bridgePrincipal;
+
     private static final ObjectMapper LOG_MAPPER = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -101,14 +104,14 @@ public class CashRegisterService {
             return mockResponse(request, totalAmount);
         }
 
-        String deviceId = deviceOpt.get().getId().toString();
-
-        // Fire-and-forget. The agent echoes eventId back in its reply,
-        // so we don't need to track the request server-side.
-        log.info("[CashRegister] Dispatching receipt to agent deviceId={} (requestId={})", deviceId, requestId);
-        messagingTemplate.convertAndSendToUser(deviceId, "/queue/ecr/print", receiptPayload);
+        // Fire-and-forget. Every print job goes to the single bridge principal —
+        // the bridge picks the physical printer from the IP in the payload.
+        // The bridge echoes eventId back so we don't need to track the request.
+        log.info("[CashRegister] Dispatching receipt to bridge for IP={} (requestId={})",
+                deviceOpt.get().getIp(), requestId);
+        messagingTemplate.convertAndSendToUser(bridgePrincipal, "/queue/ecr/print", receiptPayload);
         log.info("[CashRegister] Published to /user/{}/queue/ecr/print (requestId={})\n{}",
-                deviceId, requestId, pretty(receiptPayload));
+                bridgePrincipal, requestId, pretty(receiptPayload));
 
         return CashRegisterReceiptResponse.builder()
                 .status("PENDING")

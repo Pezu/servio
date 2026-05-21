@@ -1,14 +1,23 @@
 package com.servio.cash.dto;
 
-import lombok.Builder;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
-@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class ReceiptResponse {
-    private boolean success;
-    private String message;
-    private String fiscalNumber;
+    private String status;
     private String receiptNumber;
-    private String rawResponse;
+    private String fiscalReceiptId;
+    private String cashRegisterSerial;
+    private LocalDateTime issuedAt;
+    private BigDecimal totalAmount;
+    private String paymentMethod;
+    private String errorCode;
+    private String errorMessage;
 }
