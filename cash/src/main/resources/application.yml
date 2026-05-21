@@ -5,7 +5,9 @@ bridge:
   # Servio API STOMP endpoint. SockJS exposes a raw WebSocket subpath at /ws/websocket.
   server-url: wss://servioapp.ro/ws/websocket
   # Must match bridge.api-key on the API side (api/application.yml).
-  api-key: dev-bridge-key-change-me
+  # Real value lives in the gitignored application-local-secrets.yml profile —
+  # start with: mvn spring-boot:run -Dspring-boot.run.profiles=local-secrets
+  api-key: ${BRIDGE_API_KEY:dev-bridge-key-change-me}
   # Delay before the mock replies OK to a print request.
   reply-delay-seconds: 5
 

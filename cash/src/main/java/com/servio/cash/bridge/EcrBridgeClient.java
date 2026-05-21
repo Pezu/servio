@@ -42,6 +42,18 @@ public class EcrBridgeClient {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private StompSession session;
 
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    private static String pretty(Object o) {
+        try {
+            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(o);
+        } catch (Exception e) {
+            return String.valueOf(o);
+        }
+    }
+
     @PostConstruct
     public void connect() throws Exception {
         if (apiKey == null || apiKey.isBlank()) {
@@ -50,10 +62,7 @@ public class EcrBridgeClient {
         }
 
         MappingJackson2MessageConverter converter = new MappingJackson2MessageConverter();
-        ObjectMapper mapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        converter.setObjectMapper(mapper);
+        converter.setObjectMapper(MAPPER);
 
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
         stompClient.setMessageConverter(converter);
@@ -81,7 +90,8 @@ public class EcrBridgeClient {
         @Override
         public void handleFrame(StompHeaders headers, Object payload) {
             ReceiptPayload receipt = (ReceiptPayload) payload;
-            log.info("[Bridge] Received receipt: {}", receipt);
+            log.info("[Bridge] Received receipt (requestId={}, eventId={}, ip={}):\n{}",
+                    receipt.getRequestId(), receipt.getEventId(), receipt.getCashRegister(), pretty(receipt));
             scheduler.schedule(() -> sendReply(receipt), replyDelaySeconds, TimeUnit.SECONDS);
         }
     }

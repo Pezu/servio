@@ -24,3 +24,4 @@ start.bat
 .env.local.secrets
 api/src/main/resources/application-local-secrets.yml
 api/src/main/resources/application-local-netopia.yml
+cash/src/main/resources/application-local-secrets.yml
