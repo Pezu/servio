@@ -24,6 +24,9 @@ public class FirebaseConfig {
     @Value("${firebase.credentials-json:}")
     private String credentialsJson;
 
+    @Value("${firebase.project-id:}")
+    private String projectId;
+
     @Bean
     public FirebaseMessaging firebaseMessaging() throws Exception {
         if (!FirebaseApp.getApps().isEmpty()) {
@@ -48,10 +51,17 @@ public class FirebaseConfig {
             credentials = GoogleCredentials.getApplicationDefault();
         }
 
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(credentials)
-                .build();
-        FirebaseApp app = FirebaseApp.initializeApp(options);
+        FirebaseOptions.Builder builder = FirebaseOptions.builder().setCredentials(credentials);
+        // ADC on Cloud Run doesn't carry a project ID and Cloud Run doesn't set
+        // GOOGLE_CLOUD_PROJECT by default — FirebaseMessaging needs it explicitly.
+        String resolvedProjectId = !projectId.isBlank()
+                ? projectId
+                : System.getenv("GOOGLE_CLOUD_PROJECT");
+        if (resolvedProjectId != null && !resolvedProjectId.isBlank()) {
+            log.info("Firebase project ID: {}", resolvedProjectId);
+            builder.setProjectId(resolvedProjectId);
+        }
+        FirebaseApp app = FirebaseApp.initializeApp(builder.build());
         return FirebaseMessaging.getInstance(app);
     }
 }

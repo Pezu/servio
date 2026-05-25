@@ -15,6 +15,9 @@ application:
 jwt:
   secret: ${JWT_SECRET}
 
+firebase:
+  project-id: servio-order-app
+
 # CORS for production domain
 # https://localhost and capacitor://localhost are the Capacitor WebView origins on Android/iOS.
 cors:
