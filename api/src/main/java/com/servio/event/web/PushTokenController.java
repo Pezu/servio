@@ -1,0 +1,72 @@
+package com.servio.event.web;
+
+import com.servio.event.dto.PushTokenRegisterRequest;
+import com.servio.event.entity.PushTokenEntity;
+import com.servio.event.entity.UserEntity;
+import com.servio.event.repository.PushTokenRepository;
+import com.servio.event.repository.UserRepository;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/push")
+@RequiredArgsConstructor
+public class PushTokenController {
+
+    private final PushTokenRepository pushTokenRepository;
+    private final UserRepository userRepository;
+
+    @PostMapping("/register")
+    @Transactional
+    public ResponseEntity<Void> register(@Valid @RequestBody PushTokenRegisterRequest request) {
+        UUID userId = currentUserId();
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + userId));
+
+        Instant now = Instant.now();
+        PushTokenEntity entity = pushTokenRepository.findById(request.getToken()).orElse(null);
+        if (entity == null) {
+            entity = new PushTokenEntity();
+            entity.setToken(request.getToken());
+            entity.setCreatedAt(now);
+            log.info("Registering new push token for user={} platform={}", userId, request.getPlatform());
+        } else {
+            log.debug("Refreshing existing push token for user={}", userId);
+        }
+        entity.setUser(user);
+        entity.setPlatform(request.getPlatform());
+        entity.setLastSeenAt(now);
+        pushTokenRepository.save(entity);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/unregister/{token}")
+    @Transactional
+    public ResponseEntity<Void> unregister(@PathVariable String token) {
+        pushTokenRepository.deleteByToken(token);
+        return ResponseEntity.noContent().build();
+    }
+
+    private UUID currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            throw new IllegalStateException("No authenticated principal");
+        }
+        return UUID.fromString(auth.getPrincipal().toString());
+    }
+}
