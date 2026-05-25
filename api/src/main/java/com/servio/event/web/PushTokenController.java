@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -34,9 +33,7 @@ public class PushTokenController {
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<Void> register(@Valid @RequestBody PushTokenRegisterRequest request) {
-        UUID userId = currentUserId();
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + userId));
+        UserEntity user = currentUser();
 
         Instant now = Instant.now();
         PushTokenEntity entity = pushTokenRepository.findById(request.getToken()).orElse(null);
@@ -44,9 +41,9 @@ public class PushTokenController {
             entity = new PushTokenEntity();
             entity.setToken(request.getToken());
             entity.setCreatedAt(now);
-            log.info("Registering new push token for user={} platform={}", userId, request.getPlatform());
+            log.info("Registering new push token for user={} platform={}", user.getUsername(), request.getPlatform());
         } else {
-            log.debug("Refreshing existing push token for user={}", userId);
+            log.debug("Refreshing existing push token for user={}", user.getUsername());
         }
         entity.setUser(user);
         entity.setPlatform(request.getPlatform());
@@ -62,11 +59,14 @@ public class PushTokenController {
         return ResponseEntity.noContent().build();
     }
 
-    private UUID currentUserId() {
+    // The JWT subject is the username, not a UUID — resolve to the entity.
+    private UserEntity currentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getPrincipal() == null) {
             throw new IllegalStateException("No authenticated principal");
         }
-        return UUID.fromString(auth.getPrincipal().toString());
+        String principal = auth.getPrincipal().toString();
+        return userRepository.findByUsername(principal)
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + principal));
     }
 }
