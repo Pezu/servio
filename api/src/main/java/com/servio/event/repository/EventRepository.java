@@ -68,4 +68,12 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
            "  OR EXISTS (SELECT 1 FROM EventEntity e3 JOIN e3.users u WHERE e3 = e AND u.username = :username)" +
            ")")
     Page<EventEntity> findActiveAssignedToUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
+
+    /** Users in event_waiters of any of the given events. */
+    @Query("SELECT DISTINCT w.id FROM EventEntity e JOIN e.waiters w WHERE e.id IN :eventIds")
+    java.util.List<UUID> findWaiterUserIdsByEventIds(@Param("eventIds") java.util.List<UUID> eventIds);
+
+    /** Users in event_users of any of the given events. */
+    @Query("SELECT DISTINCT u.id FROM EventEntity e JOIN e.users u WHERE e.id IN :eventIds")
+    java.util.List<UUID> findEventUserIdsByEventIds(@Param("eventIds") java.util.List<UUID> eventIds);
 }

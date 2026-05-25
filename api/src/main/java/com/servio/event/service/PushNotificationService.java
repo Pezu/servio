@@ -12,10 +12,9 @@ import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.Notification;
 import com.google.firebase.messaging.SendResponse;
 import com.servio.event.entity.PushTokenEntity;
-import com.servio.event.entity.RegistrationEntity.ValidationStatus;
-import com.servio.event.entity.RegistrationOrderPointEntity;
+import com.servio.event.repository.EventOrderPointRepository;
+import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.PushTokenRepository;
-import com.servio.event.repository.RegistrationOrderPointRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -36,7 +37,8 @@ public class PushNotificationService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final PushTokenRepository pushTokenRepository;
-    private final RegistrationOrderPointRepository registrationOrderPointRepository;
+    private final EventOrderPointRepository eventOrderPointRepository;
+    private final EventRepository eventRepository;
 
     @Value("${firebase.enabled:true}")
     private boolean firebaseEnabled;
@@ -55,22 +57,25 @@ public class PushNotificationService {
             return;
         }
 
-        List<UUID> userIds = registrationOrderPointRepository
-                .findByOrderPointIdAndValidationStatus(orderPointId, ValidationStatus.APPROVED)
-                .stream()
-                .map(RegistrationOrderPointEntity::getRegistration)
-                .map(reg -> reg.getUser() != null ? reg.getUser().getId() : null)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        log.info("FCM target users: {} for orderPoint={}", userIds.size(), orderPointId);
+        // Mirrors the targeting in EventRepository.findActiveAssignedToUsername:
+        // a user is a waiter for this order point if either (a) they're directly
+        // bound via event_order_points.user_id, or (b) they're in event_waiters
+        // / event_users of the parent event.
+        Set<UUID> userIds = new HashSet<>(
+                eventOrderPointRepository.findUserIdsAssignedToOrderPoint(orderPointId));
+        List<UUID> eventIds = eventOrderPointRepository.findEventIdsByOrderPointId(orderPointId);
+        if (!eventIds.isEmpty()) {
+            userIds.addAll(eventRepository.findWaiterUserIdsByEventIds(eventIds));
+            userIds.addAll(eventRepository.findEventUserIdsByEventIds(eventIds));
+        }
+        log.info("FCM target users: {} for orderPoint={} (events={})", userIds.size(), orderPointId, eventIds);
 
         if (userIds.isEmpty()) {
-            log.info("FCM skip: no approved waiters with users on orderPoint={}", orderPointId);
+            log.info("FCM skip: no waiters assigned to orderPoint={}", orderPointId);
             return;
         }
 
-        List<PushTokenEntity> tokens = pushTokenRepository.findByUserIdIn(userIds);
+        List<PushTokenEntity> tokens = pushTokenRepository.findByUserIdIn(new ArrayList<>(userIds));
         log.info("FCM target tokens: {} for {} users", tokens.size(), userIds.size());
         if (tokens.isEmpty()) {
             log.info("FCM skip: no push tokens for {} waiters of orderPoint={}", userIds.size(), orderPointId);
