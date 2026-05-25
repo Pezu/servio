@@ -123,6 +123,13 @@
             <version>4.1.0</version>
         </dependency>
 
+        <!-- Firebase Admin (FCM push) -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.3.0</version>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

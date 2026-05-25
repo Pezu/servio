@@ -77,6 +77,13 @@ netopia:
   currency: ${NETOPIA_CURRENCY:RON}
   email-template: ${NETOPIA_EMAIL_TEMPLATE:confirm}
 
+# Firebase Admin (FCM push notifications)
+# Provide ONE of these. credentials-json takes precedence; if both are empty,
+# the SDK falls back to application-default credentials (works on GCP runtimes).
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+  credentials-json: ${FIREBASE_CREDENTIALS_JSON:}
+
 # Single ECR bridge that fans out to all physical printers.
 # The bridge connects with X-Bridge-Key and the API publishes every print job to
 # /user/{bridge-principal}/queue/ecr/print — the bridge picks the printer by IP.

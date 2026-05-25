@@ -2,6 +2,7 @@ package com.servio.event.listener;
 
 import com.servio.event.dto.WebSocketNotification;
 import com.servio.event.dto.sqs.*;
+import com.servio.event.service.PushNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class NotificationEventListener {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final PushNotificationService pushNotificationService;
 
     @Async("eventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -36,6 +39,17 @@ public class NotificationEventListener {
         notifyEventAndOrderPoint(event.getEventId(), event.getOrderPointId(), notification, "orders");
         // ACTIVE pay-later orders need to appear in the payments view in real time too.
         notifyEventAndOrderPoint(event.getEventId(), event.getOrderPointId(), notification, "payments");
+
+        pushNotificationService.notifyOrderPointWaiters(
+                event.getOrderPointId(),
+                "Order received",
+                "Order #" + event.getOrderNo(),
+                Map.of(
+                        "type", "ORDER_CREATED",
+                        "orderId", String.valueOf(event.getOrderId()),
+                        "orderNo", String.valueOf(event.getOrderNo()),
+                        "eventId", String.valueOf(event.getEventId())
+                ));
     }
 
     @Async("eventExecutor")
@@ -60,6 +74,16 @@ public class NotificationEventListener {
             case "READY" -> {
                 notification.setType("ORDER_READY");
                 notification.setMessage("Order #" + event.getOrderNo() + " is ready for pickup");
+                pushNotificationService.notifyOrderPointWaiters(
+                        event.getOrderPointId(),
+                        "Order ready",
+                        "Order #" + event.getOrderNo() + " is ready for pickup",
+                        Map.of(
+                                "type", "ORDER_READY",
+                                "orderId", String.valueOf(event.getOrderId()),
+                                "orderNo", String.valueOf(event.getOrderNo()),
+                                "eventId", String.valueOf(event.getEventId())
+                        ));
             }
             case "DELIVERED" -> {
                 notification.setType("ORDER_DELIVERED");
