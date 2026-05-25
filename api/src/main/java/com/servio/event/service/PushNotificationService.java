@@ -49,7 +49,11 @@ public class PushNotificationService {
     @Async("eventExecutor")
     @Transactional
     public void notifyOrderPointWaiters(UUID orderPointId, String title, String body, Map<String, String> data) {
-        if (!firebaseEnabled || orderPointId == null) return;
+        log.info("FCM dispatch: orderPoint={}, title='{}', enabled={}", orderPointId, title, firebaseEnabled);
+        if (!firebaseEnabled || orderPointId == null) {
+            log.info("FCM skip: enabled={} orderPointId={}", firebaseEnabled, orderPointId);
+            return;
+        }
 
         List<UUID> userIds = registrationOrderPointRepository
                 .findByOrderPointIdAndValidationStatus(orderPointId, ValidationStatus.APPROVED)
@@ -59,15 +63,17 @@ public class PushNotificationService {
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
+        log.info("FCM target users: {} for orderPoint={}", userIds.size(), orderPointId);
 
         if (userIds.isEmpty()) {
-            log.debug("No waiters with users assigned to orderPoint={}", orderPointId);
+            log.info("FCM skip: no approved waiters with users on orderPoint={}", orderPointId);
             return;
         }
 
         List<PushTokenEntity> tokens = pushTokenRepository.findByUserIdIn(userIds);
+        log.info("FCM target tokens: {} for {} users", tokens.size(), userIds.size());
         if (tokens.isEmpty()) {
-            log.debug("No push tokens for {} waiters of orderPoint={}", userIds.size(), orderPointId);
+            log.info("FCM skip: no push tokens for {} waiters of orderPoint={}", userIds.size(), orderPointId);
             return;
         }
 
