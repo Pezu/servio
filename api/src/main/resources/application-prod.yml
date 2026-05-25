@@ -16,8 +16,9 @@ jwt:
   secret: ${JWT_SECRET}
 
 # CORS for production domain
+# https://localhost and capacitor://localhost are the Capacitor WebView origins on Android/iOS.
 cors:
-  allowed-origins: https://servioapp.ro,https://www.servioapp.ro
+  allowed-origins: https://servioapp.ro,https://www.servioapp.ro,https://localhost,capacitor://localhost
 
 # ECR bridge - require a real key in prod, no dev default fallback.
 bridge:
