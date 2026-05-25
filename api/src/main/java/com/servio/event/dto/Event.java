@@ -27,6 +27,7 @@ public class Event {
     private String clientName;
     private String logoPath;
     private boolean requireValidation;
+    private boolean paused;
     private List<UUID> userIds;
     private List<UUID> waiterUserIds;
     private List<UUID> paymentTypeIds;

@@ -61,6 +61,7 @@ public class EventService {
         eventEntity.setEndDate(request.getEndDate());
         eventEntity.setLocation(location);
         eventEntity.setRequireValidation(request.isRequireValidation());
+        eventEntity.setPaused(request.isPaused());
 
         // Functional approach: batch load related entities
         Optional.ofNullable(request.getUserIds())
@@ -124,6 +125,12 @@ public class EventService {
                 .map(eventMapper::toDto);
     }
 
+    public Page<Event> getActiveEventsAssignedToUsername(String username, Pageable pageable) {
+        LocalDate now = LocalDate.now();
+        return eventRepository.findActiveAssignedToUsername(username, now, pageable)
+                .map(eventMapper::toDto);
+    }
+
     public Page<Event> getAllActiveEvents(Pageable pageable) {
         LocalDate now = LocalDate.now();
         return eventRepository.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(now, now, pageable)
@@ -142,6 +149,7 @@ public class EventService {
         eventEntity.setEndDate(request.getEndDate());
         eventEntity.setLocation(location);
         eventEntity.setRequireValidation(request.isRequireValidation());
+        eventEntity.setPaused(request.isPaused());
 
         // Functional approach: update or clear collections
         updateCollection(request.getUserIds(), userRepository::findAllById, eventEntity::setUsers, eventEntity.getUsers());
@@ -234,22 +242,51 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Upsert the cash registers for an event. Rows in the request that carry an
+     * existing id are updated in place (so external references — the cash register
+     * id is also the bridge agent's deviceId, and FK targets in
+     * {@code cash_register_order_points} — stay stable). Rows without an id are
+     * inserted, and rows present in the DB but absent from the request are deleted.
+     */
     @Transactional
     public List<CashRegister> saveCashRegisters(UUID eventId, List<CashRegister> cashRegisters) {
-        // Delete existing cash registers for this event
-        cashRegisterRepository.deleteByEventId(eventId);
+        List<CashRegister> requested = cashRegisters == null ? List.of() : cashRegisters;
+        List<CashRegisterEntity> existing = cashRegisterRepository.findByEventId(eventId);
+        java.util.Map<UUID, CashRegisterEntity> existingById = existing.stream()
+                .collect(Collectors.toMap(CashRegisterEntity::getId, e -> e));
 
-        // Save new cash registers
-        List<CashRegisterEntity> entities = cashRegisters.stream()
-                .map(cr -> CashRegisterEntity.builder()
+        Set<UUID> requestedIds = requested.stream()
+                .map(CashRegister::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Delete rows no longer present in the request. CASCADE drops any
+        // cash_register_order_points rows for those cash registers.
+        List<CashRegisterEntity> toDelete = existing.stream()
+                .filter(e -> !requestedIds.contains(e.getId()))
+                .collect(Collectors.toList());
+        if (!toDelete.isEmpty()) {
+            cashRegisterRepository.deleteAll(toDelete);
+        }
+
+        // Upsert each row in request order.
+        List<CashRegisterEntity> saved = new java.util.ArrayList<>(requested.size());
+        for (CashRegister cr : requested) {
+            CashRegisterEntity entity;
+            if (cr.getId() != null && existingById.containsKey(cr.getId())) {
+                entity = existingById.get(cr.getId());
+                entity.setName(cr.getName());
+                entity.setIp(cr.getIp());
+            } else {
+                entity = CashRegisterEntity.builder()
                         .eventId(eventId)
                         .name(cr.getName())
                         .ip(cr.getIp())
-                        .sharedToken(cr.getSharedToken())
-                        .build())
-                .collect(Collectors.toList());
-
-        List<CashRegisterEntity> saved = cashRegisterRepository.saveAll(entities);
+                        .build();
+            }
+            saved.add(cashRegisterRepository.save(entity));
+        }
 
         return saved.stream()
                 .map(this::toCashRegisterDto)
@@ -261,7 +298,6 @@ public class EventService {
                 .id(entity.getId())
                 .name(entity.getName())
                 .ip(entity.getIp())
-                .sharedToken(entity.getSharedToken())
                 .build();
     }
 }

@@ -2746,3 +2746,49 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Maintenance view (shown when the event is paused) */
+.maintenance-view {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  gap: 20px;
+  background: #ffffff;
+  text-align: center;
+  z-index: 10000;
+}
+
+.maintenance-logo {
+  max-width: 160px;
+  max-height: 80px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
+
+.maintenance-icon {
+  width: 80px;
+  height: 80px;
+  color: #94a3b8;
+  animation: maintenance-spin 6s linear infinite;
+}
+
+.maintenance-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.maintenance-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+@keyframes maintenance-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -30,9 +30,6 @@ public class CashRegisterEntity {
     @Column(name = "ip")
     private String ip;
 
-    @Column(name = "shared_token")
-    private String sharedToken;
-
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

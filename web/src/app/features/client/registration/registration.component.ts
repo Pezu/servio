@@ -71,6 +71,7 @@ interface EventData {
   name: string;
   logoPath?: string;
   requireValidation?: boolean;
+  paused?: boolean;
 }
 
 interface PendingTeamRegistration {
@@ -137,6 +138,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
 
   // Validation polling
   private validationPollInterval: any = null;
+  private eventPollInterval: any = null;
 
   // Menu
   menuItems: MenuItem[] = [];
@@ -392,11 +394,30 @@ export class RegistrationComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (event) => {
           this.eventData = event;
+          this.startEventPolling();
         },
         error: (err) => {
           console.error('Error loading event data:', err);
         }
       });
+  }
+
+  private startEventPolling(): void {
+    if (this.eventPollInterval) return;
+    this.eventPollInterval = setInterval(() => {
+      this.http.get<EventData>(`${environment.apiUrl}/api/events/${this.eventId}`)
+        .subscribe({
+          next: (event) => { this.eventData = event; },
+          error: () => {}
+        });
+    }, 15000);
+  }
+
+  private stopEventPolling(): void {
+    if (this.eventPollInterval) {
+      clearInterval(this.eventPollInterval);
+      this.eventPollInterval = null;
+    }
   }
 
   getLogoUrl(logoPath: string): string {
@@ -410,6 +431,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.disconnectWebSocket();
     this.stopValidationPolling();
+    this.stopEventPolling();
     this.removeWakeUpListeners();
   }
 

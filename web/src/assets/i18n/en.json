@@ -142,7 +142,9 @@
     "CASH_REGISTERS": "Cash Registers",
     "NO_CASH_REGISTERS": "No cash registers configured",
     "REQUIRE_VALIDATION": "Require validation for pay-later registrations",
-    "REQUIRE_VALIDATION_SHORT": "Validation"
+    "REQUIRE_VALIDATION_SHORT": "Validation",
+    "PAUSED": "Break event (show maintenance message to customers)",
+    "PAUSED_SHORT": "Break"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",

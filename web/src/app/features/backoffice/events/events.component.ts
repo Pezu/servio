@@ -44,7 +44,7 @@ const CUSTOM_DATE_FORMATS = {
 };
 import { ClientService, Client, PageResponse } from '../clients/client.service';
 import { LocationService, Location } from '../clients/location.service';
-import { EventService, Event } from '../clients/event.service';
+import { EventService, Event, OrderPointSummary } from '../clients/event.service';
 import { UserService, User } from '../clients/user.service';
 import { MenuService, MenuItem } from '../clients/menu.service';
 import { EventOrderPointService, EventOrderPoint } from '../clients/event-order-point.service';
@@ -221,6 +221,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <th>{{ 'EVENTS.START_DATE' | translate }}</th>
                       <th>{{ 'EVENTS.END_DATE' | translate }}</th>
                       <th class="text-center">{{ 'EVENTS.REQUIRE_VALIDATION_SHORT' | translate }}</th>
+                      <th class="text-center">{{ 'EVENTS.PAUSED_SHORT' | translate }}</th>
                       <th class="text-end">
                         @if (selectedLocation) {
                           <button class="btn-icon-action btn-icon-add" (click)="openEventModal(); $event.stopPropagation()" [title]="'EVENTS.ADD_EVENT' | translate">
@@ -234,9 +235,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   </thead>
                   <tbody>
                     @if (loadingEvents) {
-                      <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (events.length === 0) {
-                      <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
+                      <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
                     } @else {
                       @for (event of events; track event.id) {
                         <tr>
@@ -264,6 +265,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                    [disabled]="savingValidationFor === event.id"
                                    (change)="toggleRequireValidation(event, $event)"
                                    [title]="'EVENTS.REQUIRE_VALIDATION' | translate">
+                          </td>
+                          <td class="text-center">
+                            <input type="checkbox" class="credit-checkbox"
+                                   [checked]="!!event.paused"
+                                   [disabled]="savingPausedFor === event.id"
+                                   (change)="togglePaused(event, $event)"
+                                   [title]="'EVENTS.PAUSED' | translate">
                           </td>
                           <td class="text-end">
                             <label class="btn-icon-action" [title]="'EVENTS.UPLOAD_LOGO' | translate">
@@ -461,6 +469,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 </label>
               </div>
 
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="eventFormData.paused">
+                  <span class="checkbox-label-text">{{ 'EVENTS.PAUSED' | translate }}</span>
+                </label>
+              </div>
+
             }
     
             <!-- Tables Tab -->
@@ -559,7 +574,6 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <tr>
                         <th>{{ 'COMMON.NAME' | translate }}</th>
                         <th>IP</th>
-                        <th>Shared token</th>
                         <th class="actions-col"></th>
                       </tr>
                     </thead>
@@ -580,28 +594,21 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                               <span class="cell-value">{{ cr.ip || '' }}</span>
                             }
                           </td>
-                          <td class="shared-token-cell">
-                            <div class="shared-token-row">
-                              <span class="editable-cell shared-token-value" (click)="startEditingCashRegister(cr, 'sharedToken', $event)">
-                                @if (isEditingCashRegister(cr, 'sharedToken')) {
-                                  <input type="text" class="inline-input" [(ngModel)]="cr.sharedToken" (blur)="onCashRegisterBlur(cr)" (keydown.enter)="onCashRegisterBlur(cr)" #editInput>
-                                } @else {
-                                  <span class="cell-value mono">{{ cr.sharedToken || '' }}</span>
-                                }
-                              </span>
-                              <button class="btn-icon-action btn-icon-generate" (click)="generateSharedToken(cr); $event.stopPropagation()" title="Generate token">
+                          <td class="actions-col">
+                            <div class="row-actions">
+                              @if (cr.id) {
+                                <button class="btn-icon-action btn-icon-assign" (click)="openAssignModal(cr)" title="Assign order points">
+                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                  </svg>
+                                </button>
+                              }
+                              <button class="btn-icon-action btn-icon-delete" (click)="deleteCashRegister(cr)" title="Delete">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
                             </div>
-                          </td>
-                          <td class="actions-col">
-                            <button class="btn-icon-action btn-icon-delete" (click)="deleteCashRegister(cr)" title="Delete">
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
                           </td>
                         </tr>
                       }
@@ -618,6 +625,45 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 {{ savingEvent ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
               </button>
             }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Assign Order Points to Cash Register Modal -->
+    @if (showAssignModal) {
+      <div class="modal-overlay assign-modal-overlay" (mousedown)="closeAssignModal()">
+        <div class="modal assign-modal" (mousedown)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>Assign order points{{ assignModalCashRegister?.name ? ' — ' + assignModalCashRegister?.name : '' }}</h3>
+            <button class="close-btn" (click)="closeAssignModal()" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div class="modal-body assign-modal-body">
+            @if (loadingAssignments) {
+              <div class="empty-tables-message">{{ 'COMMON.LOADING' | translate }}</div>
+            } @else if (assignableOrderPoints.length === 0) {
+              <div class="empty-tables-message">No parent order points available at this event's location. All are either already assigned to another cash register or there are no order points yet.</div>
+            } @else {
+              <div class="assign-hint">Pick parent order points to assign to this cash register. Split sub-order-points (e.g. M3.1) inherit from their parent and don't appear here.</div>
+              <div class="assign-list">
+                @for (op of assignableOrderPoints; track op.id) {
+                  <label class="assign-row">
+                    <input type="checkbox" class="assign-checkbox"
+                      [checked]="isAssignSelected(op.id)"
+                      (change)="toggleAssignSelection(op.id)">
+                    <span class="assign-name">{{ op.name }}</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" (click)="closeAssignModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button class="btn btn-primary" (click)="saveAssignments()" [disabled]="savingAssignments || loadingAssignments">
+              {{ savingAssignments ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
+            </button>
           </div>
         </div>
       </div>
@@ -881,17 +927,25 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .cash-registers-header { display: flex; justify-content: flex-end; margin-bottom: 16px; }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
     .btn-sm svg { width: 14px; height: 14px; }
-    .cash-registers-table th:nth-child(1) { width: 22%; }
-    .cash-registers-table th:nth-child(2) { width: 18%; }
-    .cash-registers-table th:nth-child(3) { width: 50%; }
-    .cash-registers-table th:nth-child(4) { width: 10%; }
-    .cash-registers-table .actions-col { text-align: center; width: 60px; }
-    .cash-registers-table .shared-token-cell { padding: 0 8px; }
-    .shared-token-row { display: flex; align-items: center; gap: 6px; }
-    .shared-token-value { flex: 1; min-width: 0; }
-    .shared-token-value .cell-value.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; word-break: break-all; }
-    .btn-icon-generate { color: #2563eb; }
-    .btn-icon-generate:hover { color: #1d4ed8; }
+    .cash-registers-table th:nth-child(1) { width: 45%; }
+    .cash-registers-table th:nth-child(2) { width: 35%; }
+    .cash-registers-table th:nth-child(3) { width: 20%; }
+    .cash-registers-table .actions-col { text-align: center; width: 100px; }
+    .cash-registers-table .row-actions { display: inline-flex; gap: 4px; justify-content: center; }
+    .btn-icon-assign { color: var(--primary); }
+    .btn-icon-assign:hover { color: var(--primary); background: var(--primary-light); }
+
+    /* Assign Order Points Modal */
+    .assign-modal { width: 100%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; }
+    .assign-modal-overlay { z-index: 1100; }
+    .assign-modal-body { padding: 20px; }
+    .assign-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+    .assign-list { display: flex; flex-direction: column; gap: 2px; max-height: 380px; overflow-y: auto; border: 1px solid var(--border-color); }
+    .assign-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border-color); transition: background 0.15s ease; }
+    .assign-row:last-child { border-bottom: none; }
+    .assign-row:hover { background: var(--bg-light); }
+    .assign-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); margin: 0; flex-shrink: 0; }
+    .assign-name { font-size: 14px; color: var(--text-dark); user-select: none; }
 
     .modal-header h3 { font-size: 16px; font-weight: 600; color: #1e293b; margin: 0; }
     .close-btn { width: 32px; height: 32px; border: 1px solid var(--border-color); background: transparent; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748b; padding: 0; }
@@ -1199,6 +1253,7 @@ export class EventsComponent implements OnInit {
   loadingEvents = false;
   savingEvent = false;
   savingValidationFor: string | null = null;
+  savingPausedFor: string | null = null;
   showEventModal = false;
   eventModalTab: 'details' | 'tables' | 'cashRegisters' = 'details';
   editingEvent: Event | null = null;
@@ -1207,8 +1262,8 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; waiterUserIds: string[]; requireValidation: boolean } = {
-    name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; waiterUserIds: string[]; requireValidation: boolean; paused: boolean } = {
+    name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false
   };
 
   // Users
@@ -1230,9 +1285,18 @@ export class EventsComponent implements OnInit {
   editingCell: { orderPointId: string; field: string } | null = null;
 
   // Cash Registers tab
-  cashRegisters: { id?: string; tempId?: string; name: string; ip: string; sharedToken?: string }[] = [];
+  cashRegisters: { id?: string; tempId?: string; name: string; ip: string }[] = [];
   editingCashRegister: { id: string; field: string } | null = null;
   private cashRegisterTempIdCounter = 0;
+
+  // Assign-order-points-to-cash-register modal state.
+  showAssignModal = false;
+  assignModalCashRegister: { id?: string; tempId?: string; name: string; ip: string } | null = null;
+  assignableOrderPoints: OrderPointSummary[] = [];
+  /** Selected order point IDs. Initialised from the server's "assigned" list when the modal opens. */
+  selectedOrderPointIds = new Set<string>();
+  loadingAssignments = false;
+  savingAssignments = false;
 
   // Material Date Picker
   startDate: Date | null = null;
@@ -1484,7 +1548,7 @@ export class EventsComponent implements OnInit {
   openEventModal(): void {
     this.editingEvent = null;
     this.eventModalTab = 'details';
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1503,7 +1567,8 @@ export class EventsComponent implements OnInit {
       endDate: '',
       userIds: event.userIds || [],
       waiterUserIds: event.waiterUserIds || [],
-      requireValidation: !!event.requireValidation
+      requireValidation: !!event.requireValidation,
+      paused: !!event.paused
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
@@ -1541,7 +1606,8 @@ export class EventsComponent implements OnInit {
       userIds: this.eventFormData.userIds,
       waiterUserIds: this.eventFormData.waiterUserIds,
       menuItemIds,
-      requireValidation: this.eventFormData.requireValidation
+      requireValidation: this.eventFormData.requireValidation,
+      paused: this.eventFormData.paused
     };
     const operation = this.editingEvent
       ? this.eventService.updateEvent(this.editingEvent.id!, { ...eventData, locationId })
@@ -1568,7 +1634,8 @@ export class EventsComponent implements OnInit {
       waiterUserIds: event.waiterUserIds,
       paymentTypeIds: event.paymentTypeIds,
       menuItemIds: event.menuItemIds,
-      requireValidation: newValue
+      requireValidation: newValue,
+      paused: !!event.paused
     }).subscribe({
       next: () => { this.savingValidationFor = null; },
       error: (err) => {
@@ -1576,6 +1643,35 @@ export class EventsComponent implements OnInit {
         event.requireValidation = previous;
         if (target) target.checked = previous;
         this.savingValidationFor = null;
+      }
+    });
+  }
+
+  togglePaused(event: Event, change: any): void {
+    if (!event.id) return;
+    const target = change?.target as HTMLInputElement | undefined;
+    const newValue = target ? target.checked : !event.paused;
+    const previous = !!event.paused;
+    event.paused = newValue;
+    this.savingPausedFor = event.id;
+    this.eventService.updateEvent(event.id, {
+      name: event.name,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      locationId: event.locationId,
+      userIds: event.userIds,
+      waiterUserIds: event.waiterUserIds,
+      paymentTypeIds: event.paymentTypeIds,
+      menuItemIds: event.menuItemIds,
+      requireValidation: !!event.requireValidation,
+      paused: newValue
+    }).subscribe({
+      next: () => { this.savingPausedFor = null; },
+      error: (err) => {
+        console.error('Error updating paused:', err);
+        event.paused = previous;
+        if (target) target.checked = previous;
+        this.savingPausedFor = null;
       }
     });
   }
@@ -1828,24 +1924,7 @@ export class EventsComponent implements OnInit {
   // Cash Register Methods
   addCashRegister(): void {
     const tempId = `temp-${++this.cashRegisterTempIdCounter}`;
-    this.cashRegisters.push({ tempId, name: '', ip: '', sharedToken: '' });
-  }
-
-  generateSharedToken(cr: { id?: string; tempId?: string; sharedToken?: string }): void {
-    cr.sharedToken = this.randomSharedToken();
-    this.saveCashRegisters();
-  }
-
-  private randomSharedToken(): string {
-    // 32 random bytes encoded as hex (64 chars). Uses the Web Crypto API when
-    // available and falls back to Math.random for older runtimes.
-    const bytes = new Uint8Array(32);
-    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-      crypto.getRandomValues(bytes);
-    } else {
-      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-    }
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    this.cashRegisters.push({ tempId, name: '', ip: '' });
   }
 
   isEditingCashRegister(cr: { id?: string; tempId?: string }, field: string): boolean {
@@ -1899,6 +1978,76 @@ export class EventsComponent implements OnInit {
         this.cashRegisters = registers;
       },
       error: (err) => console.error('Error loading cash registers:', err)
+    });
+  }
+
+  // Assign-order-points-to-cash-register modal
+  openAssignModal(cr: { id?: string; tempId?: string; name: string; ip: string }): void {
+    if (!cr.id) return; // Guard: the button is hidden for unsaved rows, but be defensive.
+    this.assignModalCashRegister = cr;
+    this.showAssignModal = true;
+    this.loadingAssignments = true;
+    this.assignableOrderPoints = [];
+    this.selectedOrderPointIds = new Set<string>();
+    this.eventService.getCashRegisterOrderPoints(cr.id).subscribe({
+      next: (response) => {
+        // The pool the user picks from is "currently assigned to this CR" + "still
+        // assignable" — both rendered together so the user can untick existing
+        // assignments to drop them on save.
+        const merged = [...response.assigned, ...response.assignable];
+        // De-dupe by id just in case the backend ever returns overlap.
+        const seen = new Set<string>();
+        this.assignableOrderPoints = merged.filter(op => {
+          if (seen.has(op.id)) return false;
+          seen.add(op.id);
+          return true;
+        });
+        this.selectedOrderPointIds = new Set(response.assigned.map(op => op.id));
+        this.loadingAssignments = false;
+      },
+      error: (err) => {
+        console.error('Error loading order point assignments:', err);
+        this.loadingAssignments = false;
+      }
+    });
+  }
+
+  closeAssignModal(): void {
+    this.showAssignModal = false;
+    this.assignModalCashRegister = null;
+    this.assignableOrderPoints = [];
+    this.selectedOrderPointIds = new Set<string>();
+    this.savingAssignments = false;
+    this.loadingAssignments = false;
+  }
+
+  isAssignSelected(orderPointId: string): boolean {
+    return this.selectedOrderPointIds.has(orderPointId);
+  }
+
+  toggleAssignSelection(orderPointId: string): void {
+    if (this.selectedOrderPointIds.has(orderPointId)) {
+      this.selectedOrderPointIds.delete(orderPointId);
+    } else {
+      this.selectedOrderPointIds.add(orderPointId);
+    }
+  }
+
+  saveAssignments(): void {
+    const cr = this.assignModalCashRegister;
+    if (!cr?.id || this.savingAssignments) return;
+    this.savingAssignments = true;
+    const ids = Array.from(this.selectedOrderPointIds);
+    this.eventService.setCashRegisterOrderPoints(cr.id, ids).subscribe({
+      next: () => {
+        this.savingAssignments = false;
+        this.closeAssignModal();
+      },
+      error: (err) => {
+        console.error('Error saving order point assignments:', err);
+        this.savingAssignments = false;
+        alert('Could not save assignments. Please try again.');
+      }
     });
   }
 

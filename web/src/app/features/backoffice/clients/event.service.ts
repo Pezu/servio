@@ -16,6 +16,7 @@ export interface Event {
   paymentTypeIds?: string[];
   menuItemIds?: string[];
   requireValidation?: boolean;
+  paused?: boolean;
 }
 
 export interface CashRegister {
@@ -23,7 +24,16 @@ export interface CashRegister {
   tempId?: string;
   name: string;
   ip: string;
-  sharedToken?: string;
+}
+
+export interface OrderPointSummary {
+  id: string;
+  name: string;
+}
+
+export interface CashRegisterOrderPoints {
+  assigned: OrderPointSummary[];
+  assignable: OrderPointSummary[];
 }
 
 export interface PageResponse<T> {
@@ -39,6 +49,7 @@ export interface PageResponse<T> {
 })
 export class EventService {
   private apiUrl = `${environment.apiUrl}/api/events`;
+  private cashRegisterApiUrl = `${environment.apiUrl}/api/cash-registers`;
 
   constructor(private http: HttpClient) {}
 
@@ -67,11 +78,11 @@ export class EventService {
     return this.http.get<Event>(`${this.apiUrl}/${id}`);
   }
 
-  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean }): Observable<Event> {
+  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean }): Observable<Event> {
     return this.http.post<Event>(`${this.apiUrl}/location/${locationId}`, event);
   }
 
-  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean }): Observable<Event> {
+  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean }): Observable<Event> {
     return this.http.put<Event>(`${this.apiUrl}/${id}`, event);
   }
 
@@ -100,5 +111,17 @@ export class EventService {
 
   saveCashRegisters(eventId: string, cashRegisters: CashRegister[]): Observable<CashRegister[]> {
     return this.http.put<CashRegister[]>(`${this.apiUrl}/${eventId}/cash-registers`, cashRegisters);
+  }
+
+  // Per-event assignment of parent order points to a specific cash register.
+  getCashRegisterOrderPoints(cashRegisterId: string): Observable<CashRegisterOrderPoints> {
+    return this.http.get<CashRegisterOrderPoints>(`${this.cashRegisterApiUrl}/${cashRegisterId}/order-points`);
+  }
+
+  setCashRegisterOrderPoints(cashRegisterId: string, orderPointIds: string[]): Observable<CashRegisterOrderPoints> {
+    return this.http.put<CashRegisterOrderPoints>(
+      `${this.cashRegisterApiUrl}/${cashRegisterId}/order-points`,
+      { orderPointIds }
+    );
   }
 }

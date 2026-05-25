@@ -45,6 +45,9 @@ public class EventEntity {
     @Column(name = "require_validation", nullable = false)
     private boolean requireValidation = false;
 
+    @Column(name = "paused", nullable = false)
+    private boolean paused = false;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "event_users",

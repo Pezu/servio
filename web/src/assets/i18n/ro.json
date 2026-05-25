@@ -142,7 +142,9 @@
     "CASH_REGISTERS": "Case de Marcat",
     "NO_CASH_REGISTERS": "Nu sunt case de marcat configurate",
     "REQUIRE_VALIDATION": "Necesită validare pentru înregistrările cu plată ulterioară",
-    "REQUIRE_VALIDATION_SHORT": "Validare"
+    "REQUIRE_VALIDATION_SHORT": "Validare",
+    "PAUSED": "Pauză eveniment (afișează mesaj de mentenanță clienților)",
+    "PAUSED_SHORT": "Pauza"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",

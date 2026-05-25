@@ -243,10 +243,17 @@ export class LoginPage {
   ) {
     addIcons({ personOutline, lockClosedOutline });
 
-    // Redirect if already authenticated
-    if (this.authService.isAuthenticated()) {
+    // Redirect if already authenticated as a waiter; otherwise stay on login.
+    if (this.authService.isAuthenticated() && this.hasWaiterRole()) {
       this.router.navigate(['/my-events']);
+    } else if (this.authService.isAuthenticated()) {
+      this.authService.logout();
     }
+  }
+
+  private hasWaiterRole(): boolean {
+    const info = this.authService.getUserInfo();
+    return !!info && info.roles.includes('WAITER');
   }
 
   login(): void {
@@ -258,6 +265,11 @@ export class LoginPage {
     this.authService.login({ username: this.username, password: this.password }).subscribe({
       next: () => {
         this.loading = false;
+        if (!this.hasWaiterRole()) {
+          this.authService.logout();
+          this.error = 'This app is only available for waiter accounts.';
+          return;
+        }
         this.router.navigate(['/my-events']);
       },
       error: (err) => {

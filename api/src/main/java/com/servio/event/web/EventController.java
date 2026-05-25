@@ -72,6 +72,20 @@ public class EventController {
         return ResponseEntity.ok(events);
     }
 
+    /**
+     * Active events the user is assigned to in any capacity (service user on an
+     * EventOrderPoint, or waiter via event_waiters). Sibling to /my-events/active,
+     * added because that one is order-point-only and excludes pure waiters.
+     */
+    @GetMapping("/my-events/active-assigned")
+    public ResponseEntity<Page<Event>> getMyActiveAssignedEvents(
+            HttpServletRequest request,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        String username = (String) request.getAttribute("username");
+        Page<Event> events = eventService.getActiveEventsAssignedToUsername(username, pageable);
+        return ResponseEntity.ok(events);
+    }
+
     @GetMapping("/active")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER','SERVICE','WAITER')")
     public ResponseEntity<Page<Event>> getAllActiveEvents(

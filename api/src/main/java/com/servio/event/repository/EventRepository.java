@@ -53,4 +53,19 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
 
     @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e WHERE eop.user.username = :username AND e.startDate <= :now AND e.endDate >= :now")
     Page<EventEntity> findActiveByOrderPointUserUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
+
+    /**
+     * Active events where the user is assigned in any capacity — as a service
+     * user on an EventOrderPoint, as a service user via event_users, or as a
+     * waiter via event_waiters. Used by the mobile app's "My Active Events"
+     * list so waiters see the events they belong to even when they aren't tied
+     * to a specific order point.
+     */
+    @Query("SELECT e FROM EventEntity e " +
+           "WHERE e.startDate <= :now AND e.endDate >= :now AND (" +
+           "  EXISTS (SELECT 1 FROM EventOrderPointEntity eop WHERE eop.event = e AND eop.user.username = :username)" +
+           "  OR EXISTS (SELECT 1 FROM EventEntity e2 JOIN e2.waiters w WHERE e2 = e AND w.username = :username)" +
+           "  OR EXISTS (SELECT 1 FROM EventEntity e3 JOIN e3.users u WHERE e3 = e AND u.username = :username)" +
+           ")")
+    Page<EventEntity> findActiveAssignedToUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
 }

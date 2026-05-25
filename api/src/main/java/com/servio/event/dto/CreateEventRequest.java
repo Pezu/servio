@@ -22,4 +22,5 @@ public class CreateEventRequest {
     private List<UUID> paymentTypeIds;
     private List<UUID> menuItemIds;
     private boolean requireValidation;
+    private boolean paused;
 }

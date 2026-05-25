@@ -23,4 +23,5 @@ public class UpdateEventRequest {
     private List<UUID> paymentTypeIds;
     private List<UUID> menuItemIds;
     private boolean requireValidation;
+    private boolean paused;
 }

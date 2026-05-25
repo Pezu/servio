@@ -43,7 +43,7 @@ export class EventService {
 
   getMyActiveEvents(): Observable<Event[]> {
     const params = new HttpParams().set('page', '0').set('size', '100');
-    return this.http.get<PageResponse<Event>>(`${environment.apiUrl}/events/my-events/active`, {
+    return this.http.get<PageResponse<Event>>(`${environment.apiUrl}/events/my-events/active-assigned`, {
       headers: this.getHeaders(),
       params
     }).pipe(
