@@ -146,7 +146,7 @@ export class TablesPage implements OnInit {
     this.loading = true;
     this.orderService.getEventOrderPoints(this.eventId).subscribe({
       next: (orderPoints) => {
-        this.myTables = orderPoints.filter(op => (op.userLogins || []).includes(this.currentUsername));
+        this.myTables = orderPoints.filter(op => !!op.payLater && (op.userLogins || []).includes(this.currentUsername));
         this.loading = false;
       },
       error: (err) => {
@@ -159,7 +159,7 @@ export class TablesPage implements OnInit {
   doRefresh(event: any) {
     this.orderService.getEventOrderPoints(this.eventId).subscribe({
       next: (orderPoints) => {
-        this.myTables = orderPoints.filter(op => (op.userLogins || []).includes(this.currentUsername));
+        this.myTables = orderPoints.filter(op => !!op.payLater && (op.userLogins || []).includes(this.currentUsername));
         event.target.complete();
       },
       error: () => {

@@ -40,6 +40,7 @@ export interface EventOrderPoint {
   userIds?: string[];
   userNames?: string[];
   userLogins?: string[];
+  payLater?: boolean;
   prepaid?: number;
   credit?: boolean;
   creditValue?: number;
