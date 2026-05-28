@@ -18,6 +18,7 @@ public class EventOrderPoint {
     private UUID orderPointId;
     private String orderPointName;
     private String sublocationName;
+    private boolean payLater;
     private List<UUID> userIds = new ArrayList<>();
     private List<String> userNames = new ArrayList<>();
     private List<String> userLogins = new ArrayList<>();

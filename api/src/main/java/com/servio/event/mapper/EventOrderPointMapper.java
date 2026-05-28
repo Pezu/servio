@@ -20,6 +20,7 @@ public interface EventOrderPointMapper {
     @Mapping(source = "orderPoint.id", target = "orderPointId")
     @Mapping(source = "orderPoint.name", target = "orderPointName")
     @Mapping(source = "orderPoint.location.name", target = "sublocationName")
+    @Mapping(source = "orderPoint.payLater", target = "payLater")
     @Mapping(source = "users", target = "userIds", qualifiedByName = "userIds")
     @Mapping(source = "users", target = "userNames", qualifiedByName = "userNames")
     @Mapping(source = "users", target = "userLogins", qualifiedByName = "userLogins")

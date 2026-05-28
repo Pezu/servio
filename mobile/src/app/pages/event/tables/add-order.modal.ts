@@ -21,9 +21,10 @@ import {
   ModalController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { closeOutline, addOutline, removeOutline, cartOutline } from 'ionicons/icons';
+import { closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline } from 'ionicons/icons';
 import { OrderService, MenuItem, EventOrderPoint, CreateOrderItem } from '../../../services/order.service';
 import { RegistrationService } from '../../../services/registration.service';
+import { AuthService } from '../../../services/auth.service';
 
 interface CartItem {
   menuItemId: string;
@@ -158,6 +159,34 @@ interface CartItem {
         </div>
       </ion-toolbar>
     </ion-footer>
+
+    @if (paymentPickerOpen) {
+      <div class="picker-backdrop" (click)="cancelPaymentPicker()">
+        <div class="picker-sheet" (click)="$event.stopPropagation()">
+          <div class="picker-head">
+            <h3>Select Payment Method</h3>
+            <ion-button fill="clear" size="small" (click)="cancelPaymentPicker()" [disabled]="submitting">
+              <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+            </ion-button>
+          </div>
+          <div class="picker-summary">
+            <span>{{ getTotalItems() }} {{ getTotalItems() === 1 ? 'item' : 'items' }}</span>
+            <span class="picker-total">{{ getTotal() | currency:'RON':'symbol':'1.2-2' }}</span>
+          </div>
+          <div class="picker-methods">
+            <button class="picker-btn cash" [disabled]="submitting" (click)="placeOrderWithPayment('CASH')">
+              <ion-icon name="cash-outline"></ion-icon> Cash
+            </button>
+            <button class="picker-btn card" [disabled]="submitting" (click)="placeOrderWithPayment('CARD')">
+              <ion-icon name="card-outline"></ion-icon> Card
+            </button>
+            <button class="picker-btn protocol" [disabled]="submitting" (click)="placeOrderWithPayment('PROTOCOL')">
+              <ion-icon name="document-text-outline"></ion-icon> Protocol
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .loading-container, .empty-state {
@@ -236,6 +265,99 @@ interface CartItem {
       margin: 0 0 4px;
       font-size: 13px;
     }
+
+    .picker-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .picker-sheet {
+      width: 100%;
+      max-width: 480px;
+      background: #ffffff;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      padding: 16px 16px 24px;
+      box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .picker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .picker-head h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0;
+      color: #1e293b;
+    }
+
+    .picker-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 4px 16px;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .picker-summary .picker-total {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 16px;
+    }
+
+    .picker-methods {
+      display: flex;
+      gap: 8px;
+    }
+
+    .picker-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px;
+      border: 1px solid;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 0;
+    }
+
+    .picker-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .picker-btn ion-icon {
+      font-size: 18px;
+    }
+
+    .picker-btn.cash {
+      color: #16a34a;
+      border-color: #16a34a;
+    }
+
+    .picker-btn.card {
+      color: var(--ion-color-primary);
+      border-color: var(--ion-color-primary);
+    }
+
+    .picker-btn.protocol {
+      color: #b45309;
+      border-color: #f59e0b;
+    }
   `]
 })
 export class AddOrderModal implements OnInit {
@@ -248,13 +370,15 @@ export class AddOrderModal implements OnInit {
   submitting = false;
   registrationId: string | null = null;
   registrationError: string | null = null;
+  paymentPickerOpen = false;
 
   constructor(
     private modalController: ModalController,
     private orderService: OrderService,
-    private registrationService: RegistrationService
+    private registrationService: RegistrationService,
+    private authService: AuthService
   ) {
-    addIcons({ closeOutline, addOutline, removeOutline, cartOutline });
+    addIcons({ closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline });
   }
 
   ngOnInit() {
@@ -336,8 +460,90 @@ export class AddOrderModal implements OnInit {
   }
 
   placeOrder() {
-    if (this.cart.length === 0 || !this.registrationId) return;
+    if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
 
+    // Pay-later OPs: existing flow — create the order and let it sit in
+    // needs-payment until settled via the Payments page.
+    if (this.table.payLater) {
+      this.createAndDismiss(true);
+      return;
+    }
+
+    // Non-pay-later OPs: ask for the payment method first; the order is
+    // created, settled, and moved to DELIVERED in one go.
+    this.paymentPickerOpen = true;
+  }
+
+  cancelPaymentPicker() {
+    if (this.submitting) return;
+    this.paymentPickerOpen = false;
+  }
+
+  placeOrderWithPayment(method: 'CASH' | 'CARD' | 'PROTOCOL') {
+    if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
+
+    this.submitting = true;
+    const orderItems: CreateOrderItem[] = this.cart.map(item => ({
+      menuItemId: item.menuItemId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity
+    }));
+
+    // payLater=true creates the order as ACTIVE + needsPayment=true (the
+    // bulk-paid call below clears needsPayment and triggers the fiscal
+    // print for CASH/CARD; PROTOCOL skips the print backend-side).
+    this.orderService.createOrder({
+      registrationId: this.registrationId!,
+      orderPointId: this.table.orderPointId,
+      payLater: true,
+      orderItems
+    }).subscribe({
+      next: (order) => {
+        const operator = this.authService.getUserInfo()?.username || '';
+        this.orderService.bulkMarkPaid({
+          orderIds: [order.id],
+          paymentMethod: method,
+          paidBy: operator,
+          cashRegisterDeviceId: this.table.cashRegisterId ?? null
+        }).subscribe({
+          next: () => {
+            this.orderService.setOrderStatus(order.id, 'DELIVERED').subscribe({
+              next: () => {
+                this.submitting = false;
+                this.paymentPickerOpen = false;
+                this.modalController.dismiss({ success: true, order });
+              },
+              error: (err) => {
+                // The order is paid; just couldn't auto-deliver. Surface
+                // it as a success — the waiter can finish the move from
+                // the kanban without losing the payment.
+                console.error('Failed to mark order as DELIVERED:', err);
+                this.submitting = false;
+                this.paymentPickerOpen = false;
+                this.modalController.dismiss({ success: true, order, deliveredFailed: true });
+              }
+            });
+          },
+          error: (err) => {
+            console.error('Failed to mark order as paid:', err);
+            this.submitting = false;
+            // Leave the picker open so the waiter can retry; the order
+            // exists in needs-payment and will be visible in Payments.
+            this.modalController.dismiss({ success: false, error: err, order, paymentFailed: true });
+          }
+        });
+      },
+      error: (err) => {
+        this.submitting = false;
+        this.paymentPickerOpen = false;
+        console.error('Failed to create order:', err);
+        this.modalController.dismiss({ success: false, error: err });
+      }
+    });
+  }
+
+  private createAndDismiss(payLater: boolean) {
     this.submitting = true;
 
     const orderItems: CreateOrderItem[] = this.cart.map(item => ({
@@ -348,9 +554,9 @@ export class AddOrderModal implements OnInit {
     }));
 
     this.orderService.createOrder({
-      registrationId: this.registrationId,
+      registrationId: this.registrationId!,
       orderPointId: this.table.orderPointId,
-      payLater: true,
+      payLater,
       orderItems
     }).subscribe({
       next: (order) => {

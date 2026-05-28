@@ -40,6 +40,9 @@ export interface EventOrderPoint {
   userIds?: string[];
   userNames?: string[];
   userLogins?: string[];
+  cashRegisterId?: string | null;
+  cashRegisterName?: string;
+  payLater?: boolean;
   prepaid?: number;
   credit?: boolean;
   creditValue?: number;
@@ -128,29 +131,14 @@ export class OrderService {
     );
   }
 
-  markOrderPaid(orderId: string, paymentMethod: string, paidBy: string): Observable<Order> {
-    return this.http.patch<Order>(
-      `${environment.apiUrl}/orders/${orderId}/paid`,
-      { paymentMethod, paidBy },
-      { headers: this.headers() }
-    );
-  }
-
-  getCashRegisters(eventId: string): Observable<{ id: string; name: string }[]> {
-    return this.http.get<{ id: string; name: string }[]>(
-      `${environment.apiUrl}/events/${eventId}/cash-registers`,
-      { headers: this.headers() }
-    );
-  }
-
-  printCashRegisterReceipt(payload: {
+  bulkMarkPaid(payload: {
     orderIds: string[];
-    paymentMethod: 'CASH' | 'CARD';
-    operator: string;
+    paymentMethod: 'CASH' | 'CARD' | 'PROTOCOL';
+    paidBy: string;
     cashRegisterDeviceId: string | null;
-  }): Observable<any> {
-    return this.http.post(
-      `${environment.apiUrl}/orders/cash-register/receipt`,
+  }): Observable<void> {
+    return this.http.post<void>(
+      `${environment.apiUrl}/orders/bulk-paid`,
       payload,
       { headers: this.headers() }
     );

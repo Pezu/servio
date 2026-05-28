@@ -1,7 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin } from 'rxjs';
 import {
   IonContent,
   IonIcon,
@@ -16,7 +15,8 @@ import {
   cashOutline,
   walletOutline,
   closeOutline,
-  storefrontOutline
+  storefrontOutline,
+  documentTextOutline
 } from 'ionicons/icons';
 import { Subscription } from 'rxjs';
 import { OrderService, Order, EventOrderPoint } from '../../../services/order.service';
@@ -125,34 +125,25 @@ interface TableGroup {
             <span class="modal-total">{{ formatPrice(pendingTotal) }}</span>
           </div>
 
-          @if (cashRegisters.length > 0) {
-            <div class="section-label">Cash register</div>
-            <div class="register-grid">
-              @for (cr of cashRegisters; track cr.id) {
-                <button
-                  class="register-btn"
-                  [class.selected]="selectedCashRegisterDeviceId === cr.id"
-                  (click)="selectedCashRegisterDeviceId = cr.id">
-                  <ion-icon name="storefront-outline"></ion-icon>
-                  {{ cr.name || 'Register' }}
-                </button>
-              }
-            </div>
-          }
-
           <div class="section-label">Payment method</div>
           <div class="method-row">
             <button
               class="method-btn cash"
-              [disabled]="busy || (cashRegisters.length > 0 && !selectedCashRegisterDeviceId)"
+              [disabled]="busy"
               (click)="confirmPayment('CASH')">
               <ion-icon name="cash-outline"></ion-icon> Cash
             </button>
             <button
               class="method-btn card"
-              [disabled]="busy || (cashRegisters.length > 0 && !selectedCashRegisterDeviceId)"
+              [disabled]="busy"
               (click)="confirmPayment('CARD')">
               <ion-icon name="card-outline"></ion-icon> Card
+            </button>
+            <button
+              class="method-btn protocol"
+              [disabled]="busy"
+              (click)="confirmPayment('PROTOCOL')">
+              <ion-icon name="document-text-outline"></ion-icon> Protocol
             </button>
           </div>
         </div>
@@ -395,38 +386,6 @@ interface TableGroup {
       padding: 12px 16px 6px;
     }
 
-    .register-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      padding: 0 16px 8px;
-    }
-
-    .register-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 14px 8px;
-      border: 1px solid #e2e8f0;
-      background: transparent;
-      color: #475569;
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-      border-radius: 0;
-    }
-
-    .register-btn.selected {
-      border-color: var(--ion-color-primary);
-      color: var(--ion-color-primary);
-      background: rgba(59, 130, 246, 0.06);
-    }
-
-    .register-btn ion-icon {
-      font-size: 18px;
-    }
-
     .method-row {
       display: flex;
       gap: 8px;
@@ -466,6 +425,11 @@ interface TableGroup {
       color: var(--ion-color-primary);
       border-color: var(--ion-color-primary);
     }
+
+    .method-btn.protocol {
+      color: #b45309;
+      border-color: #f59e0b;
+    }
   `]
 })
 export class PaymentsPage implements OnInit, OnDestroy {
@@ -477,7 +441,10 @@ export class PaymentsPage implements OnInit, OnDestroy {
   needsPaymentOrders: Order[] = [];
   tableGroups: TableGroup[] = [];
 
-  cashRegisters: { id: string; name: string }[] = [];
+  // OP id → assigned cash register id (from Edit Event → Order Points).
+  // The bulk-paid endpoint forwards this to the cash-register listener;
+  // backend gracefully falls back to the event's first CR when null.
+  private cashRegisterByOrderPointId = new Map<string, string>();
   selectedCashRegisterDeviceId: string | null = null;
 
   showPaymentModal = false;
@@ -493,14 +460,13 @@ export class PaymentsPage implements OnInit, OnDestroy {
     private authService: AuthService,
     private ws: WebSocketService
   ) {
-    addIcons({ cardOutline, cashOutline, walletOutline, closeOutline, storefrontOutline });
+    addIcons({ cardOutline, cashOutline, walletOutline, closeOutline, storefrontOutline, documentTextOutline });
   }
 
   ngOnInit(): void {
     this.eventId = this.route.snapshot.paramMap.get('id') || this.route.parent?.snapshot.paramMap.get('id') || '';
     this.currentUser = this.authService.getUserInfo()?.username || '';
     this.load();
-    this.loadCashRegisters();
     this.ws.connect();
     this.subs.push(
       this.ws.subscribeToEventPayments(this.eventId).subscribe(() => this.loadNeedsPayment()),
@@ -523,23 +489,17 @@ export class PaymentsPage implements OnInit, OnDestroy {
         this.myOrderPointIds = eops
           .filter(e => (e.userLogins || []).includes(this.currentUser))
           .map(e => e.orderPointId);
+        this.cashRegisterByOrderPointId.clear();
+        for (const eop of eops) {
+          if (eop.cashRegisterId) {
+            this.cashRegisterByOrderPointId.set(eop.orderPointId, eop.cashRegisterId);
+          }
+        }
         this.loadNeedsPayment();
       },
       error: () => {
         this.myOrderPointIds = [];
         this.loading = false;
-      }
-    });
-  }
-
-  loadCashRegisters(): void {
-    this.orderService.getCashRegisters(this.eventId).subscribe({
-      next: (regs) => {
-        this.cashRegisters = regs || [];
-        this.selectedCashRegisterDeviceId = this.cashRegisters[0]?.id ?? null;
-      },
-      error: () => {
-        this.cashRegisters = [];
       }
     });
   }
@@ -601,6 +561,11 @@ export class PaymentsPage implements OnInit, OnDestroy {
     if (this.busy) return;
     this.pendingOrders = orders;
     this.pendingTotal = orders.reduce((sum, o) => sum + this.orderTotal(o), 0);
+    // Resolve the cash register from the OP's assignment (Edit Event →
+    // Order Points). Backend gracefully falls back to the event's first
+    // CR when null, so we don't need to load the CR list ourselves.
+    const opId = orders[0]?.orderPointId;
+    this.selectedCashRegisterDeviceId = opId ? this.cashRegisterByOrderPointId.get(opId) ?? null : null;
     this.showPaymentModal = true;
   }
 
@@ -610,9 +575,10 @@ export class PaymentsPage implements OnInit, OnDestroy {
     this.pendingTotal = 0;
   }
 
-  confirmPayment(method: 'CASH' | 'CARD'): void {
+  confirmPayment(method: 'CASH' | 'CARD' | 'PROTOCOL'): void {
     if (this.busy) return;
     const orders = this.pendingOrders;
+    const deviceId = this.selectedCashRegisterDeviceId;
     if (orders.length === 0) {
       this.closePaymentModal();
       return;
@@ -620,26 +586,22 @@ export class PaymentsPage implements OnInit, OnDestroy {
 
     this.busy = true;
 
-    this.orderService.printCashRegisterReceipt({
+    // One bulk request — backend marks the orders paid AND fires the
+    // cash-register print via PaymentCompletedEvent (same mechanism as
+    // the Netopia callback). PROTOCOL skips the fiscal print.
+    this.orderService.bulkMarkPaid({
       orderIds: orders.map(o => o.id),
       paymentMethod: method,
-      operator: this.currentUser,
-      cashRegisterDeviceId: this.selectedCashRegisterDeviceId
+      paidBy: this.currentUser,
+      cashRegisterDeviceId: deviceId
     }).subscribe({
-      next: (r) => console.log('[CashRegister] receipt:', r),
-      error: (err) => console.error('[CashRegister] receipt failed:', err)
-    });
-
-    forkJoin(
-      orders.map(o => this.orderService.markOrderPaid(o.id, method, this.currentUser))
-    ).subscribe({
       next: () => {
         this.busy = false;
         this.closePaymentModal();
         this.loadNeedsPayment();
       },
       error: (err) => {
-        console.error('[Payments] mark paid failed:', err);
+        console.error('[Payments] bulk mark paid failed:', err);
         this.busy = false;
         this.closePaymentModal();
         this.loadNeedsPayment();
