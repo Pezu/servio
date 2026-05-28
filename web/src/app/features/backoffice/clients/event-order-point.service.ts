@@ -9,8 +9,11 @@ export interface EventOrderPoint {
   orderPointId: string;
   orderPointName: string;
   sublocationName: string;
-  userId?: string | null;
-  userName?: string;
+  userIds?: string[];
+  userNames?: string[];
+  userLogins?: string[];
+  cashRegisterId?: string | null;
+  cashRegisterName?: string;
   prepaid: number;
   clientName?: string;
   email?: string;

@@ -48,10 +48,10 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     Page<EventEntity> findByStartDateLessThanEqualAndEndDateGreaterThanEqual(
             LocalDate startDate, LocalDate endDate, Pageable pageable);
 
-    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e WHERE eop.user.username = :username")
+    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e JOIN eop.users u WHERE u.username = :username")
     Page<EventEntity> findByOrderPointUserUsername(@Param("username") String username, Pageable pageable);
 
-    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e WHERE eop.user.username = :username AND e.startDate <= :now AND e.endDate >= :now")
+    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e JOIN eop.users u WHERE u.username = :username AND e.startDate <= :now AND e.endDate >= :now")
     Page<EventEntity> findActiveByOrderPointUserUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
 
     /**
@@ -63,7 +63,7 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
      */
     @Query("SELECT e FROM EventEntity e " +
            "WHERE e.startDate <= :now AND e.endDate >= :now AND (" +
-           "  EXISTS (SELECT 1 FROM EventOrderPointEntity eop WHERE eop.event = e AND eop.user.username = :username)" +
+           "  EXISTS (SELECT 1 FROM EventOrderPointEntity eop JOIN eop.users u WHERE eop.event = e AND u.username = :username)" +
            "  OR EXISTS (SELECT 1 FROM EventEntity e2 JOIN e2.waiters w WHERE e2 = e AND w.username = :username)" +
            "  OR EXISTS (SELECT 1 FROM EventEntity e3 JOIN e3.users u WHERE e3 = e AND u.username = :username)" +
            ")")

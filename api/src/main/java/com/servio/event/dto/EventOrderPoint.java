@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -16,9 +18,11 @@ public class EventOrderPoint {
     private UUID orderPointId;
     private String orderPointName;
     private String sublocationName;
-    private UUID userId;
-    private String userName;
-    private String userLogin;
+    private List<UUID> userIds = new ArrayList<>();
+    private List<String> userNames = new ArrayList<>();
+    private List<String> userLogins = new ArrayList<>();
+    private UUID cashRegisterId;
+    private String cashRegisterName;
     private BigDecimal prepaid;
     private String clientName;
     private String email;

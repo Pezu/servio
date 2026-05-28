@@ -1,5 +1,6 @@
 package com.servio.event.web;
 
+import com.servio.event.dto.BulkMarkPaidRequest;
 import com.servio.event.dto.CashRegisterReceiptRequest;
 import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.MarkPaidRequest;
@@ -189,5 +190,25 @@ public class OrderController {
     public ResponseEntity<CashRegisterReceiptResponse> printCashRegisterReceipt(
             @RequestBody CashRegisterReceiptRequest request) {
         return ResponseEntity.ok(cashRegisterService.printReceipt(request));
+    }
+
+    /**
+     * Backoffice Collect modal: mark a batch of orders paid in one shot. After
+     * the transaction commits, the listener fires once and routes a single
+     * fiscal receipt to the per-OP cash register (mirrors the Netopia path).
+     */
+    @PostMapping("/bulk-paid")
+    public ResponseEntity<Void> bulkMarkPaid(@RequestBody BulkMarkPaidRequest request) {
+        int marked = orderService.markOrdersPaidBulk(
+                request.getOrderIds(),
+                request.getPaymentMethod(),
+                request.getPaidBy(),
+                request.getCashRegisterDeviceId());
+        log.info("Bulk-marked {} items as paid across {} order(s) via {} by {}",
+                marked,
+                request.getOrderIds() != null ? request.getOrderIds().size() : 0,
+                request.getPaymentMethod(),
+                request.getPaidBy());
+        return ResponseEntity.noContent().build();
     }
 }

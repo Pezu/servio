@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -29,9 +31,13 @@ public class EventOrderPointEntity {
     @JoinColumn(name = "order_point_id", nullable = false)
     private OrderPointEntity orderPoint;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private UserEntity user;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "event_order_point_users",
+            joinColumns = @JoinColumn(name = "event_order_point_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<UserEntity> users = new HashSet<>();
 
     @Column(precision = 10, scale = 2)
     private BigDecimal prepaid = BigDecimal.ZERO;

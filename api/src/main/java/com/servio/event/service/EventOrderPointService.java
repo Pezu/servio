@@ -1,12 +1,16 @@
 package com.servio.event.service;
 
 import com.servio.event.dto.EventOrderPoint;
+import com.servio.event.entity.CashRegisterEntity;
+import com.servio.event.entity.CashRegisterOrderPointEntity;
 import com.servio.event.entity.EventEntity;
 import com.servio.event.entity.EventOrderPointEntity;
 import com.servio.event.entity.OrderPointEntity;
 import com.servio.event.entity.UserEntity;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.EventOrderPointMapper;
+import com.servio.event.repository.CashRegisterOrderPointRepository;
+import com.servio.event.repository.CashRegisterRepository;
 import com.servio.event.repository.EventOrderPointRepository;
 import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.OrderPointRepository;
@@ -17,61 +21,86 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class EventOrderPointService {
 
+    /** Matches pay-later split names like {@code M3.1}, {@code M3.2}, ... */
+    private static final Pattern PAY_LATER_NAME = Pattern.compile("^M(\\d+)\\.(\\d+)$");
+
     private final EventOrderPointRepository eventOrderPointRepository;
     private final EventRepository eventRepository;
     private final OrderPointRepository orderPointRepository;
     private final UserRepository userRepository;
     private final EventOrderPointMapper eventOrderPointMapper;
+    private final CashRegisterOrderPointRepository cashRegisterOrderPointRepository;
+    private final CashRegisterRepository cashRegisterRepository;
 
     @Transactional(readOnly = true)
     public List<EventOrderPoint> getEventOrderPoints(UUID eventId) {
         EventEntity event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event", eventId));
 
-        // Get all order points for the event's location (including sublocations)
-        // Only include order points with payLater = true
         UUID locationId = event.getLocation().getId();
         Comparator<OrderPointEntity> sublocationThenName = Comparator
                 .comparing((OrderPointEntity op) -> op.getLocation().getName(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(OrderPointNameComparator.by(OrderPointEntity::getName));
         List<OrderPointEntity> allOrderPoints = orderPointRepository.findByLocationIdIncludingSublocations(locationId)
                 .stream()
-                .filter(OrderPointEntity::isPayLater)
                 .sorted(sublocationThenName)
                 .toList();
 
-        // Get existing event order point entries
+        // Cash register lookups: per-OP assignment is stored only on the canonical
+        // row of each M{n} pay-later group, so resolve splits → canonical before
+        // looking up the assignment.
+        Map<UUID, UUID> canonicalByOrderPointId = canonicalByOrderPointId(allOrderPoints);
+        Map<UUID, UUID> cashRegisterByOrderPointId = cashRegisterOrderPointRepository.findByEventId(eventId).stream()
+                .collect(Collectors.toMap(
+                        CashRegisterOrderPointEntity::getOrderPointId,
+                        CashRegisterOrderPointEntity::getCashRegisterId,
+                        (a, b) -> a));
+        Map<UUID, CashRegisterEntity> cashRegistersById = cashRegisterRepository.findByEventId(eventId).stream()
+                .collect(Collectors.toMap(CashRegisterEntity::getId, Function.identity()));
+
         List<EventOrderPointEntity> existingEntries = eventOrderPointRepository.findByEventIdWithDetails(eventId);
         Map<UUID, EventOrderPointEntity> existingByOrderPointId = existingEntries.stream()
                 .collect(Collectors.toMap(e -> e.getOrderPoint().getId(), Function.identity()));
 
-        // Build result list, creating virtual entries for order points without data
         return allOrderPoints.stream()
                 .map(op -> {
                     EventOrderPointEntity existing = existingByOrderPointId.get(op.getId());
+                    EventOrderPoint dto;
                     if (existing != null) {
-                        return eventOrderPointMapper.toDto(existing);
+                        dto = eventOrderPointMapper.toDto(existing);
                     } else {
-                        // Create a virtual entry (not persisted)
-                        EventOrderPoint dto = new EventOrderPoint();
+                        dto = new EventOrderPoint();
                         dto.setEventId(eventId);
                         dto.setOrderPointId(op.getId());
                         dto.setOrderPointName(op.getName());
                         dto.setSublocationName(op.getLocation().getName());
                         dto.setPrepaid(BigDecimal.ZERO);
-                        return dto;
                     }
+                    UUID canonicalId = canonicalByOrderPointId.getOrDefault(op.getId(), op.getId());
+                    UUID crId = cashRegisterByOrderPointId.get(canonicalId);
+                    if (crId != null) {
+                        dto.setCashRegisterId(crId);
+                        CashRegisterEntity cr = cashRegistersById.get(crId);
+                        if (cr != null) {
+                            dto.setCashRegisterName(cr.getName());
+                        }
+                    }
+                    return dto;
                 })
                 .collect(Collectors.toList());
     }
@@ -100,16 +129,134 @@ public class EventOrderPointService {
         entity.setCredit(request.isCredit());
         entity.setCreditValue(request.isCredit() ? request.getCreditValue() : null);
 
-        if (request.getUserId() != null) {
-            UserEntity user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("User", request.getUserId()));
-            entity.setUser(user);
+        List<UUID> requestedUserIds = request.getUserIds() != null ? request.getUserIds() : List.of();
+        if (requestedUserIds.isEmpty()) {
+            entity.getUsers().clear();
         } else {
-            entity.setUser(null);
+            List<UserEntity> users = userRepository.findAllById(requestedUserIds);
+            if (users.size() != requestedUserIds.size()) {
+                throw new ResourceNotFoundException("User", requestedUserIds.toString());
+            }
+            entity.getUsers().clear();
+            entity.getUsers().addAll(users);
         }
 
         EventOrderPointEntity saved = eventOrderPointRepository.save(entity);
-        return eventOrderPointMapper.toDto(saved);
+
+        applyCashRegisterAssignment(eventId, orderPoint, request.getCashRegisterId());
+
+        return getEventOrderPointDto(eventId, saved);
+    }
+
+    /**
+     * Upsert the cash-register assignment for {@code orderPoint}, resolving
+     * pay-later splits to their canonical row so all splits of an M{n} group
+     * share the same cash register.
+     */
+    private void applyCashRegisterAssignment(UUID eventId, OrderPointEntity orderPoint, UUID requestedCashRegisterId) {
+        UUID canonicalId = resolveCanonicalOrderPointId(orderPoint);
+
+        List<CashRegisterOrderPointEntity> existingForOrderPoint = cashRegisterOrderPointRepository.findByEventId(eventId).stream()
+                .filter(a -> a.getOrderPointId().equals(canonicalId))
+                .collect(Collectors.toList());
+
+        if (requestedCashRegisterId == null) {
+            existingForOrderPoint.forEach(cashRegisterOrderPointRepository::delete);
+            return;
+        }
+
+        CashRegisterEntity cashRegister = cashRegisterRepository.findById(requestedCashRegisterId)
+                .orElseThrow(() -> new ResourceNotFoundException("CashRegister", requestedCashRegisterId));
+        if (!eventId.equals(cashRegister.getEventId())) {
+            throw new IllegalArgumentException("Cash register does not belong to this event");
+        }
+
+        CashRegisterOrderPointEntity keep = null;
+        for (CashRegisterOrderPointEntity existing : existingForOrderPoint) {
+            if (existing.getCashRegisterId().equals(requestedCashRegisterId) && keep == null) {
+                keep = existing;
+            } else {
+                cashRegisterOrderPointRepository.delete(existing);
+            }
+        }
+        if (keep == null) {
+            // Flush the deletes (if any) before the insert so the unique
+            // (event_id, order_point_id) constraint doesn't trip.
+            cashRegisterOrderPointRepository.flush();
+            cashRegisterOrderPointRepository.save(CashRegisterOrderPointEntity.builder()
+                    .cashRegisterId(requestedCashRegisterId)
+                    .eventId(eventId)
+                    .orderPointId(canonicalId)
+                    .createdAt(LocalDateTime.now())
+                    .build());
+        }
+    }
+
+    private EventOrderPoint getEventOrderPointDto(UUID eventId, EventOrderPointEntity entity) {
+        EventOrderPoint dto = eventOrderPointMapper.toDto(entity);
+        OrderPointEntity op = entity.getOrderPoint();
+        UUID canonicalId = resolveCanonicalOrderPointId(op);
+        cashRegisterOrderPointRepository.findByEventId(eventId).stream()
+                .filter(a -> a.getOrderPointId().equals(canonicalId))
+                .findFirst()
+                .ifPresent(a -> {
+                    dto.setCashRegisterId(a.getCashRegisterId());
+                    cashRegisterRepository.findById(a.getCashRegisterId())
+                            .ifPresent(cr -> dto.setCashRegisterName(cr.getName()));
+                });
+        return dto;
+    }
+
+    /**
+     * For a pay-later split (M{n}.{m}), find the canonical sibling — the row
+     * with the smallest {@code .m} suffix in the same location. For any other
+     * order point, the canonical is the order point itself.
+     */
+    private UUID resolveCanonicalOrderPointId(OrderPointEntity op) {
+        Matcher m = PAY_LATER_NAME.matcher(op.getName());
+        if (!m.matches()) return op.getId();
+        String groupNum = m.group(1);
+        UUID locationId = op.getLocation().getId();
+        OrderPointEntity canonical = op;
+        int canonicalSuffix = Integer.parseInt(m.group(2));
+        for (OrderPointEntity sibling : orderPointRepository.findByLocationId(locationId)) {
+            Matcher sm = PAY_LATER_NAME.matcher(sibling.getName());
+            if (!sm.matches() || !sm.group(1).equals(groupNum)) continue;
+            int suffix = Integer.parseInt(sm.group(2));
+            if (suffix < canonicalSuffix) {
+                canonical = sibling;
+                canonicalSuffix = suffix;
+            }
+        }
+        return canonical.getId();
+    }
+
+    /** Build a map from every OP id (in the supplied list) → its canonical OP id. */
+    private Map<UUID, UUID> canonicalByOrderPointId(List<OrderPointEntity> ops) {
+        record GroupKey(UUID locationId, String groupNum) {}
+        Map<GroupKey, OrderPointEntity> canonicals = new HashMap<>();
+        Map<GroupKey, Integer> canonicalSuffix = new HashMap<>();
+        for (OrderPointEntity op : ops) {
+            Matcher m = PAY_LATER_NAME.matcher(op.getName());
+            if (!m.matches()) continue;
+            GroupKey key = new GroupKey(op.getLocation().getId(), m.group(1));
+            int suffix = Integer.parseInt(m.group(2));
+            Integer prev = canonicalSuffix.get(key);
+            if (prev == null || suffix < prev) {
+                canonicals.put(key, op);
+                canonicalSuffix.put(key, suffix);
+            }
+        }
+        Map<UUID, UUID> result = new HashMap<>();
+        for (OrderPointEntity op : ops) {
+            Matcher m = PAY_LATER_NAME.matcher(op.getName());
+            if (m.matches()) {
+                GroupKey key = new GroupKey(op.getLocation().getId(), m.group(1));
+                OrderPointEntity canon = canonicals.get(key);
+                if (canon != null) result.put(op.getId(), canon.getId());
+            }
+        }
+        return result;
     }
 
     @Transactional

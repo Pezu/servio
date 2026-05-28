@@ -37,9 +37,9 @@ export interface EventOrderPoint {
   orderPointId: string;
   orderPointName: string;
   sublocationName?: string;
-  userId?: string;
-  userName?: string;
-  userLogin?: string;
+  userIds?: string[];
+  userNames?: string[];
+  userLogins?: string[];
   prepaid?: number;
   credit?: boolean;
   creditValue?: number;

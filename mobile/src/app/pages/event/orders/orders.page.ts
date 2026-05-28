@@ -339,7 +339,7 @@ export class OrdersPage implements OnInit, OnDestroy {
     this.orderService.getEventOrderPoints(this.eventId).subscribe({
       next: (eops) => {
         this.myOrderPointIds = eops
-          .filter(e => e.userLogin === this.currentUser)
+          .filter(e => (e.userLogins || []).includes(this.currentUser))
           .map(e => e.orderPointId);
         this.loadOrders();
       },

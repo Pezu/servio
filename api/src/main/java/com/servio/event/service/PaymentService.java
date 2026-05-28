@@ -148,7 +148,7 @@ public class PaymentService {
             int itemsMarked = markOrderAsPaid(order);
             if (itemsMarked > 0) {
                 orderNotificationService.notifyPaymentComplete(order.getEventId(), order.getOrderPointId(), itemsMarked);
-                eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD));
+                eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD, null, null));
             }
             return itemsMarked;
         }
@@ -184,7 +184,7 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0 && orderPointId != null) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
-            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD));
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null));
         }
         return totalItemsMarked;
     }
@@ -212,7 +212,7 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
-            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD));
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null));
         }
         return totalItemsMarked;
     }

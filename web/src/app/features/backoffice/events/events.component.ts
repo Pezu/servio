@@ -358,7 +358,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
               {{ 'EVENTS.DETAILS' | translate }}
             </button>
             <button class="modal-tab" [class.active]="eventModalTab === 'tables'" (click)="eventModalTab = 'tables'" [disabled]="!editingEvent">
-              {{ 'EVENTS.TABLES' | translate }}
+              {{ 'EVENTS.ORDER_POINTS' | translate }}
             </button>
             <button class="modal-tab" [class.active]="eventModalTab === 'cashRegisters'" (click)="eventModalTab = 'cashRegisters'" [disabled]="!editingEvent">
               {{ 'EVENTS.CASH_REGISTERS' | translate }}
@@ -491,19 +491,20 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                     <span>{{ 'ORDER_POINTS.NO_ORDER_POINTS' | translate }}</span>
                   </div>
                 } @else {
-                  <table class="tables-table">
+                  <table class="tables-table order-points-table">
                     <thead>
                       <tr>
                         <th>{{ 'LOCATIONS.LOCATION' | translate }}</th>
                         <th>{{ 'EVENTS.CLIENT' | translate }}</th>
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
                         <th>{{ 'EVENTS.USER' | translate }}</th>
+                        <th>{{ 'EVENTS.CASH_REGISTER' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="4">
+                          <td colspan="5">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -533,10 +534,41 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                 }
                               </td>
                               <td class="user-cell">
-                                <select class="user-select" [ngModel]="table.userId || ''" (ngModelChange)="onUserChange(table, $event)">
+                                <div class="multi-select-wrapper row-multi-select" [class.open]="openUserDropdownRowId === table.orderPointId">
+                                  <div class="multi-select-input row-multi-select-input" (click)="toggleRowUserDropdown(table.orderPointId, $event)">
+                                    @if (getOrderPointUsersText(table); as text) {
+                                      <span class="selected-text">{{ text }}</span>
+                                    } @else {
+                                      <span class="placeholder">-</span>
+                                    }
+                                    <span class="dropdown-arrow">
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </span>
+                                  </div>
+                                  @if (openUserDropdownRowId === table.orderPointId) {
+                                    <div class="multi-select-dropdown" (click)="$event.stopPropagation()">
+                                      @if (waiterUsers.length === 0) {
+                                        <div class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
+                                      }
+                                      @for (u of waiterUsers; track u.id) {
+                                        <label class="checkbox-option">
+                                          <input type="checkbox" [checked]="isOrderPointUserSelected(table, u.id!)" (change)="toggleOrderPointUser(table, u.id!, $event)">
+                                          <span class="checkbox-label-text">{{ u.name }}</span>
+                                        </label>
+                                      }
+                                    </div>
+                                  }
+                                </div>
+                              </td>
+                              <td class="user-cell">
+                                <select class="user-select" [ngModel]="table.cashRegisterId || ''" (ngModelChange)="onCashRegisterChange(table, $event)">
                                   <option value="">-</option>
-                                  @for (u of waiterUsers; track u.id) {
-                                    <option [value]="u.id">{{ u.name }}</option>
+                                  @for (cr of cashRegisters; track cr.id) {
+                                    @if (cr.id) {
+                                      <option [value]="cr.id">{{ cr.name }}</option>
+                                    }
                                   }
                                 </select>
                               </td>
@@ -872,6 +904,11 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .tables-table th:nth-child(2) { width: 30%; }
     .tables-table th:nth-child(3) { width: 30%; }
     .tables-table th:nth-child(4) { width: 20%; }
+    .order-points-table th:nth-child(1) { width: 16%; }
+    .order-points-table th:nth-child(2) { width: 24%; }
+    .order-points-table th:nth-child(3) { width: 22%; }
+    .order-points-table th:nth-child(4) { width: 19%; }
+    .order-points-table th:nth-child(5) { width: 19%; text-align: center; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
     .tables-table .parent-row:hover { background: #e2e8f0; }
@@ -892,6 +929,12 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .credit-value-input { text-align: right; }
     .disabled-cell { cursor: not-allowed; opacity: 0.5; }
     .user-cell { padding: 6px 12px; }
+    .row-multi-select { width: 100%; }
+    .row-multi-select-input { padding: 5px 10px; min-height: 32px; font-size: 13px; }
+    .row-multi-select-input .selected-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row-multi-select-input .placeholder { font-size: 13px; }
+    .row-multi-select-input .dropdown-arrow svg { width: 14px; height: 14px; }
+    .row-multi-select .multi-select-dropdown { z-index: 1200; }
     .user-select {
       width: 100%;
       height: 32px;
@@ -1357,6 +1400,12 @@ export class EventsComponent implements OnInit {
     const pageSizeDropdown = this.elementRef.nativeElement.querySelector('.page-size-select-custom');
     if (pageSizeDropdown && !pageSizeDropdown.contains(event.target)) {
       this.pageSizeDropdownOpen = false;
+    }
+    if (this.openUserDropdownRowId) {
+      const openRow = this.elementRef.nativeElement.querySelector('.row-multi-select.open');
+      if (openRow && !openRow.contains(event.target)) {
+        this.openUserDropdownRowId = null;
+      }
     }
   }
 
@@ -1912,12 +1961,62 @@ export class EventsComponent implements OnInit {
     return this.users.filter(u => u.roles?.includes('WAITER'));
   }
 
-  onUserChange(table: EventOrderPoint, userId: string): void {
-    const newId = userId || null;
-    if ((table.userId || null) === newId) return;
-    table.userId = newId;
-    const matched = newId ? this.users.find(u => u.id === newId) : null;
-    table.userName = matched?.name;
+  // Per-row open state for the Order Points user multi-select. Only one row's
+  // dropdown is open at a time; clicking another row's input closes the previous.
+  openUserDropdownRowId: string | null = null;
+
+  toggleRowUserDropdown(rowId: string, event: MouseEvent): void {
+    event.stopPropagation();
+    this.openUserDropdownRowId = this.openUserDropdownRowId === rowId ? null : rowId;
+  }
+
+  isOrderPointUserSelected(table: EventOrderPoint, userId: string): boolean {
+    return (table.userIds || []).includes(userId);
+  }
+
+  toggleOrderPointUser(table: EventOrderPoint, userId: string, event: globalThis.Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const current = table.userIds ? [...table.userIds] : [];
+    const next = checked
+      ? (current.includes(userId) ? current : [...current, userId])
+      : current.filter(id => id !== userId);
+    table.userIds = next;
+    table.userNames = next
+      .map(id => this.users.find(u => u.id === id)?.name)
+      .filter((n): n is string => !!n);
+    this.saveEventTable(table);
+  }
+
+  getOrderPointUsersText(table: EventOrderPoint): string {
+    const ids = table.userIds || [];
+    if (ids.length === 0) return '';
+    const names = ids
+      .map(id => this.users.find(u => u.id === id)?.name)
+      .filter((n): n is string => !!n);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.length} users selected`;
+  }
+
+  onCashRegisterChange(table: EventOrderPoint, cashRegisterId: string): void {
+    const newId = cashRegisterId || null;
+    if ((table.cashRegisterId || null) === newId) return;
+    table.cashRegisterId = newId;
+    const matched = newId ? this.cashRegisters.find(cr => cr.id === newId) : null;
+    table.cashRegisterName = matched?.name;
+    // Mirror the assignment across pay-later splits in the same M{n} group so
+    // the UI matches the backend's canonical-row rule without a round-trip.
+    const groupMatch = table.orderPointName.match(/^M(\d+)\.\d+$/);
+    if (groupMatch) {
+      const groupPrefix = `M${groupMatch[1]}.`;
+      for (const sibling of this.eventTables) {
+        if (sibling !== table
+            && sibling.sublocationName === table.sublocationName
+            && sibling.orderPointName.startsWith(groupPrefix)) {
+          sibling.cashRegisterId = newId;
+          sibling.cashRegisterName = matched?.name;
+        }
+      }
+    }
     this.saveEventTable(table);
   }
 

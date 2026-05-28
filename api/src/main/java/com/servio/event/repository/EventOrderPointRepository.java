@@ -30,8 +30,8 @@ public interface EventOrderPointRepository extends JpaRepository<EventOrderPoint
     @Query("SELECT DISTINCT eop.event.id FROM EventOrderPointEntity eop WHERE eop.orderPoint.id = :orderPointId")
     List<UUID> findEventIdsByOrderPointId(@Param("orderPointId") UUID orderPointId);
 
-    /** Users directly assigned to a specific order point via event_order_points.user_id. */
-    @Query("SELECT DISTINCT eop.user.id FROM EventOrderPointEntity eop " +
-           "WHERE eop.orderPoint.id = :orderPointId AND eop.user IS NOT NULL")
+    /** Users directly assigned to a specific order point via event_order_point_users. */
+    @Query("SELECT DISTINCT u.id FROM EventOrderPointEntity eop JOIN eop.users u " +
+           "WHERE eop.orderPoint.id = :orderPointId")
     List<UUID> findUserIdsAssignedToOrderPoint(@Param("orderPointId") UUID orderPointId);
 }

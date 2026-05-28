@@ -8,6 +8,7 @@ import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.RegistrationEntity;
 import com.servio.event.entity.RegistrationOrderPointEntity;
+import com.servio.event.event.PaymentCompletedEvent;
 import com.servio.event.exception.BusinessException;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.OrderMapper;
@@ -20,6 +21,7 @@ import com.servio.event.repository.RegistrationOrderPointRepository;
 import com.servio.event.repository.RegistrationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,6 +48,7 @@ public class OrderService {
     private final MenuItemRepository menuItemRepository;
     private final OrderNotificationService notificationService;
     private final OrderMapper orderMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public OrderEntity createOrder(ReceiveOrderRequest request) {
@@ -427,6 +431,33 @@ public class OrderService {
         notificationService.notifyPaymentCompleted(order, itemsMarkedPaid);
 
         return itemsMarkedPaid;
+    }
+
+    /**
+     * Marks a batch of orders paid in one transaction (backoffice Collect flow).
+     * After the transaction commits, fires a single {@link PaymentCompletedEvent}
+     * so the cash-register listener prints ONE receipt covering all the orders
+     * — same mechanism as the Netopia callback path.
+     *
+     * Skips the per-order PATCH cadence (each call would publish its own event
+     * → one print per order, not one per Collect).
+     */
+    @Transactional
+    public int markOrdersPaidBulk(List<UUID> orderIds, String paymentMethod, String paidBy, String cashRegisterDeviceId) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return 0;
+        }
+        int totalItemsMarked = 0;
+        List<UUID> processed = new ArrayList<>(orderIds.size());
+        for (UUID orderId : orderIds) {
+            int marked = handlePaymentComplete(orderId, paymentMethod, paidBy);
+            totalItemsMarked += marked;
+            processed.add(orderId);
+        }
+        if (paymentMethod != null) {
+            eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy));
+        }
+        return totalItemsMarked;
     }
 
     /**

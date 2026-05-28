@@ -74,19 +74,6 @@ interface TableCard {
   noteText: string;
 }
 
-/** Mirror of the backend CashRegisterReceiptResponse (mock ECR for now). */
-interface CashRegisterReceiptResponse {
-  status: 'OK' | 'ERROR';
-  receiptNumber?: string;
-  fiscalReceiptId?: string;
-  cashRegisterSerial?: string;
-  issuedAt?: string;
-  totalAmount?: number;
-  paymentMethod?: 'CASH' | 'CARD';
-  errorCode?: string;
-  errorMessage?: string;
-}
-
 interface PendingRegistration {
   id: string;
   orderPointId: string;
@@ -102,6 +89,8 @@ interface EventOrderPoint {
   orderPointId: string;
   orderPointName: string;
   sublocationName: string;
+  cashRegisterId?: string | null;
+  cashRegisterName?: string;
   prepaid: number;
   clientName?: string;
   email?: string;
@@ -547,34 +536,25 @@ interface EventOrderPoint {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-          @if (cashRegisters.length > 0) {
-            <div class="payment-modal-section-label">Cash register</div>
-            <div class="payment-modal-body register-grid">
-              @for (cr of cashRegisters; track cr.id) {
-                <button class="payment-method-btn register"
-                        [class.selected]="selectedCashRegisterDeviceId === cr.id"
-                        (click)="selectedCashRegisterDeviceId = cr.id">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h0a4 4 0 014 4v2m-8 0h8m-8 0a2 2 0 01-2-2V8a2 2 0 012-2h8a2 2 0 012 2v7a2 2 0 01-2 2M9 8h6" />
-                  </svg>
-                  {{ cr.name || 'Register' }}
-                </button>
-              }
-            </div>
-          }
           <div class="payment-modal-section-label">Payment method</div>
           <div class="payment-modal-body">
-            <button class="payment-method-btn cash" (click)="confirmPayment('CASH')" [disabled]="!selectedCashRegisterDeviceId && cashRegisters.length > 0">
+            <button class="payment-method-btn cash" (click)="confirmPayment('CASH')">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Cash
             </button>
-            <button class="payment-method-btn card" (click)="confirmPayment('CARD')" [disabled]="!selectedCashRegisterDeviceId && cashRegisters.length > 0">
+            <button class="payment-method-btn card" (click)="confirmPayment('CARD')">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
               Card
+            </button>
+            <button class="payment-method-btn protocol" (click)="confirmPayment('PROTOCOL')">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Protocol
             </button>
           </div>
         </div>
@@ -2014,6 +1994,11 @@ interface EventOrderPoint {
       background: #eff6ff;
       color: #1d4ed8;
     }
+    .payment-method-btn.protocol:hover {
+      border-color: #f59e0b;
+      background: #fffbeb;
+      color: #b45309;
+    }
   `]
 })
 export class OrderDashboardComponent implements OnInit, OnDestroy {
@@ -2031,6 +2016,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   needsPaymentOrders: Order[] = [];
   loadingNeedsPayment = false;
   creditValueMap: Map<string, number> = new Map(); // orderPointId -> creditValue
+  cashRegisterByOrderPointId: Map<string, string> = new Map(); // orderPointId -> cashRegisterId
   paymentGroupMode: Map<string, 'all' | 'guest'> = new Map();
   paymentViewMode: Map<string, 'total' | 'order'> = new Map();
   paymentMode: 'table' | 'guest' = 'table';
@@ -2301,11 +2287,15 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: ({ orders, eventOrderPoints }) => {
         this.needsPaymentOrders = orders;
-        // Build creditValueMap from eventOrderPoints
+        // Build creditValueMap and cashRegisterByOrderPointId from eventOrderPoints
         this.creditValueMap.clear();
+        this.cashRegisterByOrderPointId.clear();
         for (const eop of eventOrderPoints) {
           if (eop.credit && eop.creditValue != null && eop.creditValue > 0) {
             this.creditValueMap.set(eop.orderPointId, eop.creditValue);
+          }
+          if (eop.cashRegisterId) {
+            this.cashRegisterByOrderPointId.set(eop.orderPointId, eop.cashRegisterId);
           }
         }
         this.updateGroupedPaymentOrders();
@@ -2393,7 +2383,6 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (registers) => {
           this.cashRegisters = registers || [];
-          this.selectedCashRegisterDeviceId = this.cashRegisters[0]?.id ?? null;
         },
         error: (err) => {
           console.error('Failed to load cash registers:', err);
@@ -2726,12 +2715,28 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
 
   markTablePaid(orders: Order[]): void {
     this.pendingPaymentOrders = orders;
+    this.selectedCashRegisterDeviceId = this.resolveCashRegisterForOrders(orders);
     this.showPaymentModal = true;
   }
 
   markGuestPaid(orders: Order[]): void {
     this.pendingPaymentOrders = orders;
+    this.selectedCashRegisterDeviceId = this.resolveCashRegisterForOrders(orders);
     this.showPaymentModal = true;
+  }
+
+  /**
+   * Pick the cash register pre-assigned to these orders' order point in the
+   * event setup (Edit Event → Order Points → Cash Register column). Falls
+   * back to the first configured register if no per-OP assignment exists.
+   */
+  private resolveCashRegisterForOrders(orders: Order[]): string | null {
+    const opId = orders[0]?.orderPointId;
+    const assigned = opId ? this.cashRegisterByOrderPointId.get(opId) : null;
+    if (assigned && this.cashRegisters.some(cr => cr.id === assigned)) {
+      return assigned;
+    }
+    return this.cashRegisters[0]?.id ?? null;
   }
 
   closePaymentModal(): void {
@@ -2739,40 +2744,29 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     this.pendingPaymentOrders = [];
   }
 
-  confirmPayment(paymentMethod: 'CASH' | 'CARD'): void {
+  confirmPayment(paymentMethod: 'CASH' | 'CARD' | 'PROTOCOL'): void {
     const orders = this.pendingPaymentOrders;
+    const deviceId = this.selectedCashRegisterDeviceId;
     this.closePaymentModal();
 
-    // Push the receipt request to the backend; it builds the fiscal payload,
-    // logs it, "talks" to the cash register, and returns the receipt response
-    // (number, fiscal id, status, ...). Then mark the orders paid.
-    this.http.post<CashRegisterReceiptResponse>(`${environment.apiUrl}/api/orders/cash-register/receipt`, {
-      orderIds: orders.map(o => o.id),
+    // One bulk PATCH — backend marks the orders paid AND fires the
+    // cash-register print via PaymentCompletedEvent (same mechanism as
+    // the Netopia callback). PROTOCOL skips the fiscal print.
+    const orderIds = orders.map(o => o.id);
+    this.http.post(`${environment.apiUrl}/api/orders/bulk-paid`, {
+      orderIds,
       paymentMethod,
-      operator: this.currentUser,
-      cashRegisterDeviceId: this.selectedCashRegisterDeviceId
+      paidBy: this.currentUser,
+      cashRegisterDeviceId: deviceId
     }).subscribe({
-      next: (receipt) => {
-        console.log('[CashRegister] ECR response:', receipt);
+      next: () => {
+        const paidIds = new Set(orderIds);
+        this.needsPaymentOrders = this.needsPaymentOrders.filter(o => !paidIds.has(o.id));
+        this.updateGroupedPaymentOrders();
       },
       error: (err) => {
-        console.error('[CashRegister] Failed to print receipt:', err);
+        console.error('Failed to mark orders as paid:', err);
       }
-    });
-
-    orders.forEach(order => {
-      this.http.patch(`${environment.apiUrl}/api/orders/${order.id}/paid`, {
-        paymentMethod: paymentMethod,
-        paidBy: this.currentUser
-      }).subscribe({
-        next: () => {
-          this.needsPaymentOrders = this.needsPaymentOrders.filter(o => o.id !== order.id);
-          this.updateGroupedPaymentOrders();
-        },
-        error: (err) => {
-          console.error('Failed to mark order as paid:', err);
-        }
-      });
     });
   }
 

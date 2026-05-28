@@ -198,7 +198,8 @@ const CUSTOM_DATE_FORMATS = {
                         <span class="payment-method-badge"
                               [class.cash]="order.paymentMethod === 'CASH'"
                               [class.card]="order.paymentMethod === 'CARD'"
-                              [class.online]="order.paymentMethod === 'ONLINE'">
+                              [class.online]="order.paymentMethod === 'ONLINE'"
+                              [class.protocol]="order.paymentMethod === 'PROTOCOL'">
                           {{ getPaymentMethodLabel(order.paymentMethod) }}
                         </span>
                       } @else {
@@ -315,6 +316,7 @@ const CUSTOM_DATE_FORMATS = {
     .payment-method-badge.cash { background: rgba(76, 175, 80, 0.15); color: #2E7D32; }
     .payment-method-badge.card { background: rgba(33, 150, 243, 0.15); color: #1565C0; }
     .payment-method-badge.online { background: rgba(156, 39, 176, 0.15); color: #7B1FA2; }
+    .payment-method-badge.protocol { background: rgba(245, 158, 11, 0.15); color: #b45309; }
 
     .pagination-container { display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 100%; }
     .pagination-list { list-style: none; display: flex; align-items: center; gap: 4px; margin: 0; padding: 0; }
@@ -686,6 +688,7 @@ export class RevenueComponent implements OnInit {
       case 'CASH': return 'Cash';
       case 'CARD': return 'Card';
       case 'ONLINE': return 'Online';
+      case 'PROTOCOL': return 'Protocol';
       default: return method;
     }
   }
