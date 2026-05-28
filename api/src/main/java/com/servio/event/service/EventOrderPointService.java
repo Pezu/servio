@@ -89,7 +89,6 @@ public class EventOrderPointService {
                         dto.setOrderPointId(op.getId());
                         dto.setOrderPointName(op.getName());
                         dto.setSublocationName(op.getLocation().getName());
-                        dto.setPayLater(op.isPayLater());
                         dto.setPrepaid(BigDecimal.ZERO);
                     }
                     UUID canonicalId = canonicalByOrderPointId.getOrDefault(op.getId(), op.getId());
