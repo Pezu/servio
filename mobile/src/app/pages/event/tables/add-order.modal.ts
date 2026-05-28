@@ -462,9 +462,11 @@ export class AddOrderModal implements OnInit {
   placeOrder() {
     if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
 
-    // Pay-later OPs: existing flow — create the order and let it sit in
-    // needs-payment until settled via the Payments page.
-    if (this.table.payLater) {
+    // Only non-pay-later OPs show the payment-method picker. Treat a
+    // missing payLater flag as pay-later so the picker never appears
+    // unless the OP is *explicitly* marked non-pay-later (defensive
+    // against an older backend that hasn't been redeployed yet).
+    if (this.table.payLater !== false) {
       this.createAndDismiss(true);
       return;
     }

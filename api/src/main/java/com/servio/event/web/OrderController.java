@@ -4,6 +4,8 @@ import com.servio.event.dto.BulkMarkPaidRequest;
 import com.servio.event.dto.CashRegisterReceiptRequest;
 import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.MarkPaidRequest;
+import com.servio.event.dto.ProtocolPaymentSummary;
+import com.servio.event.service.ProtocolPaymentService;
 import com.servio.event.dto.Order;
 import com.servio.event.dto.OrderItem;
 import com.servio.event.dto.ReceiveOrderRequest;
@@ -39,6 +41,7 @@ public class OrderController {
     private final OrderMapper orderMapper;
     private final OrderDtoEnricher orderDtoEnricher;
     private final CashRegisterService cashRegisterService;
+    private final ProtocolPaymentService protocolPaymentService;
 
     @PostMapping
     public ResponseEntity<Order> receiveOrder(@Valid @RequestBody ReceiveOrderRequest request) {
@@ -190,6 +193,16 @@ public class OrderController {
     public ResponseEntity<CashRegisterReceiptResponse> printCashRegisterReceipt(
             @RequestBody CashRegisterReceiptRequest request) {
         return ResponseEntity.ok(cashRegisterService.printReceipt(request));
+    }
+
+    /**
+     * Lists PROTOCOL-paid orders for the event — feeds the mobile Approvals
+     * tab. Each row carries the paying user, total amount, order point and the
+     * client name configured in Edit Event → Order Points.
+     */
+    @GetMapping("/events/{eventId}/protocol-payments")
+    public ResponseEntity<List<ProtocolPaymentSummary>> listProtocolPayments(@PathVariable UUID eventId) {
+        return ResponseEntity.ok(protocolPaymentService.listForEvent(eventId));
     }
 
     /**

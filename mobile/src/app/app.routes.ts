@@ -29,6 +29,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/event/payments/payments.page').then(m => m.PaymentsPage)
       },
       {
+        path: 'approvals',
+        loadComponent: () => import('./pages/event/approvals/approvals.page').then(m => m.ApprovalsPage)
+      },
+      {
         path: '',
         redirectTo: 'orders',
         pathMatch: 'full'

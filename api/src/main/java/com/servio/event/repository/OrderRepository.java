@@ -66,4 +66,9 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
 
     @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.groupId = :groupId AND o.status NOT IN :excludedStatuses ORDER BY o.orderNo ASC")
     List<OrderEntity> findByGroupIdAndStatusNotIn(@Param("groupId") UUID groupId, @Param("excludedStatuses") List<OrderStatus> excludedStatuses);
+
+    @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items " +
+           "WHERE o.eventId = :eventId AND o.paymentMethod = :paymentMethod " +
+           "ORDER BY o.paidAt DESC")
+    List<OrderEntity> findByEventIdAndPaymentMethod(@Param("eventId") UUID eventId, @Param("paymentMethod") String paymentMethod);
 }

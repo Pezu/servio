@@ -82,6 +82,17 @@ export interface CreateOrderRequest {
   orderItems: CreateOrderItem[];
 }
 
+export interface ProtocolPaymentSummary {
+  orderId: string;
+  orderNo: number;
+  paidAt: string | null;
+  paidBy: string | null;
+  totalAmount: number;
+  orderPointId: string | null;
+  orderPointName: string | null;
+  clientName: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrderService {
   constructor(private http: HttpClient, private authService: AuthService) {}
@@ -140,6 +151,13 @@ export class OrderService {
     return this.http.post<void>(
       `${environment.apiUrl}/orders/bulk-paid`,
       payload,
+      { headers: this.headers() }
+    );
+  }
+
+  getProtocolPayments(eventId: string): Observable<ProtocolPaymentSummary[]> {
+    return this.http.get<ProtocolPaymentSummary[]>(
+      `${environment.apiUrl}/orders/events/${eventId}/protocol-payments`,
       { headers: this.headers() }
     );
   }
