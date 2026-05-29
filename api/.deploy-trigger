@@ -1,0 +1,2 @@
+Bump this file to trigger the API Cloud Run deploy (deploy-api.yml watches api/**).
+Last trigger: 2026-05-29 20:58:08 EEST
