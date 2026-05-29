@@ -168,7 +168,9 @@ public class CashRegisterService {
                 if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
                 if (itemScope != null && !itemScope.contains(item.getId())) continue;
                 BigDecimal vat = item.getVatRate() != null ? item.getVatRate() : BigDecimal.ZERO;
-                LineKey key = new LineKey(item.getName(), item.getPrice(), vat);
+                // The fiscal printer only handles plain text — item names may carry
+                // menu-admin HTML (e.g. <font size="1">0.7L</font>), so strip it here.
+                LineKey key = new LineKey(stripHtml(item.getName()), item.getPrice(), vat);
                 grouped.merge(key, item.getQuantity(), Integer::sum);
             }
         }
@@ -190,6 +192,27 @@ public class CashRegisterService {
                 device != null ? device.getIp() : null,
                 lines
         );
+    }
+
+    /**
+     * Reduce an item name to plain text for the fiscal printer: drop every HTML
+     * tag, decode the common entities, and collapse whitespace. Tags become a
+     * space so {@code Beer<br>0.7L} doesn't glue into {@code Beer0.7L}.
+     */
+    private static String stripHtml(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+        String text = input.replaceAll("(?is)<[^>]*>", " ");
+        text = text
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'");
+        return text.replaceAll("\\s+", " ").trim();
     }
 
     private BigDecimal computeTotalAmount(List<OrderEntity> orders, java.util.Set<UUID> itemScope) {
