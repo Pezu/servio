@@ -140,6 +140,7 @@
     "USER": "Utilizator",
     "CASH_REGISTER": "Casă de Marcat",
     "PROTOCOL": "Protocol",
+    "BAR": "Bar",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Valoare Credit",
     "CASH_REGISTERS": "Case de Marcat",
@@ -283,7 +284,9 @@
       "TIP": "Bacșiș",
       "TOTAL": "Total",
       "TOTALS": "Totaluri",
-      "NO_RECORDS": "Nu s-au găsit înregistrări de plată"
+      "NO_RECORDS": "Nu s-au găsit înregistrări de plată",
+      "PAYMENTS": "Plăți",
+      "MULTIPLE_PAYMENTS_ONLY": "Doar plăți multiple"
     }
   }
 }

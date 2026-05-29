@@ -88,6 +88,12 @@ const CUSTOM_DATE_FORMATS = {
               <mat-datepicker #endPicker></mat-datepicker>
             </mat-form-field>
           </div>
+          <div class="filter-group">
+            <label class="multi-pay-toggle">
+              <input type="checkbox" [(ngModel)]="multiplePaymentsOnly" (change)="applyFilters()">
+              <span>{{ 'REPORTS.REVENUE.MULTIPLE_PAYMENTS_ONLY' | translate }}</span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="card-body p-0">
@@ -171,6 +177,7 @@ const CUSTOM_DATE_FORMATS = {
                   }
                 </th>
                 <th>{{ 'REPORTS.REVENUE.DATE' | translate }}</th>
+                <th class="text-center">{{ 'REPORTS.REVENUE.PAYMENTS' | translate }}</th>
                 <th class="text-end">{{ 'REPORTS.REVENUE.NET_AMOUNT' | translate }}</th>
                 <th class="text-end">{{ 'REPORTS.REVENUE.VAT' | translate }}</th>
                 <th class="text-end">{{ 'REPORTS.REVENUE.TIP' | translate }}</th>
@@ -179,12 +186,12 @@ const CUSTOM_DATE_FORMATS = {
             </thead>
             <tbody>
               @if (loading) {
-                <tr><td colspan="11" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                <tr><td colspan="12" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
               } @else if (filteredOrders.length === 0) {
-                <tr><td colspan="11" class="text-center py-4 text-muted">{{ 'REPORTS.REVENUE.NO_RECORDS' | translate }}</td></tr>
+                <tr><td colspan="12" class="text-center py-4 text-muted">{{ 'REPORTS.REVENUE.NO_RECORDS' | translate }}</td></tr>
               } @else {
                 @for (order of filteredOrders; track order.id) {
-                  <tr>
+                  <tr [class.multi-pay-row]="isMultiPayment(order)">
                     <td><span class="fw-semibold">#{{ order.orderNo }}</span></td>
                     <td class="text-muted">{{ order.eventName || '-' }}</td>
                     <td class="text-muted">{{ order.orderPointName || '-' }}</td>
@@ -208,17 +215,59 @@ const CUSTOM_DATE_FORMATS = {
                     </td>
                     <td class="text-muted">{{ order.paidBy || '-' }}</td>
                     <td class="text-muted">{{ order.paidAt ? formatDate(order.paidAt) : '-' }}</td>
+                    <td class="text-center">
+                      @if (isMultiPayment(order)) {
+                        <button type="button" class="multi-pay-badge" (click)="toggleExpand(order, $event)" [class.open]="expandedOrderId === order.id">
+                          {{ order.paymentCount }}×
+                          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      } @else if (order.paymentCount) {
+                        <span class="text-muted">{{ order.paymentCount }}</span>
+                      } @else {
+                        <span class="text-muted">-</span>
+                      }
+                    </td>
                     <td class="text-end">{{ (order.netAmount || order.totalAmount) | number:'1.2-2' }}</td>
                     <td class="text-end">{{ order.vatAmount ? (order.vatAmount | number:'1.2-2') : '-' }}</td>
                     <td class="text-end">{{ order.tip ? (order.tip | number:'1.2-2') : '-' }}</td>
                     <td class="text-end fw-semibold">{{ getOrderTotal(order) | number:'1.2-2' }}</td>
                   </tr>
+                  @if (expandedOrderId === order.id && order.payments?.length) {
+                    <tr class="payment-detail-row">
+                      <td colspan="12">
+                        <div class="payment-breakdown">
+                          <div class="payment-breakdown-title">{{ 'REPORTS.REVENUE.PAYMENTS' | translate }}</div>
+                          @for (payment of order.payments; track $index) {
+                            <div class="payment-line">
+                              <span class="payment-line-no">#{{ $index + 1 }}</span>
+                              <span class="payment-line-date">{{ payment.paidAt ? formatDate(payment.paidAt) : '-' }}</span>
+                              @if (payment.paymentMethod) {
+                                <span class="payment-method-badge"
+                                      [class.cash]="payment.paymentMethod === 'CASH'"
+                                      [class.card]="payment.paymentMethod === 'CARD'"
+                                      [class.online]="payment.paymentMethod === 'ONLINE'"
+                                      [class.protocol]="payment.paymentMethod === 'PROTOCOL'">
+                                  {{ getPaymentMethodLabel(payment.paymentMethod) }}
+                                </span>
+                              } @else {
+                                <span class="text-muted">-</span>
+                              }
+                              <span class="payment-line-by text-muted">{{ payment.paidBy || '-' }}</span>
+                              <span class="payment-line-amount">{{ payment.amount | number:'1.2-2' }}</span>
+                            </div>
+                          }
+                        </div>
+                      </td>
+                    </tr>
+                  }
                 }
               }
             </tbody>
             <tfoot>
               <tr class="total-row">
-                <td colspan="7" class="text-end fw-semibold">{{ 'REPORTS.REVENUE.TOTALS' | translate }}:</td>
+                <td colspan="8" class="text-end fw-semibold">{{ 'REPORTS.REVENUE.TOTALS' | translate }}:</td>
                 <td class="text-end fw-bold">{{ calculateNetTotal() | number:'1.2-2' }}</td>
                 <td class="text-end fw-bold">{{ calculateVatTotal() | number:'1.2-2' }}</td>
                 <td class="text-end fw-bold">{{ calculateTipTotal() | number:'1.2-2' }}</td>
@@ -307,6 +356,27 @@ const CUSTOM_DATE_FORMATS = {
     .mb-0 { margin-bottom: 0; }
     .d-flex { display: flex; }
     .align-items-center { align-items: center; }
+
+    /* Multiple-payment (partial pay) indicator */
+    .multi-pay-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: none; border-radius: 10px; font-size: 11px; font-weight: 700; background: rgba(124, 58, 237, 0.12); color: #6d28d9; font-variant-numeric: tabular-nums; cursor: pointer; }
+    .multi-pay-badge:hover { background: rgba(124, 58, 237, 0.2); }
+    .multi-pay-badge .chevron { width: 12px; height: 12px; transition: transform 0.15s ease; }
+    .multi-pay-badge.open .chevron { transform: rotate(180deg); }
+    .multi-pay-row td { background: rgba(124, 58, 237, 0.04); }
+    .multi-pay-row td:first-child { box-shadow: inset 3px 0 0 #7c3aed; }
+
+    .multi-pay-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-muted); user-select: none; white-space: nowrap; }
+    .multi-pay-toggle input[type="checkbox"] { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+
+    /* Per-payment breakdown (expanded) */
+    .payment-detail-row td { background: rgba(124, 58, 237, 0.04); box-shadow: inset 3px 0 0 #7c3aed; padding: 10px 16px 12px 24px; }
+    .payment-breakdown-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
+    .payment-line { display: flex; align-items: center; gap: 14px; padding: 5px 0; font-size: 13px; border-bottom: 1px dashed var(--border-color); }
+    .payment-line:last-child { border-bottom: none; }
+    .payment-line-no { font-weight: 700; color: #6d28d9; min-width: 28px; }
+    .payment-line-date { color: var(--text-muted); min-width: 130px; }
+    .payment-line-by { flex: 1; }
+    .payment-line-amount { font-weight: 700; color: var(--text-dark); font-variant-numeric: tabular-nums; margin-left: auto; }
 
     .paid-badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
     .paid-badge.paid { background: rgba(76, 175, 80, 0.1); color: #388E3C; }
@@ -461,6 +531,12 @@ export class RevenueComponent implements OnInit {
   showOperatorFilter = false;
   showStatusFilter = false;
 
+  /** When on, only orders settled through more than one payment are shown. */
+  multiplePaymentsOnly = false;
+
+  /** Id of the order whose per-payment breakdown is expanded (one at a time). */
+  expandedOrderId: string | null = null;
+
   constructor(private orderService: OrderService, private elementRef: ElementRef) {
     this.initDateFilters();
   }
@@ -567,8 +643,24 @@ export class RevenueComponent implements OnInit {
         if (!this.selectedStatuses.has(status)) return false;
       }
 
+      // Multiple-payment (partial pay) filter
+      if (this.multiplePaymentsOnly && !this.isMultiPayment(order)) {
+        return false;
+      }
+
       return true;
     });
+  }
+
+  /** True when the order was settled through more than one payment transaction. */
+  isMultiPayment(order: Order): boolean {
+    return (order.paymentCount || 0) > 1;
+  }
+
+  /** Toggle the per-payment breakdown for a multi-payment order. */
+  toggleExpand(order: Order, event: Event): void {
+    event.stopPropagation();
+    this.expandedOrderId = this.expandedOrderId === order.id ? null : order.id;
   }
 
   togglePaymentMethodFilter(event: Event): void {

@@ -113,6 +113,17 @@ interface EventOrderPoint {
         }
       </div>
       <div class="header-right">
+        <button class="fullscreen-btn" (click)="toggleFullscreen()" [title]="isFullscreen ? 'Exit full screen' : 'Full screen'">
+          @if (!isFullscreen) {
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
+          } @else {
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V5m0 4H5m4 0L4 4m11 5h4m-4 0V5m0 4l5-5M9 15v4m0-4H5m4 0l-5 5m11-5h4m-4 0v4m0-4l5 5" />
+            </svg>
+          }
+        </button>
         <div class="user-menu-wrapper">
           <div class="user-avatar" (click)="toggleUserMenu($event)">{{ userInitials }}</div>
           <div class="user-dropdown" [class.show]="userMenuOpen">
@@ -131,28 +142,8 @@ interface EventOrderPoint {
       </div>
     </header>
     
-    <!-- Navigation Tabs -->
-    <nav class="nav-tabs">
-      <button class="nav-tab" [class.active]="activeView === 'orders'" (click)="navigateTo('orders')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-        </svg>
-        Orders
-        @if (visibleOrdersCount > 0) {
-          <span class="tab-badge">{{ visibleOrdersCount }}</span>
-        }
-      </button>
-      <button class="nav-tab" [class.active]="activeView === 'payments'" (click)="navigateTo('payments')">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        Payments
-        @if (groupedPaymentOrders.length > 0) {
-          <span class="tab-badge">{{ groupedPaymentOrders.length }}</span>
-        }
-      </button>
-    </nav>
-    
+    <!-- Navigation tabs hidden: dashboard is locked to the Orders kanban view -->
+
     <div class="dashboard-content">
       <!-- ORDERS VIEW -->
       @if (activeView === 'orders') {
@@ -594,6 +585,22 @@ interface EventOrderPoint {
       color: #64748b;
     }
     .header-right { display: flex; align-items: center; gap: 12px; }
+
+    .fullscreen-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #f0f2f5;
+      color: #64748b;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .fullscreen-btn:hover { background: #e2e8f0; color: #1e293b; }
+    .fullscreen-btn svg { width: 20px; height: 20px; }
 
     /* User Menu */
     .user-menu-wrapper { position: relative; }
@@ -2023,6 +2030,12 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   private visibilityHandler: (() => void) | null = null;
   private onlineHandler: (() => void) | null = null;
 
+  // Full-screen + screen wake lock (kitchen/bar display stays lit and focused).
+  isFullscreen = false;
+  private wakeLock: any = null;
+  private fullscreenHandler: (() => void) | null = null;
+  private wakeVisibilityHandler: (() => void) | null = null;
+
   // Payment modal
   showPaymentModal = false;
   pendingPaymentOrders: Order[] = [];
@@ -2365,9 +2378,78 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
     this.router.navigate(['/backoffice/login']);
   }
 
+  /** Toggle browser full-screen on the whole dashboard (kitchen/bar wall display). */
+  toggleFullscreen(): void {
+    const doc = document as any;
+    const el = document.documentElement as any;
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      const request = el.requestFullscreen || el.webkitRequestFullscreen;
+      request?.call(el).catch?.((err: unknown) => console.warn('[Fullscreen] request failed:', err));
+    } else {
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
+      exit?.call(doc);
+    }
+  }
+
+  /** Keep isFullscreen in sync however the user enters/leaves (button, F11, Esc). */
+  private setupFullscreenTracking(): void {
+    this.fullscreenHandler = () => {
+      const doc = document as any;
+      this.isFullscreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', this.fullscreenHandler);
+    document.addEventListener('webkitfullscreenchange', this.fullscreenHandler);
+  }
+
+  /**
+   * Hold a screen wake lock so the display never dims or sleeps while the
+   * kanban is open. The lock is auto-released when the tab is hidden, so we
+   * re-acquire it whenever the page becomes visible again.
+   */
+  private requestWakeLock(): void {
+    const nav = navigator as any;
+    if (!nav.wakeLock?.request) {
+      return; // Unsupported browser — nothing we can do.
+    }
+    const acquire = () => {
+      if (document.visibilityState !== 'visible') return;
+      nav.wakeLock.request('screen')
+        .then((lock: any) => {
+          this.wakeLock = lock;
+          lock.addEventListener?.('release', () => { this.wakeLock = null; });
+        })
+        .catch((err: unknown) => console.warn('[WakeLock] request failed:', err));
+    };
+    this.wakeVisibilityHandler = () => {
+      if (document.visibilityState === 'visible' && !this.wakeLock) {
+        acquire();
+      }
+    };
+    document.addEventListener('visibilitychange', this.wakeVisibilityHandler);
+    acquire();
+  }
+
+  private releaseDisplayKeepAwake(): void {
+    if (this.fullscreenHandler) {
+      document.removeEventListener('fullscreenchange', this.fullscreenHandler);
+      document.removeEventListener('webkitfullscreenchange', this.fullscreenHandler);
+      this.fullscreenHandler = null;
+    }
+    if (this.wakeVisibilityHandler) {
+      document.removeEventListener('visibilitychange', this.wakeVisibilityHandler);
+      this.wakeVisibilityHandler = null;
+    }
+    if (this.wakeLock) {
+      this.wakeLock.release?.();
+      this.wakeLock = null;
+    }
+  }
+
   ngOnInit(): void {
     this.currentUser = this.getUsernameFromToken();
     this.userInitials = this.getUserInitials();
+    this.setupFullscreenTracking();
+    this.requestWakeLock();
     this.eventId = this.route.snapshot.paramMap.get('eventId') || '';
     if (this.eventId) {
       this.loadOrders();
@@ -2418,7 +2500,10 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
   }
 
   loadOrders(): void {
-    this.http.get<Order[]>(`${environment.apiUrl}/api/orders/events/${this.eventId}`)
+    // ?scope=service → backend filters to orders served from OPs the
+    // logged-in user is assigned to (see OrderController.getOrdersByEvent).
+    // SUPER bypass is on the server.
+    this.http.get<Order[]>(`${environment.apiUrl}/api/orders/events/${this.eventId}?scope=service`)
       .subscribe({
         next: (orders) => {
           this.orders = orders;
@@ -2797,6 +2882,7 @@ export class OrderDashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.removeWakeUpListeners();
+    this.releaseDisplayKeepAwake();
     if (this.stompClient) {
       this.stompClient.deactivate();
     }

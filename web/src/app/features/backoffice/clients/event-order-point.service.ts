@@ -22,6 +22,7 @@ export interface EventOrderPoint {
   credit: boolean;
   creditValue?: number;
   protocol?: boolean;
+  linkedOrderPointId?: string | null;
 }
 
 @Injectable({

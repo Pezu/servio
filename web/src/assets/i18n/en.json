@@ -140,6 +140,7 @@
     "USER": "User",
     "CASH_REGISTER": "Cash Register",
     "PROTOCOL": "Protocol",
+    "BAR": "Bar",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Credit Value",
     "CASH_REGISTERS": "Cash Registers",
@@ -283,7 +284,9 @@
       "TIP": "Tip",
       "TOTAL": "Total",
       "TOTALS": "Totals",
-      "NO_RECORDS": "No payment records found"
+      "NO_RECORDS": "No payment records found",
+      "PAYMENTS": "Payments",
+      "MULTIPLE_PAYMENTS_ONLY": "Multiple payments only"
     }
   }
 }

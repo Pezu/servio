@@ -13,6 +13,13 @@ export interface OrderItem {
   paid?: boolean;
 }
 
+export interface OrderPayment {
+  amount: number;
+  paymentMethod?: string;
+  paidBy?: string;
+  paidAt?: string;
+}
+
 export interface Order {
   id: string;
   orderNo: number;
@@ -30,6 +37,10 @@ export interface Order {
   paidBy?: string;
   paidAt?: string;
   tip?: number;
+  /** Distinct payment transactions that settled this order (> 1 = partial pay). */
+  paymentCount?: number;
+  /** Per-payment breakdown (amount + method) — drives the revenue report detail. */
+  payments?: OrderPayment[];
   items: OrderItem[];
   totalAmount: number;
   netAmount?: number;

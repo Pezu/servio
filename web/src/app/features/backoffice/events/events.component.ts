@@ -500,12 +500,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                         <th>{{ 'EVENTS.USER' | translate }}</th>
                         <th>{{ 'EVENTS.CASH_REGISTER' | translate }}</th>
                         <th>{{ 'EVENTS.PROTOCOL' | translate }}</th>
+                        <th>{{ 'EVENTS.BAR' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="6">
+                          <td colspan="7">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -578,6 +579,16 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                        [checked]="!!table.protocol"
                                        (change)="onProtocolChange(table, $event)"
                                        [title]="'EVENTS.PROTOCOL' | translate">
+                              </td>
+                              <td class="user-cell">
+                                @if (table.payLater) {
+                                  <select class="user-select" [ngModel]="table.linkedOrderPointId || ''" (ngModelChange)="onLinkedOrderPointChange(table, $event)">
+                                    <option value="">-</option>
+                                    @for (op of nonPayLaterOrderPoints; track op.orderPointId) {
+                                      <option [value]="op.orderPointId">{{ op.orderPointName }}</option>
+                                    }
+                                  </select>
+                                }
                               </td>
                             </tr>
                           }
@@ -911,12 +922,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .tables-table th:nth-child(2) { width: 30%; }
     .tables-table th:nth-child(3) { width: 30%; }
     .tables-table th:nth-child(4) { width: 20%; }
-    .order-points-table th:nth-child(1) { width: 14%; }
-    .order-points-table th:nth-child(2) { width: 22%; }
-    .order-points-table th:nth-child(3) { width: 18%; }
-    .order-points-table th:nth-child(4) { width: 18%; }
-    .order-points-table th:nth-child(5) { width: 18%; text-align: center; }
-    .order-points-table th:nth-child(6) { width: 10%; text-align: center; }
+    .order-points-table th:nth-child(1) { width: 12%; }
+    .order-points-table th:nth-child(2) { width: 18%; }
+    .order-points-table th:nth-child(3) { width: 16%; }
+    .order-points-table th:nth-child(4) { width: 16%; }
+    .order-points-table th:nth-child(5) { width: 16%; text-align: center; }
+    .order-points-table th:nth-child(6) { width: 8%; text-align: center; }
+    .order-points-table th:nth-child(7) { width: 14%; }
     .order-points-table td:nth-child(6) { text-align: center; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
@@ -1974,15 +1986,20 @@ export class EventsComponent implements OnInit {
     return this.users.filter(u => u.roles?.includes('BARMAN'));
   }
 
+  /** Non-pay-later rows accept SERVICE staff alongside barmen. */
+  get barmanOrServiceUsers(): User[] {
+    return this.users.filter(u => u.roles?.includes('BARMAN') || u.roles?.includes('SERVICE'));
+  }
+
   /**
    * Per-row dropdown source on the Order Points tab.
    * Pay-later OPs (typical table service) → waiters.
-   * Non-pay-later OPs (bars/quick-serve) → barmen.
-   * Falls back to waiters when payLater is undefined (e.g. stale backend
-   * that doesn't yet return the flag) to preserve the original behavior.
+   * Non-pay-later OPs (bars/quick-serve) → barmen + service staff.
+   * Falls back to the pay-later pool when payLater is undefined (e.g. stale
+   * backend that doesn't yet return the flag).
    */
   usersForOrderPoint(table: EventOrderPoint): User[] {
-    return table.payLater === false ? this.barmanUsers : this.waiterUsers;
+    return table.payLater === false ? this.barmanOrServiceUsers : this.waiterUsers;
   }
 
   // Per-row open state for the Order Points user multi-select. Only one row's
@@ -2019,6 +2036,18 @@ export class EventsComponent implements OnInit {
       .filter((n): n is string => !!n);
     if (names.length <= 2) return names.join(', ');
     return `${names.length} users selected`;
+  }
+
+  /** Source for the "Bar" dropdown on every pay-later row. */
+  get nonPayLaterOrderPoints(): EventOrderPoint[] {
+    return this.eventTables.filter(t => t.payLater === false);
+  }
+
+  onLinkedOrderPointChange(table: EventOrderPoint, linkedOrderPointId: string): void {
+    const newId = linkedOrderPointId || null;
+    if ((table.linkedOrderPointId || null) === newId) return;
+    table.linkedOrderPointId = newId;
+    this.saveEventTable(table);
   }
 
   onProtocolChange(table: EventOrderPoint, change: globalThis.Event): void {
