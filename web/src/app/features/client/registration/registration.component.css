@@ -2141,8 +2141,8 @@
 
 .aggregated-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid #f0f0f0;
 }
@@ -2152,6 +2152,8 @@
 }
 
 .aggregated-item-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2169,10 +2171,16 @@
   color: #333;
 }
 
+/* Price sits to the right of the row, just before the status coin, so
+   values line up in a column across rows regardless of name length. */
 .aggregated-item-price {
+  margin-left: auto;
+  text-align: right;
   font-size: 12px;
   font-weight: 500;
   color: #333;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Individual Orders */
@@ -2450,6 +2458,18 @@
   font-size: 16px;
   font-weight: 600;
   color: #333;
+}
+
+/* Orderer's nickname tucked between the order number and the total */
+.order-status-header .order-guest {
+  flex: 1;
+  margin: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .order-status-number {

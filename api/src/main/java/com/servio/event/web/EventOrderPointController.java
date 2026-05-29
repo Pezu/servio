@@ -36,4 +36,18 @@ public class EventOrderPointController {
         eventOrderPointService.deleteEventOrderPoint(id);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Split a pay-later order point and seed the new sibling with the same
+     * per-event configuration (users, client name/phone/email, credit,
+     * protocol, prepaid). Mobile Tables view drives this with the per-tile
+     * split button.
+     */
+    @PostMapping("/{orderPointId}/split")
+    public ResponseEntity<EventOrderPoint> splitOrderPoint(
+            @PathVariable UUID eventId,
+            @PathVariable UUID orderPointId) {
+        EventOrderPoint created = eventOrderPointService.splitForEvent(eventId, orderPointId);
+        return ResponseEntity.ok(created);
+    }
 }

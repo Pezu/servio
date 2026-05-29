@@ -47,7 +47,7 @@ import { WebSocketService } from '../../services/websocket.service';
     IonLabel
   ],
   template: `
-    <ion-menu contentId="event-content" menuId="event-menu">
+    <ion-menu contentId="event-content" menuId="event-menu" side="end">
       <ion-header class="ion-no-border">
         <ion-toolbar>
           <ion-title>Menu</ion-title>
@@ -88,10 +88,10 @@ import { WebSocketService } from '../../services/websocket.service';
     <div id="event-content">
       <ion-header class="ion-no-border">
         <ion-toolbar>
-          <ion-buttons slot="start">
+          <ion-title>{{ eventTitle }}</ion-title>
+          <ion-buttons slot="end">
             <ion-menu-button menu="event-menu" autoHide="false"></ion-menu-button>
           </ion-buttons>
-          <ion-title>{{ eventTitle }}</ion-title>
         </ion-toolbar>
       </ion-header>
       <ion-content>

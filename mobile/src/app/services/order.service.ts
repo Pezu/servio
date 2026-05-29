@@ -43,6 +43,7 @@ export interface EventOrderPoint {
   cashRegisterId?: string | null;
   cashRegisterName?: string;
   payLater?: boolean;
+  protocol?: boolean;
   prepaid?: number;
   credit?: boolean;
   creditValue?: number;
@@ -112,6 +113,14 @@ export class OrderService {
     );
   }
 
+  splitEventOrderPoint(eventId: string, orderPointId: string): Observable<EventOrderPoint> {
+    return this.http.post<EventOrderPoint>(
+      `${environment.apiUrl}/events/${eventId}/order-points/${orderPointId}/split`,
+      {},
+      { headers: this.headers() }
+    );
+  }
+
   getOrders(eventId: string): Observable<Order[]> {
     return this.http.get<Order[]>(
       `${environment.apiUrl}/orders/events/${eventId}`,
@@ -147,6 +156,7 @@ export class OrderService {
     paymentMethod: 'CASH' | 'CARD' | 'PROTOCOL';
     paidBy: string;
     cashRegisterDeviceId: string | null;
+    tip?: number;
   }): Observable<void> {
     return this.http.post<void>(
       `${environment.apiUrl}/orders/bulk-paid`,

@@ -1,6 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
   IonHeader,
   IonToolbar,
@@ -9,19 +10,13 @@ import {
   IonButtons,
   IonButton,
   IonIcon,
-  IonList,
-  IonItem,
-  IonLabel,
   IonSpinner,
   IonText,
   IonFooter,
-  IonInput,
-  IonItemDivider,
-  IonBadge,
   ModalController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline } from 'ionicons/icons';
+import { closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline, arrowBackOutline, folderOutline } from 'ionicons/icons';
 import { OrderService, MenuItem, EventOrderPoint, CreateOrderItem } from '../../../services/order.service';
 import { RegistrationService } from '../../../services/registration.service';
 import { AuthService } from '../../../services/auth.service';
@@ -46,20 +41,23 @@ interface CartItem {
     IonButtons,
     IonButton,
     IonIcon,
-    IonList,
-    IonItem,
-    IonLabel,
     IonSpinner,
     IonText,
-    IonFooter,
-    IonInput,
-    IonItemDivider,
-    IonBadge
+    IonFooter
   ],
   template: `
     <ion-header>
       <ion-toolbar>
-        <ion-title>{{ table.orderPointName }}</ion-title>
+        <ion-buttons slot="start">
+          @if (categoryStack.length > 0) {
+            <ion-button (click)="goBack()">
+              <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+            </ion-button>
+          }
+        </ion-buttons>
+        <ion-title>
+          <span [innerHTML]="currentTitle()"></span>
+        </ion-title>
         <ion-buttons slot="end">
           <ion-button (click)="dismiss()">
             <ion-icon name="close-outline"></ion-icon>
@@ -79,56 +77,42 @@ interface CartItem {
             <p>No menu items available</p>
           </ion-text>
         </div>
+      } @else if (currentItems().length === 0) {
+        <div class="empty-state">
+          <ion-text color="medium">
+            <p>Nothing in this category</p>
+          </ion-text>
+        </div>
       } @else {
-        <ion-list>
-          @for (category of menuItems; track category.id) {
-            <ion-item-divider>
-              <ion-label>{{ category.name }}</ion-label>
-            </ion-item-divider>
-            @if (category.children && category.children.length > 0) {
-              @for (item of category.children; track item.id) {
-                @if (item.orderable) {
-                  <ion-item>
-                    <ion-label>
-                      <h2>{{ item.name }}</h2>
-                      <p>{{ item.price | currency:'RON':'symbol':'1.2-2' }}</p>
-                    </ion-label>
-                    <div class="quantity-controls" slot="end">
-                      @if (getQuantity(item.id) > 0) {
-                        <ion-button fill="clear" size="small" (click)="decreaseQuantity(item)">
-                          <ion-icon name="remove-outline"></ion-icon>
-                        </ion-button>
-                        <span class="quantity">{{ getQuantity(item.id) }}</span>
-                      }
-                      <ion-button fill="clear" size="small" (click)="increaseQuantity(item)">
-                        <ion-icon name="add-outline"></ion-icon>
-                      </ion-button>
-                    </div>
-                  </ion-item>
-                }
+        <div class="menu-grid">
+          @for (item of currentItems(); track item.id) {
+            <button
+              type="button"
+              class="menu-tile"
+              [class.is-category]="isCategory(item)"
+              [class.is-product]="!isCategory(item) && item.orderable"
+              [class.is-disabled]="!isCategory(item) && !item.orderable"
+              (click)="tapTile(item)"
+            >
+              @if (getQuantity(item.id) > 0) {
+                <span
+                  class="qty-decrement"
+                  role="button"
+                  aria-label="Remove one"
+                  (click)="decrementTile(item, $event)"
+                >−</span>
+                <span class="qty-badge">{{ getQuantity(item.id) }}</span>
               }
-            }
-            @if (category.orderable) {
-              <ion-item>
-                <ion-label>
-                  <h2>{{ category.name }}</h2>
-                  <p>{{ category.price | currency:'RON':'symbol':'1.2-2' }}</p>
-                </ion-label>
-                <div class="quantity-controls" slot="end">
-                  @if (getQuantity(category.id) > 0) {
-                    <ion-button fill="clear" size="small" (click)="decreaseQuantity(category)">
-                      <ion-icon name="remove-outline"></ion-icon>
-                    </ion-button>
-                    <span class="quantity">{{ getQuantity(category.id) }}</span>
-                  }
-                  <ion-button fill="clear" size="small" (click)="increaseQuantity(category)">
-                    <ion-icon name="add-outline"></ion-icon>
-                  </ion-button>
-                </div>
-              </ion-item>
-            }
+              @if (isCategory(item)) {
+                <ion-icon name="folder-outline" class="tile-icon"></ion-icon>
+              }
+              <span class="tile-name" [innerHTML]="safeHtml(item.name)"></span>
+              @if (!isCategory(item) && item.orderable) {
+                <span class="tile-price">{{ item.price | currency:'RON':'symbol':'1.2-2' }}</span>
+              }
+            </button>
           }
-        </ion-list>
+        </div>
       }
     </ion-content>
 
@@ -197,35 +181,112 @@ interface CartItem {
       padding: 24px;
     }
 
-    ion-item-divider {
-      --background: #f1f5f9;
-      --color: #475569;
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.5px;
+    .menu-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
     }
 
-    ion-item h2 {
-      font-weight: 500;
-      font-size: 16px;
-    }
-
-    ion-item p {
-      color: var(--ion-color-primary);
-      font-weight: 600;
-    }
-
-    .quantity-controls {
+    .menu-tile {
+      position: relative;
+      aspect-ratio: 1 / 1;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 4px;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 8px;
+      background: #ffffff;
+      border: 1px solid var(--ion-color-primary);
+      color: var(--ion-color-primary);
+      border-radius: 0;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s ease, color 0.15s ease;
     }
 
-    .quantity {
-      min-width: 24px;
+    .menu-tile.is-category {
+      border-color: #94a3b8;
+      color: #1e293b;
+      background: #f8fafc;
+    }
+
+    .menu-tile.is-disabled {
+      border-color: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .menu-tile:active {
+      background: var(--ion-color-primary);
+      color: #ffffff;
+    }
+
+    .menu-tile.is-category:active {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .tile-icon {
+      font-size: 28px;
+      opacity: 0.65;
+    }
+
+    .tile-name {
+      display: block;
       text-align: center;
+      font-size: 14px;
       font-weight: 600;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .tile-name font[size="1"] {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.75;
+    }
+
+    .tile-price {
+      font-size: 12px;
+      font-weight: 700;
+      opacity: 0.85;
+    }
+
+    .qty-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--ion-color-primary);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qty-decrement {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
     }
 
     ion-footer ion-toolbar {
@@ -372,13 +433,32 @@ export class AddOrderModal implements OnInit {
   registrationError: string | null = null;
   paymentPickerOpen = false;
 
+  /**
+   * Drill-down path inside the menu tree. Empty array = at the menu root.
+   * Pushing a category navigates into it; popping returns to the parent.
+   */
+  categoryStack: MenuItem[] = [];
+
+  private readonly safeHtmlCache = new Map<string, SafeHtml>();
+
   constructor(
     private modalController: ModalController,
     private orderService: OrderService,
     private registrationService: RegistrationService,
-    private authService: AuthService
+    private authService: AuthService,
+    private sanitizer: DomSanitizer
   ) {
-    addIcons({ closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline });
+    addIcons({
+      closeOutline,
+      addOutline,
+      removeOutline,
+      cartOutline,
+      cashOutline,
+      cardOutline,
+      documentTextOutline,
+      arrowBackOutline,
+      folderOutline
+    });
   }
 
   ngOnInit() {
@@ -420,6 +500,65 @@ export class AddOrderModal implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  /** Items shown in the current grid view (root or the deepest open category). */
+  currentItems(): MenuItem[] {
+    if (this.categoryStack.length === 0) return this.menuItems;
+    const top = this.categoryStack[this.categoryStack.length - 1];
+    return top.children ?? [];
+  }
+
+  /** Header title: the table name at root, or the open category's name. */
+  currentTitle(): SafeHtml {
+    if (this.categoryStack.length === 0) {
+      return this.safeHtml(this.table.orderPointName);
+    }
+    return this.safeHtml(this.categoryStack[this.categoryStack.length - 1].name);
+  }
+
+  /**
+   * A tile is treated as a category when it has children — drilling in takes
+   * precedence over its own orderable flag. The "category that's also
+   * orderable" case is rare and easier to model as a separate leaf item.
+   */
+  isCategory(item: MenuItem): boolean {
+    return !!item.children && item.children.length > 0;
+  }
+
+  tapTile(item: MenuItem): void {
+    if (this.isCategory(item)) {
+      this.categoryStack.push(item);
+      return;
+    }
+    if (item.orderable) {
+      this.increaseQuantity(item);
+    }
+  }
+
+  decrementTile(item: MenuItem, event: globalThis.Event): void {
+    event.stopPropagation();
+    this.decreaseQuantity(item);
+  }
+
+  goBack(): void {
+    this.categoryStack.pop();
+  }
+
+  /**
+   * Menu names sometimes include HTML (e.g. {@code <font size="1">0.7L</font>}
+   * to render an inline volume tag). The names come from the trusted backoffice
+   * menu admin, so bypass Angular's sanitizer and render as-is. Cached so
+   * change detection doesn't re-bypass on every tick.
+   */
+  safeHtml(value: string | null | undefined): SafeHtml {
+    const text = value ?? '';
+    let cached = this.safeHtmlCache.get(text);
+    if (!cached) {
+      cached = this.sanitizer.bypassSecurityTrustHtml(text);
+      this.safeHtmlCache.set(text, cached);
+    }
+    return cached;
   }
 
   getQuantity(itemId: string): number {

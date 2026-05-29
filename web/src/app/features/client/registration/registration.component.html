@@ -499,7 +499,7 @@
     <div class="view-container orders-view">
       <h1 class="orders-title">ORDERS</h1>
       <!-- Orders by status -->
-      @if (orders.length > 0) {
+      @if (orderPointOrders.length > 0) {
         <div class="orders-status-list">
           <!-- Ready Orders -->
           @if (getReadyOrders().length > 0) {
@@ -514,6 +514,9 @@
                   <div class="order-status-card">
                     <div class="order-status-header">
                       <span class="order-number">#{{ order.orderNo }}</span>
+                      @if (order.nickname) {
+                        <span class="order-guest">{{ order.nickname }}</span>
+                      }
                       <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
                     </div>
                     <div class="order-status-items">
@@ -543,6 +546,9 @@
                   <div class="order-status-card">
                     <div class="order-status-header">
                       <span class="order-number">#{{ order.orderNo }}</span>
+                      @if (order.nickname) {
+                        <span class="order-guest">{{ order.nickname }}</span>
+                      }
                       <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
                     </div>
                     <div class="order-status-items">
@@ -572,6 +578,9 @@
                   <div class="order-status-card">
                     <div class="order-status-header">
                       <span class="order-number">#{{ order.orderNo }}</span>
+                      @if (order.nickname) {
+                        <span class="order-guest">{{ order.nickname }}</span>
+                      }
                       <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
                     </div>
                     <div class="order-status-items">
@@ -605,6 +614,9 @@
                     <div class="order-status-card delivered">
                       <div class="order-status-header">
                         <span class="order-number">#{{ order.orderNo }}</span>
+                        @if (order.nickname) {
+                          <span class="order-guest">{{ order.nickname }}</span>
+                        }
                         <span class="order-total">{{ getOrderTotal(order) | number:'1.0-2' }} RON</span>
                       </div>
                       <div class="order-status-items">
@@ -625,7 +637,7 @@
         </div>
       }
       <!-- Empty state -->
-      @if (orders.length === 0) {
+      @if (orderPointOrders.length === 0) {
         <div class="empty-state">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -717,106 +729,30 @@
       <!-- Table Orders (for payLater order points) -->
       @if (orderPointOrders.length > 0) {
         <div class="order-point-section">
-          <!-- Toggle Controls -->
-          <div class="orders-toggle-row">
-            <div class="toggle-group">
-              <button class="toggle-btn" [class.active]="ordersGroupMode === 'table'" (click)="setOrdersGroupMode('table')">Table</button>
-              <button class="toggle-btn" [class.active]="ordersGroupMode === 'guest'" (click)="setOrdersGroupMode('guest')">Guest</button>
-            </div>
-          </div>
-          <!-- Table Mode - Shows table total -->
-          @if (ordersGroupMode === 'table') {
-            <div class="order-point-content">
-              <div class="aggregated-items">
-                <div class="aggregated-card">
-                  <div class="aggregated-header">
-                    <span class="aggregated-label">Table</span>
-                    <ng-container *ngTemplateOutlet="paymentFilterDropdown"></ng-container>
-                    <span class="aggregated-total">{{ getFilteredOrderPointTotal() | number:'1.0-2' }} RON</span>
-                  </div>
-                  <div class="aggregated-items-list">
-                    @for (item of getFilteredOrderPointItems(); track item.name + item.paid) {
-                      <div class="aggregated-item">
-                        <div class="aggregated-item-info">
-                          <span class="aggregated-item-qty">{{ item.quantity }}x</span>
-                          <span class="aggregated-item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
-                        </div>
-                        <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
-                        <svg class="paid-coin" [class.paid]="item.paid" [class.unpaid]="!item.paid" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-                          <circle cx="8" cy="8" r="7"></circle>
-                        </svg>
-                      </div>
-                    }
-                  </div>
+          <div class="order-point-content">
+            <div class="aggregated-items">
+              <div class="aggregated-card">
+                <div class="aggregated-header">
+                  <span class="aggregated-label">Table</span>
+                  <span class="aggregated-total">{{ getFilteredOrderPointTotal() | number:'1.0-2' }} RON</span>
                 </div>
-              </div>
-            </div>
-          }
-          <!-- Guest Mode - Table as parent, guests as children -->
-          @if (ordersGroupMode === 'guest') {
-            <div class="order-point-content">
-              <div class="aggregated-items">
-                <div class="aggregated-card table-parent-card">
-                  <div class="aggregated-header">
-                    <span class="aggregated-label">Table</span>
-                    <ng-container *ngTemplateOutlet="paymentFilterDropdown"></ng-container>
-                    <span class="aggregated-total">{{ getFilteredOrderPointTotal() | number:'1.0-2' }} RON</span>
-                  </div>
-                  <!-- Guest children cards -->
-                  <div class="guest-children">
-                    @for (guest of getVisibleGuests(); track guest.registrationId) {
-                      <div class="guest-child-card">
-                        <div class="guest-child-header">
-                          <span class="guest-child-name">{{ guest.nickname }}</span>
-                          <span class="guest-child-total">{{ getFilteredGuestTotal(guest) | number:'1.0-2' }} RON</span>
-                        </div>
-                        <div class="aggregated-items-list">
-                          @for (item of getFilteredGuestItems(guest); track item.name + item.paid) {
-                            <div class="aggregated-item">
-                              <div class="aggregated-item-info">
-                                <span class="aggregated-item-qty">{{ item.quantity }}x</span>
-                                <span class="aggregated-item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
-                              </div>
-                              <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
-                              <svg class="paid-coin" [class.paid]="item.paid" [class.unpaid]="!item.paid" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-                                <circle cx="8" cy="8" r="7"></circle>
-                              </svg>
-                            </div>
-                          }
-                        </div>
+                <div class="aggregated-items-list">
+                  @for (item of getFilteredOrderPointItems(); track item.name + item.paid) {
+                    <div class="aggregated-item">
+                      <div class="aggregated-item-info">
+                        <span class="aggregated-item-qty">{{ item.quantity }}x</span>
+                        <span class="aggregated-item-name" [innerHTML]="sanitizeHtml(item.name)"></span>
                       </div>
-                    }
-                  </div>
-                </div>
-              </div>
-            </div>
-          }
-
-          <!-- Reusable payment filter dropdown -->
-          <ng-template #paymentFilterDropdown>
-            <div class="custom-select payment-filter-select" [class.open]="paymentFilterDropdownOpen" (click)="togglePaymentFilterDropdown(); $event.stopPropagation()">
-              <div class="custom-select-trigger">
-                <span class="selected-value">{{ getPaymentFilterLabel() }}</span>
-                <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-              @if (paymentFilterDropdownOpen) {
-                <div class="custom-select-options">
-                  @for (opt of paymentFilterOptions; track opt.value) {
-                    <div class="custom-select-option" [class.selected]="paymentFilter === opt.value" (click)="selectPaymentFilter(opt.value); $event.stopPropagation()">
-                      <span class="option-text">{{ opt.label }}</span>
-                      @if (paymentFilter === opt.value) {
-                        <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                      }
+                      <span class="aggregated-item-price">{{ item.totalPrice | number:'1.0-2' }} RON</span>
+                      <svg class="paid-coin" [class.paid]="item.paid" [class.unpaid]="!item.paid" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+                        <circle cx="8" cy="8" r="7"></circle>
+                      </svg>
                     </div>
                   }
                 </div>
-              }
+              </div>
             </div>
-          </ng-template>
+          </div>
         </div>
       }
       <!-- Empty state when no orders -->

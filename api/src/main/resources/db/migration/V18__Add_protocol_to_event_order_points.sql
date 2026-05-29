@@ -1,0 +1,2 @@
+ALTER TABLE event_order_points
+    ADD COLUMN protocol BOOLEAN NOT NULL DEFAULT FALSE;

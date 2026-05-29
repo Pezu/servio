@@ -216,7 +216,8 @@ public class OrderController {
                 request.getOrderIds(),
                 request.getPaymentMethod(),
                 request.getPaidBy(),
-                request.getCashRegisterDeviceId());
+                request.getCashRegisterDeviceId(),
+                request.getTip());
         log.info("Bulk-marked {} items as paid across {} order(s) via {} by {}",
                 marked,
                 request.getOrderIds() != null ? request.getOrderIds().size() : 0,

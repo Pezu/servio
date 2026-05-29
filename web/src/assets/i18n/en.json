@@ -139,6 +139,7 @@
     "CLIENT": "Client",
     "USER": "User",
     "CASH_REGISTER": "Cash Register",
+    "PROTOCOL": "Protocol",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Credit Value",
     "CASH_REGISTERS": "Cash Registers",

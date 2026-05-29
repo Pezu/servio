@@ -6,10 +6,10 @@ spring:
     show-sql: false
 
 application:
-  base-url: http://192.168.0.249:4200
+  base-url: http://192.168.1.136:4200
 
 cors:
-  allowed-origins: http://192.168.0.249:4200,http://localhost:3000,http://localhost,capacitor://localhost,*
+  allowed-origins: http://192.168.1.136:4200,http://localhost:3000,http://localhost,capacitor://localhost,*
 
 jwt:
   secret: phpauf1PhcHOqocdXY9O0Z6Bjn3jrsGu7kWG2yEqMbNkbPZxM0RFaFEG8NAReW6+
@@ -24,7 +24,7 @@ netopia:
   pos-signature: 37ZT-B3X1-VZOC-GOIK-2RXP
   base-url: https://secure.sandbox.netopia-payments.com
   notify-url: https://overprominently-hemodynamic-veronica.ngrok-free.dev/api/payments/netopia/notify
-  redirect-url: http://192.168.0.249:4200/payment/confirmed
+  redirect-url: http://192.168.1.136:4200/payment/confirmed
 
 logging:
   level:

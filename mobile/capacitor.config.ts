@@ -5,8 +5,11 @@ const config: CapacitorConfig = {
   appName: 'Servio',
   webDir: 'dist/servio-mobile/browser',
   server: {
-    androidScheme: 'http',
-    cleartext: true
+    // http (not https) so the in-WebView app URL is http://localhost/.
+    // That avoids "mixed content" when the app fetches an http:// LAN
+    // backend in local dev. Production still calls https://servioapp.ro
+    // (http page → https API is a permitted upgrade, not mixed content).
+    androidScheme: 'http'
   },
   plugins: {
     StatusBar: {
@@ -18,7 +21,7 @@ const config: CapacitorConfig = {
       resizeOnFullScreen: true
     },
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
+      smallIcon: 'ic_stat_notification',
       iconColor: '#3b82f6',
       sound: 'default'
     }

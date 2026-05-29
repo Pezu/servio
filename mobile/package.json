@@ -11,7 +11,11 @@
     "test": "ng test",
     "lint": "ng lint",
     "ionic:build": "ng build",
-    "ionic:serve": "ng serve"
+    "ionic:serve": "ng serve",
+    "build:local": "ng build --configuration development",
+    "build:prod": "ng build --configuration production",
+    "deploy:local": "npm run build:local && npx cap sync android && npx cap run android",
+    "deploy:prod": "npm run build:prod && npx cap sync android && npx cap run android"
   },
   "private": true,
   "dependencies": {
@@ -30,6 +34,7 @@
     "@capacitor/ios": "^6.0.0",
     "@capacitor/keyboard": "^6.0.0",
     "@capacitor/local-notifications": "^8.0.1",
+    "@capacitor/push-notifications": "^6.0.5",
     "@capacitor/status-bar": "^6.0.0",
     "@ionic/angular": "^8.0.0",
     "@stomp/stompjs": "^7.0.0",

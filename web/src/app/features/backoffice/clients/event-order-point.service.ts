@@ -14,12 +14,14 @@ export interface EventOrderPoint {
   userLogins?: string[];
   cashRegisterId?: string | null;
   cashRegisterName?: string;
+  payLater?: boolean;
   prepaid: number;
   clientName?: string;
   email?: string;
   phone?: string;
   credit: boolean;
   creditValue?: number;
+  protocol?: boolean;
 }
 
 @Injectable({

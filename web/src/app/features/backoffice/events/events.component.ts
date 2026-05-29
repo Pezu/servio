@@ -499,12 +499,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                         <th>{{ 'COMMON.PHONE' | translate }}</th>
                         <th>{{ 'EVENTS.USER' | translate }}</th>
                         <th>{{ 'EVENTS.CASH_REGISTER' | translate }}</th>
+                        <th>{{ 'EVENTS.PROTOCOL' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
                       @for (group of groupedTables; track group.sublocationName) {
                         <tr class="parent-row" (click)="toggleSublocation(group)">
-                          <td colspan="5">
+                          <td colspan="6">
                             <div class="parent-cell">
                               <svg class="expand-icon" [class.expanded]="group.expanded" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -549,10 +550,10 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                   </div>
                                   @if (openUserDropdownRowId === table.orderPointId) {
                                     <div class="multi-select-dropdown" (click)="$event.stopPropagation()">
-                                      @if (waiterUsers.length === 0) {
+                                      @if (usersForOrderPoint(table).length === 0) {
                                         <div class="empty-state">{{ 'USERS.NO_USERS' | translate }}</div>
                                       }
-                                      @for (u of waiterUsers; track u.id) {
+                                      @for (u of usersForOrderPoint(table); track u.id) {
                                         <label class="checkbox-option">
                                           <input type="checkbox" [checked]="isOrderPointUserSelected(table, u.id!)" (change)="toggleOrderPointUser(table, u.id!, $event)">
                                           <span class="checkbox-label-text">{{ u.name }}</span>
@@ -571,6 +572,12 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                     }
                                   }
                                 </select>
+                              </td>
+                              <td class="checkbox-cell">
+                                <input type="checkbox" class="credit-checkbox"
+                                       [checked]="!!table.protocol"
+                                       (change)="onProtocolChange(table, $event)"
+                                       [title]="'EVENTS.PROTOCOL' | translate">
                               </td>
                             </tr>
                           }
@@ -904,11 +911,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
     .tables-table th:nth-child(2) { width: 30%; }
     .tables-table th:nth-child(3) { width: 30%; }
     .tables-table th:nth-child(4) { width: 20%; }
-    .order-points-table th:nth-child(1) { width: 16%; }
-    .order-points-table th:nth-child(2) { width: 24%; }
-    .order-points-table th:nth-child(3) { width: 22%; }
-    .order-points-table th:nth-child(4) { width: 19%; }
-    .order-points-table th:nth-child(5) { width: 19%; text-align: center; }
+    .order-points-table th:nth-child(1) { width: 14%; }
+    .order-points-table th:nth-child(2) { width: 22%; }
+    .order-points-table th:nth-child(3) { width: 18%; }
+    .order-points-table th:nth-child(4) { width: 18%; }
+    .order-points-table th:nth-child(5) { width: 18%; text-align: center; }
+    .order-points-table th:nth-child(6) { width: 10%; text-align: center; }
+    .order-points-table td:nth-child(6) { text-align: center; }
     .tables-table td { font-size: 13px; color: var(--text-dark); }
     .tables-table .parent-row { background: var(--bg-light); cursor: pointer; }
     .tables-table .parent-row:hover { background: #e2e8f0; }
@@ -1961,6 +1970,21 @@ export class EventsComponent implements OnInit {
     return this.users.filter(u => u.roles?.includes('WAITER'));
   }
 
+  get barmanUsers(): User[] {
+    return this.users.filter(u => u.roles?.includes('BARMAN'));
+  }
+
+  /**
+   * Per-row dropdown source on the Order Points tab.
+   * Pay-later OPs (typical table service) → waiters.
+   * Non-pay-later OPs (bars/quick-serve) → barmen.
+   * Falls back to waiters when payLater is undefined (e.g. stale backend
+   * that doesn't yet return the flag) to preserve the original behavior.
+   */
+  usersForOrderPoint(table: EventOrderPoint): User[] {
+    return table.payLater === false ? this.barmanUsers : this.waiterUsers;
+  }
+
   // Per-row open state for the Order Points user multi-select. Only one row's
   // dropdown is open at a time; clicking another row's input closes the previous.
   openUserDropdownRowId: string | null = null;
@@ -1995,6 +2019,14 @@ export class EventsComponent implements OnInit {
       .filter((n): n is string => !!n);
     if (names.length <= 2) return names.join(', ');
     return `${names.length} users selected`;
+  }
+
+  onProtocolChange(table: EventOrderPoint, change: globalThis.Event): void {
+    const target = change.target as HTMLInputElement;
+    const newValue = target.checked;
+    if (!!table.protocol === newValue) return;
+    table.protocol = newValue;
+    this.saveEventTable(table);
   }
 
   onCashRegisterChange(table: EventOrderPoint, cashRegisterId: string): void {

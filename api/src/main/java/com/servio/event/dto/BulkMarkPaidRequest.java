@@ -2,6 +2,7 @@ package com.servio.event.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -18,4 +19,6 @@ public class BulkMarkPaidRequest {
     private String paidBy;
     /** Optional. When null, the listener falls back to the event's first CR. */
     private String cashRegisterDeviceId;
+    /** Optional total tip (RON) — distributed proportionally across orderIds. */
+    private BigDecimal tip;
 }

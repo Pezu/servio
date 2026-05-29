@@ -161,7 +161,7 @@ export class RegistrationComponent implements OnInit, OnDestroy {
   cachedPaymentsDisplayItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
   cachedPaidItems: { name: string; quantity: number; totalPrice: number; paid: boolean }[] = [];
   cachedGuestOrders: CachedGuestOrders[] = [];
-  paymentFilter: 'all' | 'paid' | 'unpaid' = 'unpaid';
+  paymentFilter: 'all' | 'paid' | 'unpaid' = 'all';
   paymentFilterDropdownOpen: boolean = false;
   paymentFilterOptions: { value: 'all' | 'paid' | 'unpaid'; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -1165,9 +1165,11 @@ export class RegistrationComponent implements OnInit, OnDestroy {
         }
       });
 
-    // For payLater order points, also load all orders at the order point
+    // Load every order at this order point — the Orders view shows them all
+    // (grouped by guest), and pay-later flows additionally use this list for
+    // the Payments view aggregations.
     console.log('[Orders] orderPointPayLater:', this.orderPointPayLater, 'orderPointId:', this.orderPointId);
-    if (this.orderPointPayLater && this.orderPointId) {
+    if (this.orderPointId) {
       this.loadOrderPointOrders();
     }
   }
@@ -1337,21 +1339,26 @@ export class RegistrationComponent implements OnInit, OnDestroy {
     return this.orders.filter(order => order.status === status);
   }
 
-  // Orders by status for the new Orders view
+  /**
+   * Orders by status feeding the Orders view. Sources from {@link orderPointOrders}
+   * so every guest's orders at this OP are listed (their nicknames are surfaced
+   * per-card in the template); the per-guest {@link orders} array still feeds
+   * the header badge and other personal counts.
+   */
   getOrderedOrders(): ApiOrder[] {
-    return this.orders.filter(order => order.status === 'ACTIVE');
+    return this.orderPointOrders.filter(order => order.status === 'ACTIVE');
   }
 
   getInProgressOrders(): ApiOrder[] {
-    return this.orders.filter(order => order.status === 'IN_PROGRESS');
+    return this.orderPointOrders.filter(order => order.status === 'IN_PROGRESS');
   }
 
   getReadyOrders(): ApiOrder[] {
-    return this.orders.filter(order => order.status === 'READY');
+    return this.orderPointOrders.filter(order => order.status === 'READY');
   }
 
   getDeliveredOrders(): ApiOrder[] {
-    return this.orders.filter(order => order.status === 'DELIVERED');
+    return this.orderPointOrders.filter(order => order.status === 'DELIVERED');
   }
 
   toggleOrderCategory(category: 'ready' | 'inProgress' | 'ordered' | 'delivered'): void {

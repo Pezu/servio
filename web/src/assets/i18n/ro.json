@@ -139,6 +139,7 @@
     "CLIENT": "Client",
     "USER": "Utilizator",
     "CASH_REGISTER": "Casă de Marcat",
+    "PROTOCOL": "Protocol",
     "CREDIT": "Credit",
     "CREDIT_VALUE": "Valoare Credit",
     "CASH_REGISTERS": "Case de Marcat",

@@ -1,6 +1,8 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
   IonContent,
   IonIcon,
@@ -35,6 +37,7 @@ interface TableGroup {
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     IonContent,
     IonIcon,
     IonSpinner,
@@ -70,8 +73,8 @@ interface TableGroup {
                 <span class="table-name">{{ table.orderPointName }}</span>
                 <div class="table-head-right">
                   <span class="table-total">{{ formatPrice(table.total) }}</span>
-                  <button class="pay-table-btn" (click)="openPaymentModal(table.orders)">
-                    Pay all
+                  <button class="pay-table-btn" (click)="openPaymentModal(table.orders, table.orderPointId)">
+                    Pay
                   </button>
                 </div>
               </div>
@@ -87,9 +90,6 @@ interface TableGroup {
                     </div>
                     <div class="order-head-right">
                       <span class="order-total">{{ formatPrice(orderTotal(order)) }}</span>
-                      <button class="pay-order-btn" (click)="openPaymentModal([order])">
-                        Pay
-                      </button>
                     </div>
                   </div>
 
@@ -97,7 +97,7 @@ interface TableGroup {
                     @for (item of activeItems(order); track item.id) {
                       <div class="item">
                         <span class="qty">{{ item.quantity }}x</span>
-                        <span class="name">{{ item.name }}</span>
+                        <span class="name" [innerHTML]="safeHtml(item.name)"></span>
                         <span class="price">{{ formatPrice(item.price * item.quantity) }}</span>
                       </div>
                     }
@@ -125,27 +125,74 @@ interface TableGroup {
             <span class="modal-total">{{ formatPrice(pendingTotal) }}</span>
           </div>
 
-          <div class="section-label">Payment method</div>
-          <div class="method-row">
-            <button
-              class="method-btn cash"
-              [disabled]="busy"
-              (click)="confirmPayment('CASH')">
-              <ion-icon name="cash-outline"></ion-icon> Cash
-            </button>
-            <button
-              class="method-btn card"
-              [disabled]="busy"
-              (click)="confirmPayment('CARD')">
-              <ion-icon name="card-outline"></ion-icon> Card
-            </button>
-            <button
-              class="method-btn protocol"
-              [disabled]="busy"
-              (click)="confirmPayment('PROTOCOL')">
-              <ion-icon name="document-text-outline"></ion-icon> Protocol
-            </button>
-          </div>
+          @if (!pendingOpIsProtocol && !pendingReceiptMethod) {
+            <div class="section-label">Tip</div>
+            <div class="tip-row">
+              <button class="tip-chip" [class.active]="tipMode === 'none'" [disabled]="busy" (click)="selectTipMode('none')">None</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p10'" [disabled]="busy" (click)="selectTipMode('p10')">10%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p12'" [disabled]="busy" (click)="selectTipMode('p12')">12%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p15'" [disabled]="busy" (click)="selectTipMode('p15')">15%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'customPct'" [disabled]="busy" (click)="selectTipMode('customPct')">Custom %</button>
+              <button class="tip-chip" [class.active]="tipMode === 'customAmt'" [disabled]="busy" (click)="selectTipMode('customAmt')">Custom RON</button>
+            </div>
+            @if (tipMode === 'customPct') {
+              <div class="tip-input-row">
+                <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Percent"
+                  [(ngModel)]="tipCustomPercent" [disabled]="busy" />
+                <span class="tip-input-suffix">%</span>
+              </div>
+            }
+            @if (tipMode === 'customAmt') {
+              <div class="tip-input-row">
+                <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Amount"
+                  [(ngModel)]="tipCustomAmount" [disabled]="busy" />
+                <span class="tip-input-suffix">RON</span>
+              </div>
+            }
+            <div class="tip-summary">
+              <span class="tip-summary-label">Tip</span>
+              <span class="tip-summary-value">{{ formatPrice(computedTip()) }}</span>
+            </div>
+            <div class="tip-summary total">
+              <span class="tip-summary-label">Total to pay</span>
+              <span class="tip-summary-value">{{ formatPrice(totalWithTip()) }}</span>
+            </div>
+          }
+
+          @if (pendingReceiptMethod) {
+            <div class="receipt-confirm">
+              <div class="receipt-confirm-question">Get receipt from cash register?</div>
+              <div class="receipt-confirm-row">
+                <button class="receipt-btn no" [disabled]="busy" (click)="confirmReceiptNo()">No</button>
+                <button class="receipt-btn yes" [disabled]="busy" (click)="confirmReceiptYes()">Yes</button>
+              </div>
+            </div>
+          } @else {
+            <div class="section-label">Payment method</div>
+            <div class="method-row">
+              @if (pendingOpIsProtocol) {
+                <button
+                  class="method-btn protocol"
+                  [disabled]="busy"
+                  (click)="confirmPayment('PROTOCOL')">
+                  <ion-icon name="document-text-outline"></ion-icon> Protocol
+                </button>
+              } @else {
+                <button
+                  class="method-btn cash"
+                  [disabled]="busy"
+                  (click)="askReceipt('CASH')">
+                  <ion-icon name="cash-outline"></ion-icon> Cash
+                </button>
+                <button
+                  class="method-btn card"
+                  [disabled]="busy"
+                  (click)="askReceipt('CARD')">
+                  <ion-icon name="card-outline"></ion-icon> Card
+                </button>
+              }
+            </div>
+          }
         </div>
       </div>
     }
@@ -275,17 +322,6 @@ interface TableGroup {
       font-size: 14px;
     }
 
-    .pay-order-btn {
-      padding: 4px 12px;
-      border: 1px solid #cbd5e1;
-      background: transparent;
-      color: #475569;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      border-radius: 0;
-    }
-
     .items {
       padding-bottom: 4px;
     }
@@ -307,6 +343,13 @@ interface TableGroup {
     .item .name {
       flex: 1;
       color: #1e293b;
+    }
+
+    .item .name font[size="1"] {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 4px;
     }
 
     .item .price {
@@ -386,10 +429,133 @@ interface TableGroup {
       padding: 12px 16px 6px;
     }
 
+    .tip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 0 16px;
+    }
+
+    .tip-chip {
+      flex: 1 0 calc(33.333% - 6px);
+      min-width: 64px;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      background: transparent;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .tip-chip:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .tip-chip.active {
+      border-color: var(--ion-color-primary);
+      color: var(--ion-color-primary);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .tip-input-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px 0;
+    }
+
+    .tip-input-row input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 0;
+      font-size: 14px;
+      background: #ffffff;
+      color: #1e293b;
+      outline: none;
+    }
+
+    .tip-input-row input:focus {
+      border-color: var(--ion-color-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    }
+
+    .tip-input-suffix {
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      min-width: 36px;
+      text-align: left;
+    }
+
+    .tip-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px 0;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    .tip-summary.total {
+      padding-top: 6px;
+      padding-bottom: 12px;
+      color: #1e293b;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
     .method-row {
       display: flex;
       gap: 8px;
       padding: 0 16px 16px;
+    }
+
+    .receipt-confirm {
+      padding: 16px 16px 20px;
+    }
+
+    .receipt-confirm-question {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      text-align: center;
+      padding-bottom: 14px;
+    }
+
+    .receipt-confirm-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .receipt-btn {
+      flex: 1;
+      padding: 14px;
+      border: 1px solid;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 0;
+    }
+
+    .receipt-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .receipt-btn.no {
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    .receipt-btn.yes {
+      color: var(--ion-color-primary);
+      border-color: var(--ion-color-primary);
     }
 
     .method-btn {
@@ -445,22 +611,57 @@ export class PaymentsPage implements OnInit, OnDestroy {
   // The bulk-paid endpoint forwards this to the cash-register listener;
   // backend gracefully falls back to the event's first CR when null.
   private cashRegisterByOrderPointId = new Map<string, string>();
+  // OP id → protocol flag (Edit Event → Order Points → Protocol column).
+  // True means the OP is settled via internal protocol — the modal then
+  // exposes Protocol as the only payment method.
+  private protocolByOrderPointId = new Map<string, boolean>();
   selectedCashRegisterDeviceId: string | null = null;
 
   showPaymentModal = false;
   pendingOrders: Order[] = [];
   pendingTotal = 0;
+  /** Whether the OP being settled is marked as protocol-only. */
+  pendingOpIsProtocol = false;
   busy = false;
 
+  /**
+   * Set once the cashier picks Cash/Card so the modal shows a
+   * "Get receipt from cash register?" Yes/No confirm. Yes runs the
+   * payment; No closes the modal without charging anything.
+   */
+  pendingReceiptMethod: 'CASH' | 'CARD' | null = null;
+
+  // Tip selector state (only relevant when pendingOpIsProtocol === false).
+  tipMode: 'none' | 'p10' | 'p12' | 'p15' | 'customPct' | 'customAmt' = 'none';
+  tipCustomPercent: number | null = null;
+  tipCustomAmount: number | null = null;
+
   private subs: Subscription[] = [];
+  private readonly safeHtmlCache = new Map<string, SafeHtml>();
 
   constructor(
     private route: ActivatedRoute,
     private orderService: OrderService,
     private authService: AuthService,
-    private ws: WebSocketService
+    private ws: WebSocketService,
+    private sanitizer: DomSanitizer
   ) {
     addIcons({ cardOutline, cashOutline, walletOutline, closeOutline, storefrontOutline, documentTextOutline });
+  }
+
+  /**
+   * Item names sometimes contain HTML the menu admin wrote (e.g.
+   * {@code <font size="1">0.7L</font>}). Trust it and render with innerHTML;
+   * cache the SafeHtml so change detection doesn't re-bypass each tick.
+   */
+  safeHtml(value: string | null | undefined): SafeHtml {
+    const text = value ?? '';
+    let cached = this.safeHtmlCache.get(text);
+    if (!cached) {
+      cached = this.sanitizer.bypassSecurityTrustHtml(text);
+      this.safeHtmlCache.set(text, cached);
+    }
+    return cached;
   }
 
   ngOnInit(): void {
@@ -490,10 +691,12 @@ export class PaymentsPage implements OnInit, OnDestroy {
           .filter(e => (e.userLogins || []).includes(this.currentUser))
           .map(e => e.orderPointId);
         this.cashRegisterByOrderPointId.clear();
+        this.protocolByOrderPointId.clear();
         for (const eop of eops) {
           if (eop.cashRegisterId) {
             this.cashRegisterByOrderPointId.set(eop.orderPointId, eop.cashRegisterId);
           }
+          this.protocolByOrderPointId.set(eop.orderPointId, !!eop.protocol);
         }
         this.loadNeedsPayment();
       },
@@ -557,15 +760,17 @@ export class PaymentsPage implements OnInit, OnDestroy {
     return `${value.toFixed(2)} RON`;
   }
 
-  openPaymentModal(orders: Order[]): void {
+  openPaymentModal(orders: Order[], orderPointId?: string): void {
     if (this.busy) return;
     this.pendingOrders = orders;
     this.pendingTotal = orders.reduce((sum, o) => sum + this.orderTotal(o), 0);
     // Resolve the cash register from the OP's assignment (Edit Event →
     // Order Points). Backend gracefully falls back to the event's first
     // CR when null, so we don't need to load the CR list ourselves.
-    const opId = orders[0]?.orderPointId;
+    const opId = orderPointId ?? orders[0]?.orderPointId;
     this.selectedCashRegisterDeviceId = opId ? this.cashRegisterByOrderPointId.get(opId) ?? null : null;
+    this.pendingOpIsProtocol = opId ? this.protocolByOrderPointId.get(opId) === true : false;
+    this.resetTip();
     this.showPaymentModal = true;
   }
 
@@ -573,6 +778,65 @@ export class PaymentsPage implements OnInit, OnDestroy {
     this.showPaymentModal = false;
     this.pendingOrders = [];
     this.pendingTotal = 0;
+    this.pendingOpIsProtocol = false;
+    this.pendingReceiptMethod = null;
+    this.resetTip();
+  }
+
+  /** Cashier picked Cash/Card — show the receipt-confirm prompt. */
+  askReceipt(method: 'CASH' | 'CARD'): void {
+    if (this.busy) return;
+    this.pendingReceiptMethod = method;
+  }
+
+  confirmReceiptYes(): void {
+    if (!this.pendingReceiptMethod) return;
+    const method = this.pendingReceiptMethod;
+    this.pendingReceiptMethod = null;
+    this.confirmPayment(method);
+  }
+
+  confirmReceiptNo(): void {
+    this.pendingReceiptMethod = null;
+    this.closePaymentModal();
+  }
+
+  private resetTip(): void {
+    this.tipMode = 'none';
+    this.tipCustomPercent = null;
+    this.tipCustomAmount = null;
+  }
+
+  selectTipMode(mode: 'none' | 'p10' | 'p12' | 'p15' | 'customPct' | 'customAmt'): void {
+    this.tipMode = mode;
+    if (mode !== 'customPct') this.tipCustomPercent = null;
+    if (mode !== 'customAmt') this.tipCustomAmount = null;
+  }
+
+  /** Tip in RON resolved from the currently selected mode, clamped to >= 0. */
+  computedTip(): number {
+    const total = this.pendingTotal;
+    let tip = 0;
+    switch (this.tipMode) {
+      case 'p10': tip = total * 0.10; break;
+      case 'p12': tip = total * 0.12; break;
+      case 'p15': tip = total * 0.15; break;
+      case 'customPct':
+        if (this.tipCustomPercent != null && !isNaN(this.tipCustomPercent)) {
+          tip = total * (this.tipCustomPercent / 100);
+        }
+        break;
+      case 'customAmt':
+        if (this.tipCustomAmount != null && !isNaN(this.tipCustomAmount)) {
+          tip = this.tipCustomAmount;
+        }
+        break;
+    }
+    return Math.max(0, Math.round(tip * 100) / 100);
+  }
+
+  totalWithTip(): number {
+    return Math.round((this.pendingTotal + this.computedTip()) * 100) / 100;
   }
 
   confirmPayment(method: 'CASH' | 'CARD' | 'PROTOCOL'): void {
@@ -586,6 +850,9 @@ export class PaymentsPage implements OnInit, OnDestroy {
 
     this.busy = true;
 
+    // Only Cash/Card flows can carry a tip — PROTOCOL always settles flat.
+    const tip = method === 'PROTOCOL' ? 0 : this.computedTip();
+
     // One bulk request — backend marks the orders paid AND fires the
     // cash-register print via PaymentCompletedEvent (same mechanism as
     // the Netopia callback). PROTOCOL skips the fiscal print.
@@ -593,7 +860,8 @@ export class PaymentsPage implements OnInit, OnDestroy {
       orderIds: orders.map(o => o.id),
       paymentMethod: method,
       paidBy: this.currentUser,
-      cashRegisterDeviceId: deviceId
+      cashRegisterDeviceId: deviceId,
+      tip: tip > 0 ? tip : undefined
     }).subscribe({
       next: () => {
         this.busy = false;

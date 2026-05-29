@@ -46,6 +46,7 @@ public class EventOrderPointService {
     private final EventOrderPointMapper eventOrderPointMapper;
     private final CashRegisterOrderPointRepository cashRegisterOrderPointRepository;
     private final CashRegisterRepository cashRegisterRepository;
+    private final OrderPointService orderPointService;
 
     @Transactional(readOnly = true)
     public List<EventOrderPoint> getEventOrderPoints(UUID eventId) {
@@ -129,6 +130,7 @@ public class EventOrderPointService {
         entity.setPhone(request.getPhone());
         entity.setCredit(request.isCredit());
         entity.setCreditValue(request.isCredit() ? request.getCreditValue() : null);
+        entity.setProtocol(request.isProtocol());
 
         List<UUID> requestedUserIds = request.getUserIds() != null ? request.getUserIds() : List.of();
         if (requestedUserIds.isEmpty()) {
@@ -263,5 +265,49 @@ public class EventOrderPointService {
     @Transactional
     public void deleteEventOrderPoint(UUID id) {
         eventOrderPointRepository.deleteById(id);
+    }
+
+    /**
+     * Split a pay-later order point and seed the new sibling's per-event
+     * configuration from the source row (users, client name/phone/email,
+     * credit, protocol, prepaid). Cash-register assignment is intentionally
+     * not duplicated — for M{n} groups the canonical row holds the CR and
+     * splits inherit through it.
+     *
+     * Returns the new EventOrderPoint DTO with the same shape the Order
+     * Points tab and the mobile Tables view consume.
+     */
+    @Transactional
+    public EventOrderPoint splitForEvent(UUID eventId, UUID sourceOrderPointId) {
+        EventEntity event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId));
+
+        // 1. Create the new order point (M{n}.{next}). Reuses the existing
+        //    pay-later validation + naming rules in OrderPointService.
+        UUID newOrderPointId = orderPointService.splitOrderPoint(sourceOrderPointId).getId();
+        OrderPointEntity newOp = orderPointRepository.findById(newOrderPointId)
+                .orElseThrow(() -> new ResourceNotFoundException("OrderPoint", newOrderPointId));
+
+        // 2. Copy the source's per-event configuration onto the new row.
+        EventOrderPointEntity entity = new EventOrderPointEntity();
+        entity.setEvent(event);
+        entity.setOrderPoint(newOp);
+        entity.setPrepaid(BigDecimal.ZERO);
+        eventOrderPointRepository.findByEventIdAndOrderPointId(eventId, sourceOrderPointId)
+                .ifPresent(src -> {
+                    entity.setClientName(src.getClientName());
+                    entity.setEmail(src.getEmail());
+                    entity.setPhone(src.getPhone());
+                    entity.setCredit(src.isCredit());
+                    entity.setCreditValue(src.getCreditValue());
+                    entity.setProtocol(src.isProtocol());
+                    if (src.getPrepaid() != null) {
+                        entity.setPrepaid(src.getPrepaid());
+                    }
+                    entity.getUsers().addAll(src.getUsers());
+                });
+
+        EventOrderPointEntity saved = eventOrderPointRepository.save(entity);
+        return getEventOrderPointDto(eventId, saved);
     }
 }

@@ -51,8 +51,20 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e JOIN eop.users u WHERE u.username = :username")
     Page<EventEntity> findByOrderPointUserUsername(@Param("username") String username, Pageable pageable);
 
-    @Query("SELECT DISTINCT e FROM EventEntity e JOIN EventOrderPointEntity eop ON eop.event = e JOIN eop.users u WHERE u.username = :username AND e.startDate <= :now AND e.endDate >= :now")
-    Page<EventEntity> findActiveByOrderPointUserUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
+    /**
+     * Active events where the user is involved as a service operator — either
+     * assigned to a specific order point (EventOrderPoint.users) or to the
+     * event itself via the Service Users multi-select (event_users). Used by
+     * the backoffice My Events list. Excludes pure waiters (event_waiters);
+     * those are surfaced via {@link #findActiveAssignedToUsername} for the
+     * mobile app.
+     */
+    @Query("SELECT DISTINCT e FROM EventEntity e " +
+           "WHERE e.startDate <= :now AND e.endDate >= :now AND (" +
+           "  EXISTS (SELECT 1 FROM EventOrderPointEntity eop JOIN eop.users u WHERE eop.event = e AND u.username = :username)" +
+           "  OR EXISTS (SELECT 1 FROM EventEntity e2 JOIN e2.users u WHERE e2 = e AND u.username = :username)" +
+           ")")
+    Page<EventEntity> findActiveByServiceUserUsername(@Param("username") String username, @Param("now") LocalDate now, Pageable pageable);
 
     /**
      * Active events where the user is assigned in any capacity — as a service

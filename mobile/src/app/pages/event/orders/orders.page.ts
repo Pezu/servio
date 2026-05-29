@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { forkJoin } from 'rxjs';
 import {
   IonContent,
@@ -110,7 +111,7 @@ interface TableCard {
                 @for (item of card.items; track item.key) {
                   <div class="item">
                     <span class="qty">{{ item.quantity }}x</span>
-                    <span class="name">{{ item.name }}</span>
+                    <span class="name" [innerHTML]="safeHtml(item.name)"></span>
                     <span class="price">{{ formatPrice(item.totalPrice) }}</span>
                   </div>
                 }
@@ -259,6 +260,13 @@ interface TableCard {
       color: #1e293b;
     }
 
+    .item .name font[size="1"] {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 4px;
+    }
+
     .item .price {
       color: #475569;
       font-variant-numeric: tabular-nums;
@@ -306,14 +314,31 @@ export class OrdersPage implements OnInit, OnDestroy {
   cards: Record<OrderStatus, TableCard[]> = { ACTIVE: [], IN_PROGRESS: [], READY: [] };
 
   private subs: Subscription[] = [];
+  private readonly safeHtmlCache = new Map<string, SafeHtml>();
 
   constructor(
     private route: ActivatedRoute,
     private orderService: OrderService,
     private authService: AuthService,
-    private ws: WebSocketService
+    private ws: WebSocketService,
+    private sanitizer: DomSanitizer
   ) {
     addIcons({ receiptOutline, checkmarkOutline });
+  }
+
+  /**
+   * Item names sometimes contain HTML the menu admin wrote (e.g.
+   * {@code <font size="1">0.7L</font>}). Trust it and render with innerHTML;
+   * cache the SafeHtml so change detection doesn't re-bypass each tick.
+   */
+  safeHtml(value: string | null | undefined): SafeHtml {
+    const text = value ?? '';
+    let cached = this.safeHtmlCache.get(text);
+    if (!cached) {
+      cached = this.sanitizer.bypassSecurityTrustHtml(text);
+      this.safeHtmlCache.set(text, cached);
+    }
+    return cached;
   }
 
   ngOnInit(): void {

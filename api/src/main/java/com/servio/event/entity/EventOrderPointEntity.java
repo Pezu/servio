@@ -56,4 +56,8 @@ public class EventOrderPointEntity {
 
     @Column(name = "credit_value", precision = 10, scale = 2)
     private BigDecimal creditValue;
+
+    /** Marks the order point as a protocol-paid table. Backoffice toggle. */
+    @Column(nullable = false)
+    private boolean protocol = false;
 }

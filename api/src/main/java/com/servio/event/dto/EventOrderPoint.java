@@ -30,4 +30,5 @@ public class EventOrderPoint {
     private String phone;
     private boolean credit;
     private BigDecimal creditValue;
+    private boolean protocol;
 }

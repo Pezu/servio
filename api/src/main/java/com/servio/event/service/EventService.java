@@ -121,7 +121,7 @@ public class EventService {
 
     public Page<Event> getActiveEventsByUsername(String username, Pageable pageable) {
         LocalDate now = LocalDate.now();
-        return eventRepository.findActiveByOrderPointUserUsername(username, now, pageable)
+        return eventRepository.findActiveByServiceUserUsername(username, now, pageable)
                 .map(eventMapper::toDto);
     }
 

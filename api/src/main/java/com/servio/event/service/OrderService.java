@@ -444,6 +444,11 @@ public class OrderService {
      */
     @Transactional
     public int markOrdersPaidBulk(List<UUID> orderIds, String paymentMethod, String paidBy, String cashRegisterDeviceId) {
+        return markOrdersPaidBulk(orderIds, paymentMethod, paidBy, cashRegisterDeviceId, null);
+    }
+
+    @Transactional
+    public int markOrdersPaidBulk(List<UUID> orderIds, String paymentMethod, String paidBy, String cashRegisterDeviceId, BigDecimal tip) {
         if (orderIds == null || orderIds.isEmpty()) {
             return 0;
         }
@@ -454,10 +459,62 @@ public class OrderService {
             totalItemsMarked += marked;
             processed.add(orderId);
         }
+        applyTipToOrders(processed, tip);
         if (paymentMethod != null) {
             eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy));
         }
         return totalItemsMarked;
+    }
+
+    /**
+     * Distribute the supplied tip proportionally across the given orders by
+     * their non-cancelled item totals. Called from the bulk-paid flow after
+     * items have already been marked paid, so it operates on all non-cancelled
+     * items (paid + unpaid) — by that point everything's paid.
+     */
+    private void applyTipToOrders(List<UUID> orderIds, BigDecimal totalTip) {
+        if (orderIds.isEmpty() || totalTip == null || totalTip.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        List<OrderEntity> orders = new ArrayList<>(orderIds.size());
+        java.util.Map<UUID, BigDecimal> amountByOrder = new java.util.HashMap<>();
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (UUID id : orderIds) {
+            var opt = orderRepository.findByIdWithItems(id);
+            if (opt.isEmpty()) continue;
+            OrderEntity o = opt.get();
+            BigDecimal amount = o.getItems().stream()
+                    .filter(i -> i.getStatus() != OrderItemStatus.CANCELLED)
+                    .map(i -> i.getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            orders.add(o);
+            amountByOrder.put(o.getId(), amount);
+            totalAmount = totalAmount.add(amount);
+        }
+        if (orders.isEmpty()) {
+            return;
+        }
+        if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            // Nothing to weight against — dump the whole tip on the first order.
+            orders.get(0).setTip(totalTip);
+            orderRepository.save(orders.get(0));
+            return;
+        }
+        BigDecimal remaining = totalTip;
+        for (int i = 0; i < orders.size(); i++) {
+            OrderEntity o = orders.get(i);
+            BigDecimal tipForOrder;
+            if (i == orders.size() - 1) {
+                // Last order absorbs the rounding tail so the sum matches exactly.
+                tipForOrder = remaining;
+            } else {
+                tipForOrder = totalTip.multiply(amountByOrder.get(o.getId()))
+                        .divide(totalAmount, 2, java.math.RoundingMode.HALF_UP);
+                remaining = remaining.subtract(tipForOrder);
+            }
+            o.setTip(tipForOrder);
+            orderRepository.save(o);
+        }
     }
 
     /**
