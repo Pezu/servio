@@ -165,6 +165,20 @@ export class OrderService {
     );
   }
 
+  partialMarkPaid(payload: {
+    items: { orderItemId: string; quantity: number }[];
+    paymentMethod: 'CASH' | 'CARD' | 'PROTOCOL';
+    paidBy: string;
+    cashRegisterDeviceId: string | null;
+    tip?: number;
+  }): Observable<void> {
+    return this.http.post<void>(
+      `${environment.apiUrl}/orders/partial-paid`,
+      payload,
+      { headers: this.headers() }
+    );
+  }
+
   getProtocolPayments(eventId: string): Observable<ProtocolPaymentSummary[]> {
     return this.http.get<ProtocolPaymentSummary[]>(
       `${environment.apiUrl}/orders/events/${eventId}/protocol-payments`,

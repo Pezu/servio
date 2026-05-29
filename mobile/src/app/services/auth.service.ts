@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { PushService } from './push.service';
 
 export interface LoginRequest {
   username: string;
@@ -18,19 +19,22 @@ export interface LoginResponse {
 export class AuthService {
   private readonly TOKEN_KEY = 'token';
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private push: PushService) {}
 
   login(credentials: LoginRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${environment.apiUrl}/auth/login`, credentials).pipe(
       tap(response => {
         if (response.token) {
           localStorage.setItem(this.TOKEN_KEY, response.token);
+          this.push.init(response.token);
         }
       })
     );
   }
 
   logout(): void {
+    const token = this.getToken();
+    this.push.unregister(token);
     localStorage.removeItem(this.TOKEN_KEY);
   }
 

@@ -244,16 +244,16 @@ export class LoginPage {
     addIcons({ personOutline, lockClosedOutline });
 
     // Redirect if already authenticated as a waiter; otherwise stay on login.
-    if (this.authService.isAuthenticated() && this.hasWaiterRole()) {
+    if (this.authService.isAuthenticated() && this.hasMobileRole()) {
       this.router.navigate(['/my-events']);
     } else if (this.authService.isAuthenticated()) {
       this.authService.logout();
     }
   }
 
-  private hasWaiterRole(): boolean {
+  private hasMobileRole(): boolean {
     const info = this.authService.getUserInfo();
-    return !!info && info.roles.includes('WAITER');
+    return !!info && (info.roles.includes('WAITER') || info.roles.includes('BARMAN'));
   }
 
   login(): void {
@@ -265,9 +265,9 @@ export class LoginPage {
     this.authService.login({ username: this.username, password: this.password }).subscribe({
       next: () => {
         this.loading = false;
-        if (!this.hasWaiterRole()) {
+        if (!this.hasMobileRole()) {
           this.authService.logout();
-          this.error = 'This app is only available for waiter accounts.';
+          this.error = 'This app is only available for waiter or barman accounts.';
           return;
         }
         this.router.navigate(['/my-events']);

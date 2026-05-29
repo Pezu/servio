@@ -17,6 +17,9 @@ import {
 import { addIcons } from 'ionicons';
 import { calendarOutline, logOutOutline } from 'ionicons/icons';
 import { AuthService } from './services/auth.service';
+import { PushService } from './services/push.service';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 @Component({
   selector: 'app-root',
@@ -82,9 +85,36 @@ export class AppComponent {
   constructor(
     private router: Router,
     private menuCtrl: MenuController,
-    private authService: AuthService
+    private authService: AuthService,
+    private push: PushService
   ) {
     addIcons({ calendarOutline, logOutOutline });
+    const existing = this.authService.getToken();
+    const authed = this.authService.isAuthenticated();
+    console.log(`[Boot] hasToken=${!!existing} authed=${authed}`);
+    if (existing && authed) {
+      this.push.init(existing);
+    }
+    this.wireForegroundReload();
+  }
+
+  // Capacitor doesn't run a foreground service, so when the OS suspends the
+  // WebView (lock screen, app switcher, push to background) JS pauses and
+  // WS subscriptions can miss updates. On every resume, hard-reload so the
+  // current route fetches fresh data and reopens the WebSocket.
+  private wasBackgrounded = false;
+
+  private wireForegroundReload(): void {
+    if (!Capacitor.isNativePlatform()) return;
+    App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive && this.wasBackgrounded) {
+        this.wasBackgrounded = false;
+        console.log('[App] Resumed from background — reloading page');
+        window.location.reload();
+      } else if (!isActive) {
+        this.wasBackgrounded = true;
+      }
+    });
   }
 
   async goTo(path: string): Promise<void> {

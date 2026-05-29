@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -30,6 +30,22 @@ interface TableGroup {
   orderPointName: string;
   orders: Order[];
   total: number;
+}
+
+/**
+ * One selectable row in the Partial-pay overview: unpaid units of the same
+ * product (name + unit price) aggregated across the order point's orders. The
+ * cashier dials {@code selectedQty} down from {@code maxQty}; on Pay the chosen
+ * quantity is allocated back across {@code sources} (the underlying order-item
+ * ids), which the backend splits as needed.
+ */
+interface PartialLine {
+  key: string;
+  name: string;
+  unitPrice: number;
+  maxQty: number;
+  selectedQty: number;
+  sources: { orderItemId: string; quantity: number }[];
 }
 
 @Component({
@@ -73,9 +89,20 @@ interface TableGroup {
                 <span class="table-name">{{ table.orderPointName }}</span>
                 <div class="table-head-right">
                   <span class="table-total">{{ formatPrice(table.total) }}</span>
-                  <button class="pay-table-btn" (click)="openPaymentModal(table.orders, table.orderPointId)">
-                    Pay
+                  <button class="info-table-btn" (click)="openInfo(table, $event)">
+                    Info
                   </button>
+                  <div class="pay-menu-wrapper">
+                    <button class="pay-table-btn" (click)="togglePayMenu(table.orderPointId, $event)">
+                      Pay
+                    </button>
+                    @if (openPayMenuFor === table.orderPointId) {
+                      <div class="pay-menu" (click)="$event.stopPropagation()">
+                        <button class="pay-menu-item" (click)="payAll(table)">All</button>
+                        <button class="pay-menu-item" (click)="payPartial(table)">Partial</button>
+                      </div>
+                    }
+                  </div>
                 </div>
               </div>
 
@@ -196,6 +223,48 @@ interface TableGroup {
         </div>
       </div>
     }
+
+    @if (showPartialModal && partialTable) {
+      <div class="modal-overlay" (click)="closePartialModal()">
+        <div class="partial-sheet" (click)="$event.stopPropagation()">
+          <div class="modal-head">
+            <h3>{{ partialTable.orderPointName }} — Partial</h3>
+            <button class="modal-close" (click)="closePartialModal()">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+
+          <div class="partial-hint">Choose how many of each item to settle now.</div>
+
+          <div class="partial-lines">
+            @for (line of partialLines; track line.key) {
+              <div class="partial-line" [class.zeroed]="line.selectedQty === 0">
+                <div class="partial-info">
+                  <span class="partial-name" [innerHTML]="safeHtml(line.name)"></span>
+                  <span class="partial-unit">{{ formatPrice(line.unitPrice) }} · {{ line.maxQty }} ordered</span>
+                </div>
+                <div class="stepper">
+                  <button class="step-btn" [disabled]="busy || line.selectedQty === 0" (click)="decPartial(line)">−</button>
+                  <span class="step-qty">{{ line.selectedQty }}</span>
+                  <button class="step-btn" [disabled]="busy || line.selectedQty === line.maxQty" (click)="incPartial(line)">+</button>
+                </div>
+                <span class="partial-line-total">{{ formatPrice(line.unitPrice * line.selectedQty) }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="partial-foot">
+            <div class="partial-total-row">
+              <span>{{ partialSelectedUnits() }} {{ partialSelectedUnits() === 1 ? 'item' : 'items' }} selected</span>
+              <span class="partial-total">{{ formatPrice(partialSelectedTotal()) }}</span>
+            </div>
+            <button class="partial-pay-btn" [disabled]="busy || partialSelectedUnits() === 0" (click)="proceedPartialPayment()">
+              Pay
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     ion-content {
@@ -274,6 +343,55 @@ interface TableGroup {
       font-size: 13px;
       cursor: pointer;
       border-radius: 0;
+    }
+
+    .info-table-btn {
+      padding: 6px 14px;
+      border: 1px solid #cbd5e1;
+      background: transparent;
+      color: #475569;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+
+    .pay-menu-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .pay-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      z-index: 50;
+      min-width: 120px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pay-menu-item {
+      padding: 10px 14px;
+      border: none;
+      border-bottom: 1px solid #f1f5f9;
+      background: transparent;
+      color: #1e293b;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .pay-menu-item:last-child {
+      border-bottom: none;
+    }
+
+    .pay-menu-item:hover {
+      background: #f8fafc;
     }
 
     .order-block {
@@ -376,6 +494,141 @@ interface TableGroup {
       border-radius: 0;
       max-height: 90vh;
       overflow-y: auto;
+    }
+
+    /* Partial-pay selection sheet */
+    .partial-sheet {
+      background: #ffffff;
+      width: 100%;
+      max-width: 560px;
+      border: 1px solid #e2e8f0;
+      border-radius: 0;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .partial-hint {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #64748b;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .partial-lines {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .partial-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .partial-line.zeroed {
+      opacity: 0.5;
+    }
+
+    .partial-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .partial-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .partial-unit {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 1px solid #cbd5e1;
+    }
+
+    .step-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: #f8fafc;
+      color: #1e293b;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .step-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .step-qty {
+      min-width: 36px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .partial-line-total {
+      min-width: 72px;
+      text-align: right;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .partial-foot {
+      border-top: 1px solid #e2e8f0;
+      padding: 12px 16px 16px;
+      background: #ffffff;
+    }
+
+    .partial-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #1e293b;
+      padding-bottom: 12px;
+    }
+
+    .partial-total {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .partial-pay-btn {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--ion-color-primary);
+      background: var(--ion-color-primary);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 0;
+    }
+
+    .partial-pay-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
 
     .modal-head {
@@ -617,6 +870,19 @@ export class PaymentsPage implements OnInit, OnDestroy {
   private protocolByOrderPointId = new Map<string, boolean>();
   selectedCashRegisterDeviceId: string | null = null;
 
+  /** OrderPoint id whose Pay dropdown (All / Partial) is currently open. */
+  openPayMenuFor: string | null = null;
+
+  // Partial-pay selection overview (Pay → Partial).
+  showPartialModal = false;
+  partialTable: TableGroup | null = null;
+  partialLines: PartialLine[] = [];
+  /** True while the payment modal is settling a partial selection rather than
+   *  whole orders — routes confirmPayment to the partial endpoint. */
+  partialMode = false;
+  /** Allocated {orderItemId, quantity} selection carried into the payment modal. */
+  private partialItems: { orderItemId: string; quantity: number }[] = [];
+
   showPaymentModal = false;
   pendingOrders: Order[] = [];
   pendingTotal = 0;
@@ -760,10 +1026,133 @@ export class PaymentsPage implements OnInit, OnDestroy {
     return `${value.toFixed(2)} RON`;
   }
 
-  openPaymentModal(orders: Order[], orderPointId?: string): void {
+  /** Close the Pay dropdown on any click outside it (the toggle stops propagation). */
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.openPayMenuFor = null;
+  }
+
+  /** Toggle the Pay dropdown for a table. Stops propagation so the document
+   *  listener above doesn't immediately close what we just opened. */
+  togglePayMenu(orderPointId: string, ev: Event): void {
+    ev.stopPropagation();
+    this.openPayMenuFor = this.openPayMenuFor === orderPointId ? null : orderPointId;
+  }
+
+  /** "All" — settle every outstanding order on the table (current behaviour). */
+  payAll(table: TableGroup): void {
+    this.openPayMenuFor = null;
+    this.openPaymentModal(table.orders, table.orderPointId);
+  }
+
+  /** "Partial" — open the overview where the cashier dials quantities down,
+   *  then continues into the normal payment-method / tip flow. */
+  payPartial(table: TableGroup): void {
+    this.openPayMenuFor = null;
+    if (this.busy) return;
+    this.partialTable = table;
+    this.partialLines = this.buildPartialLines(table);
+    this.showPartialModal = true;
+  }
+
+  /** Aggregate the order point's unpaid, non-cancelled items by name + price. */
+  private buildPartialLines(table: TableGroup): PartialLine[] {
+    const byKey = new Map<string, PartialLine>();
+    for (const order of table.orders) {
+      for (const item of this.activeItems(order)) {
+        const key = `${item.name}|${item.price}`;
+        let line = byKey.get(key);
+        if (!line) {
+          line = {
+            key,
+            name: item.name,
+            unitPrice: item.price,
+            maxQty: 0,
+            selectedQty: 0,
+            sources: []
+          };
+          byKey.set(key, line);
+        }
+        line.maxQty += item.quantity;
+        line.selectedQty += item.quantity; // default: pay everything
+        line.sources.push({ orderItemId: item.id, quantity: item.quantity });
+      }
+    }
+    return Array.from(byKey.values());
+  }
+
+  incPartial(line: PartialLine): void {
+    if (line.selectedQty < line.maxQty) line.selectedQty++;
+  }
+
+  decPartial(line: PartialLine): void {
+    if (line.selectedQty > 0) line.selectedQty--;
+  }
+
+  /** Running total of the partial selection (before tip). */
+  partialSelectedTotal(): number {
+    return this.partialLines.reduce((sum, l) => sum + l.unitPrice * l.selectedQty, 0);
+  }
+
+  partialSelectedUnits(): number {
+    return this.partialLines.reduce((sum, l) => sum + l.selectedQty, 0);
+  }
+
+  closePartialModal(): void {
+    this.showPartialModal = false;
+    this.partialTable = null;
+    this.partialLines = [];
+  }
+
+  /**
+   * Allocate each line's selected quantity back across its underlying order
+   * items, then hand off to the shared payment modal in partial mode.
+   */
+  proceedPartialPayment(): void {
+    if (this.busy || !this.partialTable) return;
+    const items: { orderItemId: string; quantity: number }[] = [];
+    for (const line of this.partialLines) {
+      let remaining = line.selectedQty;
+      for (const source of line.sources) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, source.quantity);
+        if (take > 0) {
+          items.push({ orderItemId: source.orderItemId, quantity: take });
+          remaining -= take;
+        }
+      }
+    }
+    if (items.length === 0) return;
+
+    const table = this.partialTable;
+    const total = this.partialSelectedTotal();
+    this.showPartialModal = false;
+    this.openPaymentModal(table.orders, table.orderPointId, { items, total });
+  }
+
+  /** "Info" — show details for the table's order point. Implementation pending. */
+  openInfo(table: TableGroup, ev: Event): void {
+    ev.stopPropagation();
+    this.openPayMenuFor = null;
+    // TODO: implement info view for the order point.
+  }
+
+  openPaymentModal(
+    orders: Order[],
+    orderPointId?: string,
+    partial?: { items: { orderItemId: string; quantity: number }[]; total: number }
+  ): void {
     if (this.busy) return;
     this.pendingOrders = orders;
-    this.pendingTotal = orders.reduce((sum, o) => sum + this.orderTotal(o), 0);
+    if (partial) {
+      this.partialMode = true;
+      this.partialItems = partial.items;
+      this.pendingTotal = partial.total;
+    } else {
+      this.partialMode = false;
+      this.partialItems = [];
+      this.pendingTotal = orders.reduce((sum, o) => sum + this.orderTotal(o), 0);
+    }
     // Resolve the cash register from the OP's assignment (Edit Event →
     // Order Points). Backend gracefully falls back to the event's first
     // CR when null, so we don't need to load the CR list ourselves.
@@ -780,6 +1169,8 @@ export class PaymentsPage implements OnInit, OnDestroy {
     this.pendingTotal = 0;
     this.pendingOpIsProtocol = false;
     this.pendingReceiptMethod = null;
+    this.partialMode = false;
+    this.partialItems = [];
     this.resetTip();
   }
 
@@ -853,27 +1244,37 @@ export class PaymentsPage implements OnInit, OnDestroy {
     // Only Cash/Card flows can carry a tip — PROTOCOL always settles flat.
     const tip = method === 'PROTOCOL' ? 0 : this.computedTip();
 
-    // One bulk request — backend marks the orders paid AND fires the
-    // cash-register print via PaymentCompletedEvent (same mechanism as
-    // the Netopia callback). PROTOCOL skips the fiscal print.
-    this.orderService.bulkMarkPaid({
-      orderIds: orders.map(o => o.id),
-      paymentMethod: method,
-      paidBy: this.currentUser,
-      cashRegisterDeviceId: deviceId,
-      tip: tip > 0 ? tip : undefined
-    }).subscribe({
-      next: () => {
-        this.busy = false;
-        this.closePaymentModal();
-        this.loadNeedsPayment();
-      },
-      error: (err) => {
-        console.error('[Payments] bulk mark paid failed:', err);
-        this.busy = false;
-        this.closePaymentModal();
-        this.loadNeedsPayment();
-      }
-    });
+    const onDone = () => {
+      this.busy = false;
+      this.closePaymentModal();
+      this.loadNeedsPayment();
+    };
+    const onError = (err: unknown) => {
+      console.error('[Payments] mark paid failed:', err);
+      this.busy = false;
+      this.closePaymentModal();
+      this.loadNeedsPayment();
+    };
+
+    // Partial mode settles only the selected item quantities (backend splits
+    // items as needed); full mode marks the whole orders paid. Both fire the
+    // cash-register print via PaymentCompletedEvent (PROTOCOL skips the print).
+    if (this.partialMode) {
+      this.orderService.partialMarkPaid({
+        items: this.partialItems,
+        paymentMethod: method,
+        paidBy: this.currentUser,
+        cashRegisterDeviceId: deviceId,
+        tip: tip > 0 ? tip : undefined
+      }).subscribe({ next: onDone, error: onError });
+    } else {
+      this.orderService.bulkMarkPaid({
+        orderIds: orders.map(o => o.id),
+        paymentMethod: method,
+        paidBy: this.currentUser,
+        cashRegisterDeviceId: deviceId,
+        tip: tip > 0 ? tip : undefined
+      }).subscribe({ next: onDone, error: onError });
+    }
   }
 }

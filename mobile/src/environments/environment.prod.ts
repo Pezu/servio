@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.servio.app/api'
+  apiUrl: 'https://servioapp.ro/api'
 };

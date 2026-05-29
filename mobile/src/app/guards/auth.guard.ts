@@ -8,7 +8,7 @@ export const authGuard: CanActivateFn = () => {
 
   if (authService.isAuthenticated()) {
     const info = authService.getUserInfo();
-    if (info && info.roles.includes('WAITER')) {
+    if (info && (info.roles.includes('WAITER') || info.roles.includes('BARMAN'))) {
       return true;
     }
     authService.logout();

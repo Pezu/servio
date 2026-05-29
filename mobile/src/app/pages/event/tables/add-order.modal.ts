@@ -49,14 +49,18 @@ interface CartItem {
     <ion-header>
       <ion-toolbar>
         <ion-buttons slot="start">
-          @if (categoryStack.length > 0) {
+          @if (categoryStack.length > 0 || summaryOpen) {
             <ion-button (click)="goBack()">
               <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
             </ion-button>
           }
         </ion-buttons>
         <ion-title>
-          <span [innerHTML]="currentTitle()"></span>
+          @if (summaryOpen) {
+            <span>Order Summary</span>
+          } @else {
+            <span [innerHTML]="currentTitle()"></span>
+          }
         </ion-title>
         <ion-buttons slot="end">
           <ion-button (click)="dismiss()">
@@ -70,6 +74,31 @@ interface CartItem {
       @if (loading) {
         <div class="loading-container">
           <ion-spinner name="crescent"></ion-spinner>
+        </div>
+      } @else if (summaryOpen) {
+        <div class="summary-view">
+          @if (cart.length === 0) {
+            <div class="empty-state">
+              <ion-text color="medium">
+                <p>Cart is empty</p>
+              </ion-text>
+            </div>
+          } @else {
+            <ul class="summary-list">
+              @for (line of cart; track line.menuItemId) {
+                <li class="summary-line">
+                  <span class="summary-qty">{{ line.quantity }}×</span>
+                  <span class="summary-name" [innerHTML]="safeHtml(line.name)"></span>
+                  <span class="summary-each">{{ line.price | currency:'RON':'symbol':'1.2-2' }}</span>
+                  <span class="summary-line-total">{{ (line.price * line.quantity) | currency:'RON':'symbol':'1.2-2' }}</span>
+                </li>
+              }
+            </ul>
+            <div class="summary-total-row">
+              <span>Total</span>
+              <span class="summary-total">{{ getTotal() | currency:'RON':'symbol':'1.2-2' }}</span>
+            </div>
+          }
         </div>
       } @else if (menuItems.length === 0) {
         <div class="empty-state">
@@ -129,17 +158,27 @@ interface CartItem {
               <p>{{ registrationError }}</p>
             </ion-text>
           }
-          <ion-button
-            [disabled]="cart.length === 0 || submitting || !registrationId"
-            (click)="placeOrder()"
-            expand="block"
-          >
-            @if (submitting) {
-              <ion-spinner name="crescent"></ion-spinner>
-            } @else {
-              Place Order
-            }
-          </ion-button>
+          @if (summaryOpen) {
+            <ion-button
+              [disabled]="cart.length === 0 || submitting || !registrationId"
+              (click)="placeOrder()"
+              expand="block"
+            >
+              @if (submitting) {
+                <ion-spinner name="crescent"></ion-spinner>
+              } @else {
+                Place Order
+              }
+            </ion-button>
+          } @else {
+            <ion-button
+              [disabled]="cart.length === 0 || submitting || !registrationId"
+              (click)="openSummary()"
+              expand="block"
+            >
+              View Summary
+            </ion-button>
+          }
         </div>
       </ion-toolbar>
     </ion-footer>
@@ -148,7 +187,7 @@ interface CartItem {
       <div class="picker-backdrop" (click)="cancelPaymentPicker()">
         <div class="picker-sheet" (click)="$event.stopPropagation()">
           <div class="picker-head">
-            <h3>Select Payment Method</h3>
+            <h3>{{ pendingReceipt ? 'Confirm' : 'Order' }}</h3>
             <ion-button fill="clear" size="small" (click)="cancelPaymentPicker()" [disabled]="submitting">
               <ion-icon name="close-outline" slot="icon-only"></ion-icon>
             </ion-button>
@@ -157,17 +196,59 @@ interface CartItem {
             <span>{{ getTotalItems() }} {{ getTotalItems() === 1 ? 'item' : 'items' }}</span>
             <span class="picker-total">{{ getTotal() | currency:'RON':'symbol':'1.2-2' }}</span>
           </div>
-          <div class="picker-methods">
-            <button class="picker-btn cash" [disabled]="submitting" (click)="placeOrderWithPayment('CASH')">
-              <ion-icon name="cash-outline"></ion-icon> Cash
-            </button>
-            <button class="picker-btn card" [disabled]="submitting" (click)="placeOrderWithPayment('CARD')">
-              <ion-icon name="card-outline"></ion-icon> Card
-            </button>
-            <button class="picker-btn protocol" [disabled]="submitting" (click)="placeOrderWithPayment('PROTOCOL')">
-              <ion-icon name="document-text-outline"></ion-icon> Protocol
-            </button>
-          </div>
+
+          @if (!pendingReceipt) {
+            <div class="picker-section-label">Tip</div>
+            <div class="tip-row">
+              <button class="tip-chip" [class.active]="tipMode === 'none'" [disabled]="submitting" (click)="selectTipMode('none')">None</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p10'" [disabled]="submitting" (click)="selectTipMode('p10')">10%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p12'" [disabled]="submitting" (click)="selectTipMode('p12')">12%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'p15'" [disabled]="submitting" (click)="selectTipMode('p15')">15%</button>
+              <button class="tip-chip" [class.active]="tipMode === 'customPct'" [disabled]="submitting" (click)="selectTipMode('customPct')">Custom %</button>
+              <button class="tip-chip" [class.active]="tipMode === 'customAmt'" [disabled]="submitting" (click)="selectTipMode('customAmt')">Custom RON</button>
+            </div>
+            @if (tipMode === 'customPct') {
+              <div class="tip-input-row">
+                <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Percent"
+                  [(ngModel)]="tipCustomPercent" [disabled]="submitting" />
+                <span class="tip-input-suffix">%</span>
+              </div>
+            }
+            @if (tipMode === 'customAmt') {
+              <div class="tip-input-row">
+                <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Amount"
+                  [(ngModel)]="tipCustomAmount" [disabled]="submitting" />
+                <span class="tip-input-suffix">RON</span>
+              </div>
+            }
+            <div class="tip-summary">
+              <span class="tip-summary-label">Tip</span>
+              <span class="tip-summary-value">{{ computedTip() | currency:'RON':'symbol':'1.2-2' }}</span>
+            </div>
+            <div class="tip-summary total">
+              <span class="tip-summary-label">Total to pay</span>
+              <span class="tip-summary-value">{{ totalWithTip() | currency:'RON':'symbol':'1.2-2' }}</span>
+            </div>
+            <div class="picker-methods">
+              <button class="picker-btn order" [disabled]="submitting" (click)="askOrderReceipt()">
+                Order
+              </button>
+            </div>
+          } @else {
+            <div class="receipt-confirm">
+              <div class="receipt-confirm-question">Get receipt from cash register?</div>
+              <div class="receipt-confirm-row">
+                <button class="receipt-btn no" [disabled]="submitting" (click)="cancelPaymentPicker()">No</button>
+                <button class="receipt-btn yes" [disabled]="submitting" (click)="confirmOrderReceiptYes()">
+                  @if (submitting) {
+                    <ion-spinner name="crescent"></ion-spinner>
+                  } @else {
+                    Yes
+                  }
+                </button>
+              </div>
+            </div>
+          }
         </div>
       </div>
     }
@@ -186,6 +267,80 @@ interface CartItem {
       grid-template-columns: 1fr 1fr 1fr;
       gap: 10px;
       padding: 10px;
+    }
+
+    .summary-view {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .summary-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .summary-line {
+      display: grid;
+      grid-template-columns: 36px 1fr auto auto;
+      column-gap: 10px;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 14px;
+      color: #1e293b;
+    }
+
+    .summary-line:last-child {
+      border-bottom: none;
+    }
+
+    .summary-qty {
+      font-weight: 700;
+      color: #475569;
+    }
+
+    .summary-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .summary-name font[size="1"] {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-left: 4px;
+    }
+
+    .summary-each {
+      font-size: 12px;
+      color: #64748b;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-line-total {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-total-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px solid #cbd5e1;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .summary-total {
+      font-variant-numeric: tabular-nums;
     }
 
     .menu-tile {
@@ -419,6 +574,145 @@ interface CartItem {
       color: #b45309;
       border-color: #f59e0b;
     }
+
+    .picker-btn.order {
+      flex: 1;
+      color: var(--ion-color-primary);
+      border-color: var(--ion-color-primary);
+    }
+
+    .picker-section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      padding: 12px 0 6px;
+    }
+
+    .tip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tip-chip {
+      flex: 1 0 calc(33.333% - 6px);
+      min-width: 64px;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      background: transparent;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 0;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .tip-chip:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .tip-chip.active {
+      border-color: var(--ion-color-primary);
+      color: var(--ion-color-primary);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .tip-input-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-top: 10px;
+    }
+
+    .tip-input-row input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 0;
+      font-size: 14px;
+      background: #ffffff;
+      color: #1e293b;
+      outline: none;
+    }
+
+    .tip-input-row input:focus {
+      border-color: var(--ion-color-primary);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+    }
+
+    .tip-input-suffix {
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      min-width: 36px;
+      text-align: left;
+    }
+
+    .tip-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    .tip-summary.total {
+      padding-top: 6px;
+      padding-bottom: 4px;
+      color: #1e293b;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .receipt-confirm {
+      padding: 16px 0 4px;
+    }
+
+    .receipt-confirm-question {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      text-align: center;
+      padding-bottom: 14px;
+    }
+
+    .receipt-confirm-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .receipt-btn {
+      flex: 1;
+      padding: 14px;
+      border: 1px solid;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .receipt-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .receipt-btn.no {
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    .receipt-btn.yes {
+      color: var(--ion-color-primary);
+      border-color: var(--ion-color-primary);
+    }
   `]
 })
 export class AddOrderModal implements OnInit {
@@ -432,12 +726,37 @@ export class AddOrderModal implements OnInit {
   registrationId: string | null = null;
   registrationError: string | null = null;
   paymentPickerOpen = false;
+  /**
+   * Inside the picker sheet, swap the tip view for the
+   * "Get receipt from cash register?" Yes/No prompt.
+   */
+  pendingReceipt = false;
+
+  // Tip selector (mirrors the Payments tab).
+  tipMode: 'none' | 'p10' | 'p12' | 'p15' | 'customPct' | 'customAmt' = 'none';
+  tipCustomPercent: number | null = null;
+  tipCustomAmount: number | null = null;
+
+  /**
+   * Payment method recorded on the order when the waiter chooses Order
+   * + Yes on a non-pay-later OP. Defaulting to CARD per current ops
+   * policy; if this needs splitting later we can resurface the
+   * method selection.
+   */
+  private static readonly DEFAULT_NON_PAY_LATER_METHOD: 'CASH' | 'CARD' | 'PROTOCOL' = 'CARD';
 
   /**
    * Drill-down path inside the menu tree. Empty array = at the menu root.
    * Pushing a category navigates into it; popping returns to the parent.
    */
   categoryStack: MenuItem[] = [];
+
+  /**
+   * After tapping View Summary in the footer, swap the menu body for an
+   * order summary and turn the footer button into Place Order. Header
+   * back arrow returns to the menu.
+   */
+  summaryOpen = false;
 
   private readonly safeHtmlCache = new Map<string, SafeHtml>();
 
@@ -542,7 +861,17 @@ export class AddOrderModal implements OnInit {
   }
 
   goBack(): void {
+    if (this.summaryOpen) {
+      this.summaryOpen = false;
+      return;
+    }
     this.categoryStack.pop();
+  }
+
+  /** Footer "View Summary" → swap body to the cart summary. */
+  openSummary(): void {
+    if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
+    this.summaryOpen = true;
   }
 
   /**
@@ -601,7 +930,7 @@ export class AddOrderModal implements OnInit {
   placeOrder() {
     if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
 
-    // Only non-pay-later OPs show the payment-method picker. Treat a
+    // Only non-pay-later OPs show the tip + receipt picker. Treat a
     // missing payLater flag as pay-later so the picker never appears
     // unless the OP is *explicitly* marked non-pay-later (defensive
     // against an older backend that hasn't been redeployed yet).
@@ -610,19 +939,70 @@ export class AddOrderModal implements OnInit {
       return;
     }
 
-    // Non-pay-later OPs: ask for the payment method first; the order is
-    // created, settled, and moved to DELIVERED in one go.
+    // Non-pay-later OPs: open the tip picker; the waiter taps Order, then
+    // confirms the receipt prompt before we create + settle + DELIVER.
+    this.resetTip();
+    this.pendingReceipt = false;
     this.paymentPickerOpen = true;
   }
 
   cancelPaymentPicker() {
     if (this.submitting) return;
     this.paymentPickerOpen = false;
+    this.pendingReceipt = false;
+    this.resetTip();
   }
 
-  placeOrderWithPayment(method: 'CASH' | 'CARD' | 'PROTOCOL') {
+  /** Tip step → "Get receipt from cash register?" Yes/No step. */
+  askOrderReceipt() {
+    if (this.submitting) return;
+    this.pendingReceipt = true;
+  }
+
+  selectTipMode(mode: 'none' | 'p10' | 'p12' | 'p15' | 'customPct' | 'customAmt'): void {
+    this.tipMode = mode;
+    if (mode !== 'customPct') this.tipCustomPercent = null;
+    if (mode !== 'customAmt') this.tipCustomAmount = null;
+  }
+
+  private resetTip(): void {
+    this.tipMode = 'none';
+    this.tipCustomPercent = null;
+    this.tipCustomAmount = null;
+  }
+
+  /** Tip in RON resolved from the currently selected mode, clamped to >= 0. */
+  computedTip(): number {
+    const total = this.getTotal();
+    let tip = 0;
+    switch (this.tipMode) {
+      case 'p10': tip = total * 0.10; break;
+      case 'p12': tip = total * 0.12; break;
+      case 'p15': tip = total * 0.15; break;
+      case 'customPct':
+        if (this.tipCustomPercent != null && !isNaN(this.tipCustomPercent)) {
+          tip = total * (this.tipCustomPercent / 100);
+        }
+        break;
+      case 'customAmt':
+        if (this.tipCustomAmount != null && !isNaN(this.tipCustomAmount)) {
+          tip = this.tipCustomAmount;
+        }
+        break;
+    }
+    return Math.max(0, Math.round(tip * 100) / 100);
+  }
+
+  totalWithTip(): number {
+    return Math.round((this.getTotal() + this.computedTip()) * 100) / 100;
+  }
+
+  /** Receipt prompt "Yes": create the order, settle it, deliver it. */
+  confirmOrderReceiptYes() {
     if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
 
+    const method = AddOrderModal.DEFAULT_NON_PAY_LATER_METHOD;
+    const tip = this.computedTip();
     this.submitting = true;
     const orderItems: CreateOrderItem[] = this.cart.map(item => ({
       menuItemId: item.menuItemId,
@@ -646,13 +1026,16 @@ export class AddOrderModal implements OnInit {
           orderIds: [order.id],
           paymentMethod: method,
           paidBy: operator,
-          cashRegisterDeviceId: this.table.cashRegisterId ?? null
+          cashRegisterDeviceId: this.table.cashRegisterId ?? null,
+          tip: tip > 0 ? tip : undefined
         }).subscribe({
           next: () => {
             this.orderService.setOrderStatus(order.id, 'DELIVERED').subscribe({
               next: () => {
                 this.submitting = false;
                 this.paymentPickerOpen = false;
+                this.pendingReceipt = false;
+                this.resetTip();
                 this.modalController.dismiss({ success: true, order });
               },
               error: (err) => {
@@ -662,6 +1045,8 @@ export class AddOrderModal implements OnInit {
                 console.error('Failed to mark order as DELIVERED:', err);
                 this.submitting = false;
                 this.paymentPickerOpen = false;
+                this.pendingReceipt = false;
+                this.resetTip();
                 this.modalController.dismiss({ success: true, order, deliveredFailed: true });
               }
             });
@@ -678,6 +1063,8 @@ export class AddOrderModal implements OnInit {
       error: (err) => {
         this.submitting = false;
         this.paymentPickerOpen = false;
+        this.pendingReceipt = false;
+        this.resetTip();
         console.error('Failed to create order:', err);
         this.modalController.dismiss({ success: false, error: err });
       }
