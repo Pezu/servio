@@ -38,6 +38,15 @@ public class OrderEntity {
     @Column(name = "order_point_id", nullable = false)
     private UUID orderPointId;
 
+    /**
+     * Where the order is *served from*. For non-pay-later OPs (bars/quick
+     * serve) this is the same as {@link #orderPointId}; for pay-later OPs
+     * (tables) it's the linked bar configured in Edit Event → Order
+     * Points → Bar dropdown. May be null when the table has no bar yet.
+     */
+    @Column(name = "service_order_point_id")
+    private UUID serviceOrderPointId;
+
     @Column(name = "group_id", nullable = false)
     private UUID groupId;
 
@@ -72,8 +81,17 @@ public class OrderEntity {
     @Column(name = "tip", precision = 19, scale = 2)
     private BigDecimal tip;
 
+    /** Distinct payment transactions that have settled this order. > 1 means
+     *  it was paid in multiple installments (partial pay from the app). */
+    @Column(name = "payment_count", nullable = false)
+    private int paymentCount = 0;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItemEntity> items = new ArrayList<>();
+
+    /** Payment transactions that settled this order (one per installment). */
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderPaymentEntity> payments = new ArrayList<>();
 
     public void addItem(OrderItemEntity item) {
         items.add(item);

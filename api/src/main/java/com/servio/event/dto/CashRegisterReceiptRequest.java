@@ -22,4 +22,13 @@ public class CashRegisterReceiptRequest {
     /** Cash register's uuid (deviceId). When omitted, the service falls back
      *  to the first ACTIVE device for the event. */
     private String cashRegisterDeviceId;
+    /** When non-null, the receipt is restricted to exactly these order-item
+     *  rows (partial-pay flow). When null, every non-cancelled item on the
+     *  orders is printed (full-pay flow). */
+    private List<UUID> orderItemIds;
+
+    public CashRegisterReceiptRequest(List<UUID> orderIds, String paymentMethod,
+                                      String operator, String cashRegisterDeviceId) {
+        this(orderIds, paymentMethod, operator, cashRegisterDeviceId, null);
+    }
 }

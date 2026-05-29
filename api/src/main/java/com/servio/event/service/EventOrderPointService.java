@@ -131,6 +131,10 @@ public class EventOrderPointService {
         entity.setCredit(request.isCredit());
         entity.setCreditValue(request.isCredit() ? request.getCreditValue() : null);
         entity.setProtocol(request.isProtocol());
+        // Only pay-later rows can carry a linked non-pay-later OP. Defensive
+        // clear here so a non-pay-later row that flips wouldn't drag the
+        // stale link along.
+        entity.setLinkedOrderPointId(orderPoint.isPayLater() ? request.getLinkedOrderPointId() : null);
 
         List<UUID> requestedUserIds = request.getUserIds() != null ? request.getUserIds() : List.of();
         if (requestedUserIds.isEmpty()) {

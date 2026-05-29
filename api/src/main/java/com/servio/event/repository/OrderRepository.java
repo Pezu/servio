@@ -71,4 +71,19 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
            "WHERE o.eventId = :eventId AND o.paymentMethod = :paymentMethod " +
            "ORDER BY o.paidAt DESC")
     List<OrderEntity> findByEventIdAndPaymentMethod(@Param("eventId") UUID eventId, @Param("paymentMethod") String paymentMethod);
+
+    /**
+     * Scope variant of {@link #findByEventIdAndStatusNotIn} for the dashboard:
+     * also requires the order's serviceOrderPointId to be in the supplied set,
+     * so a logged-in user only sees orders served from OPs they're assigned to.
+     */
+    @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items " +
+           "WHERE o.eventId = :eventId " +
+           "AND o.status NOT IN :excludedStatuses " +
+           "AND o.serviceOrderPointId IN :serviceOrderPointIds " +
+           "ORDER BY o.orderNo ASC")
+    List<OrderEntity> findByEventIdAndStatusNotInAndServiceOrderPointIdIn(
+            @Param("eventId") UUID eventId,
+            @Param("excludedStatuses") List<OrderStatus> excludedStatuses,
+            @Param("serviceOrderPointIds") List<UUID> serviceOrderPointIds);
 }

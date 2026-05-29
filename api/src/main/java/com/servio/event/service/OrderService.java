@@ -1,10 +1,12 @@
 package com.servio.event.service;
 
+import com.servio.event.dto.PartialMarkPaidRequest;
 import com.servio.event.dto.ReceiveOrderRequest;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.entity.OrderGroupEntity;
 import com.servio.event.entity.OrderItemStatus;
+import com.servio.event.entity.OrderPaymentEntity;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.RegistrationEntity;
 import com.servio.event.entity.RegistrationOrderPointEntity;
@@ -12,10 +14,13 @@ import com.servio.event.event.PaymentCompletedEvent;
 import com.servio.event.exception.BusinessException;
 import com.servio.event.exception.ResourceNotFoundException;
 import com.servio.event.mapper.OrderMapper;
+import com.servio.event.repository.EventOrderPointRepository;
 import com.servio.event.repository.EventRepository;
 import com.servio.event.repository.MenuItemRepository;
 import com.servio.event.repository.OrderGroupRepository;
 import com.servio.event.repository.OrderItemRepository;
+import com.servio.event.repository.OrderPaymentRepository;
+import com.servio.event.repository.OrderPointRepository;
 import com.servio.event.repository.OrderRepository;
 import com.servio.event.repository.RegistrationOrderPointRepository;
 import com.servio.event.repository.RegistrationRepository;
@@ -41,6 +46,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderPaymentRepository orderPaymentRepository;
     private final OrderGroupRepository orderGroupRepository;
     private final RegistrationRepository registrationRepository;
     private final RegistrationOrderPointRepository registrationOrderPointRepository;
@@ -49,6 +55,8 @@ public class OrderService {
     private final OrderNotificationService notificationService;
     private final OrderMapper orderMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final OrderPointRepository orderPointRepository;
+    private final EventOrderPointRepository eventOrderPointRepository;
 
     @Transactional
     public OrderEntity createOrder(ReceiveOrderRequest request) {
@@ -89,6 +97,12 @@ public class OrderService {
         // order point, or create a new group. Once an order leaves ACTIVE its
         // group is "frozen" and any subsequent order at the same OP starts fresh.
         order.setGroupId(resolveOrderGroupId(order.getOrderPointId()));
+
+        // Tag where the order is *served from*:
+        //  - non-pay-later OP (bar/quick-serve) → itself
+        //  - pay-later OP (table) → the linked bar configured for that table
+        //    in Edit Event → Order Points → Bar (may be null if unset)
+        order.setServiceOrderPointId(resolveServiceOrderPointId(eventId, order.getOrderPointId()));
 
         // Copy nickname from registration to order
         log.info("Creating order: registration.nickname='{}', order.nickname before='{}'",
@@ -137,6 +151,40 @@ public class OrderService {
 
     public List<OrderEntity> getOrdersByEventId(UUID eventId) {
         return orderRepository.findByEventIdAndStatusNotIn(eventId, List.of(OrderStatus.DRAFT, OrderStatus.DELIVERED, OrderStatus.CANCELLED));
+    }
+
+    /**
+     * Kanban scope: orders for the event where {@code serviceOrderPointId}
+     * matches an OP the username is assigned to via Edit Event → Order Points.
+     * Returns empty when the user isn't assigned to any OP in this event.
+     */
+    public List<OrderEntity> getOrdersByEventIdForUser(UUID eventId, String username) {
+        List<UUID> assignedOpIds = eventOrderPointRepository
+                .findOrderPointIdsByEventIdAndUserUsername(eventId, username);
+        if (assignedOpIds.isEmpty()) {
+            return List.of();
+        }
+        return orderRepository.findByEventIdAndStatusNotInAndServiceOrderPointIdIn(
+                eventId,
+                List.of(OrderStatus.DRAFT, OrderStatus.DELIVERED, OrderStatus.CANCELLED),
+                assignedOpIds);
+    }
+
+    /**
+     * Where the order's service originates. Non-pay-later OPs serve themselves;
+     * pay-later OPs route to the linked bar configured in Edit Event → Order
+     * Points (may be null if unset).
+     */
+    private UUID resolveServiceOrderPointId(UUID eventId, UUID orderPointId) {
+        if (orderPointId == null) return null;
+        return orderPointRepository.findById(orderPointId)
+                .map(op -> {
+                    if (!op.isPayLater()) return op.getId();
+                    return eventOrderPointRepository.findByEventIdAndOrderPointId(eventId, orderPointId)
+                            .map(eop -> eop.getLinkedOrderPointId())
+                            .orElse(null);
+                })
+                .orElse(null);
     }
 
     private UUID resolveOrderGroupId(UUID orderPointId) {
@@ -398,6 +446,7 @@ public class OrderService {
 
         OrderEntity order = orderOpt.get();
         int itemsMarkedPaid = 0;
+        BigDecimal amountPaid = BigDecimal.ZERO;
 
         log.info("Processing payment completion for order {} with {} items", orderId, order.getItems().size());
 
@@ -408,6 +457,7 @@ public class OrderService {
             if (!item.isPaid()) {
                 item.setPaid(true);
                 itemsMarkedPaid++;
+                amountPaid = amountPaid.add(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
                 log.info("Marked item {} as paid", item.getId());
             }
         }
@@ -422,6 +472,12 @@ public class OrderService {
         }
         if (paymentMethod != null || paidBy != null) {
             order.setPaidAt(LocalDateTime.now());
+        }
+        // Count this as one payment transaction against the order (only when it
+        // actually settled something — re-confirming an already-paid order doesn't count).
+        if (itemsMarkedPaid > 0) {
+            order.setPaymentCount(order.getPaymentCount() + 1);
+            recordPayment(order, amountPaid, paymentMethod, paidBy);
         }
         orderRepository.save(order);
 
@@ -464,6 +520,174 @@ public class OrderService {
             eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy));
         }
         return totalItemsMarked;
+    }
+
+    /**
+     * Partial-pay flow (mobile Payments → Pay → Partial): settle only the
+     * chosen items/quantities of an order point.
+     *
+     * <p>For each requested {@code (orderItemId, quantity)}:
+     * <ul>
+     *   <li>full quantity → the item is flagged paid in place;</li>
+     *   <li>partial quantity → the item is <b>split</b>: the original keeps the
+     *       unpaid remainder, a new sibling row carries the paid units (so the
+     *       unit price / VAT / name stay intact for the fiscal receipt).</li>
+     * </ul>
+     *
+     * An order only loses its {@code needsPayment} flag (and gets stamped with
+     * payment metadata) once every non-cancelled item on it is paid. After
+     * commit, one {@link PaymentCompletedEvent} fires scoped to exactly the
+     * settled rows, so the receipt covers only what was paid now — not the
+     * remainder, and not units settled by an earlier partial payment.
+     *
+     * @return total units settled across all items
+     */
+    @Transactional
+    public int markItemsPaidPartial(PartialMarkPaidRequest request) {
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            return 0;
+        }
+
+        List<UUID> paidItemIds = new ArrayList<>();
+        java.util.Set<UUID> affectedOrderIds = new java.util.LinkedHashSet<>();
+        java.util.Map<UUID, Integer> unitsPaidByOrder = new java.util.HashMap<>();
+        // Amount settled now per order — computed inline (not re-read) so a
+        // freshly-persisted split row that the managed collection hasn't picked
+        // up yet can't skew the tip distribution.
+        java.util.Map<UUID, BigDecimal> paidAmountByOrder = new java.util.HashMap<>();
+        int totalUnitsPaid = 0;
+
+        for (PartialMarkPaidRequest.Item reqItem : request.getItems()) {
+            if (reqItem == null || reqItem.getOrderItemId() == null || reqItem.getQuantity() <= 0) {
+                continue;
+            }
+            OrderItemEntity item = orderItemRepository.findById(reqItem.getOrderItemId())
+                    .orElseThrow(() -> new ResourceNotFoundException("OrderItem", reqItem.getOrderItemId()));
+            if (item.getStatus() == OrderItemStatus.CANCELLED || item.isPaid()) {
+                continue;
+            }
+            int payQty = Math.min(reqItem.getQuantity(), item.getQuantity());
+            OrderEntity order = item.getOrder();
+            UUID orderId = order.getId();
+            affectedOrderIds.add(orderId);
+
+            if (payQty >= item.getQuantity()) {
+                // Whole line settled.
+                item.setPaid(true);
+                orderItemRepository.save(item);
+                paidItemIds.add(item.getId());
+            } else {
+                // Split: original keeps the unpaid remainder; new row carries the paid units.
+                item.setQuantity(item.getQuantity() - payQty);
+                orderItemRepository.save(item);
+
+                OrderItemEntity paidPart = new OrderItemEntity();
+                paidPart.setOrder(order);
+                paidPart.setName(item.getName());
+                paidPart.setPrice(item.getPrice());
+                paidPart.setQuantity(payQty);
+                paidPart.setStatus(item.getStatus());
+                paidPart.setNote(item.getNote());
+                paidPart.setPaid(true);
+                paidPart.setVatRate(item.getVatRate());
+                paidPart = orderItemRepository.save(paidPart);
+                paidItemIds.add(paidPart.getId());
+            }
+            totalUnitsPaid += payQty;
+            unitsPaidByOrder.merge(orderId, payQty, Integer::sum);
+            paidAmountByOrder.merge(orderId,
+                    item.getPrice().multiply(BigDecimal.valueOf(payQty)), BigDecimal::add);
+        }
+
+        if (paidItemIds.isEmpty()) {
+            return 0;
+        }
+
+        // Finalize each affected order: clear needsPayment + stamp metadata only
+        // once everything on the order is paid; otherwise leave it pending.
+        List<UUID> processed = new ArrayList<>(affectedOrderIds);
+        for (UUID orderId : processed) {
+            OrderEntity order = orderRepository.findByIdWithItems(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+            boolean fullyPaid = order.getItems().stream()
+                    .filter(i -> i.getStatus() != OrderItemStatus.CANCELLED)
+                    .allMatch(OrderItemEntity::isPaid);
+            // Each partial transaction that touched this order is one payment.
+            order.setPaymentCount(order.getPaymentCount() + 1);
+            recordPayment(order, paidAmountByOrder.getOrDefault(orderId, BigDecimal.ZERO),
+                    request.getPaymentMethod(), request.getPaidBy());
+            if (fullyPaid) {
+                order.setNeedsPayment(false);
+                if (request.getPaymentMethod() != null) {
+                    order.setPaymentMethod(request.getPaymentMethod());
+                }
+                if (request.getPaidBy() != null) {
+                    order.setPaidBy(request.getPaidBy());
+                }
+                order.setPaidAt(LocalDateTime.now());
+            }
+            orderRepository.save(order);
+            notificationService.notifyPaymentCompleted(order, unitsPaidByOrder.getOrDefault(orderId, 0));
+        }
+
+        applyPartialTip(processed, paidAmountByOrder, request.getTip());
+
+        if (request.getPaymentMethod() != null) {
+            eventPublisher.publishEvent(new PaymentCompletedEvent(
+                    processed, request.getPaymentMethod(), request.getCashRegisterDeviceId(),
+                    request.getPaidBy(), paidItemIds));
+        }
+
+        log.info("Partial-paid {} unit(s) across {} order(s) via {} by {}",
+                totalUnitsPaid, processed.size(), request.getPaymentMethod(), request.getPaidBy());
+        return totalUnitsPaid;
+    }
+
+    /** Persist one payment-transaction row against the order (revenue-report breakdown). */
+    private void recordPayment(OrderEntity order, BigDecimal amount, String paymentMethod, String paidBy) {
+        OrderPaymentEntity payment = new OrderPaymentEntity();
+        payment.setOrder(order);
+        payment.setAmount(amount != null ? amount : BigDecimal.ZERO);
+        payment.setPaymentMethod(paymentMethod);
+        payment.setPaidBy(paidBy);
+        payment.setPaidAt(LocalDateTime.now());
+        orderPaymentRepository.save(payment);
+    }
+
+    /**
+     * Distribute a tip across the orders touched by a partial payment, weighted
+     * by the amount actually settled now ({@code paidAmountByOrder}). Accumulates
+     * onto any existing order tip so multiple partial payments on the same order
+     * each add their share.
+     */
+    private void applyPartialTip(List<UUID> orderIds, java.util.Map<UUID, BigDecimal> paidAmountByOrder, BigDecimal totalTip) {
+        if (totalTip == null || totalTip.compareTo(BigDecimal.ZERO) <= 0 || orderIds.isEmpty()) {
+            return;
+        }
+        BigDecimal totalPaidAmount = orderIds.stream()
+                .map(id -> paidAmountByOrder.getOrDefault(id, BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal remaining = totalTip;
+        for (int i = 0; i < orderIds.size(); i++) {
+            UUID orderId = orderIds.get(i);
+            var opt = orderRepository.findById(orderId);
+            if (opt.isEmpty()) continue;
+            OrderEntity o = opt.get();
+            BigDecimal share;
+            if (i == orderIds.size() - 1 || totalPaidAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                // Last order absorbs the rounding tail; if nothing weighs, dump it here.
+                share = remaining;
+            } else {
+                share = totalTip.multiply(paidAmountByOrder.getOrDefault(orderId, BigDecimal.ZERO))
+                        .divide(totalPaidAmount, 2, java.math.RoundingMode.HALF_UP);
+                remaining = remaining.subtract(share);
+            }
+            BigDecimal existing = o.getTip() != null ? o.getTip() : BigDecimal.ZERO;
+            o.setTip(existing.add(share));
+            orderRepository.save(o);
+            if (totalPaidAmount.compareTo(BigDecimal.ZERO) <= 0) break;
+        }
     }
 
     /**

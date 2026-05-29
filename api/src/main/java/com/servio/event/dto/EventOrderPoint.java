@@ -31,4 +31,6 @@ public class EventOrderPoint {
     private boolean credit;
     private BigDecimal creditValue;
     private boolean protocol;
+    /** Non-pay-later OP this pay-later row routes drinks to. Null otherwise. */
+    private UUID linkedOrderPointId;
 }

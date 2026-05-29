@@ -94,10 +94,15 @@ public class CashRegisterService {
             deviceOpt = cashRegisterRepository.findByEventId(eventId).stream().findFirst();
         }
 
-        ReceiptPayload receiptPayload = buildReceiptPayload(orders, request, requestId, eventId, deviceOpt.orElse(null));
+        // Partial-pay flow scopes the receipt to specific (already split) item rows.
+        java.util.Set<UUID> itemScope = request.getOrderItemIds() != null && !request.getOrderItemIds().isEmpty()
+                ? new java.util.HashSet<>(request.getOrderItemIds())
+                : null;
+
+        ReceiptPayload receiptPayload = buildReceiptPayload(orders, request, requestId, eventId, deviceOpt.orElse(null), itemScope);
         log.info("[CashRegister] Receipt payload (requestId={}):\n{}", requestId, pretty(receiptPayload));
 
-        BigDecimal totalAmount = computeTotalAmount(orders);
+        BigDecimal totalAmount = computeTotalAmount(orders, itemScope);
 
         if (deviceOpt.isEmpty()) {
             log.warn("[CashRegister] No ECR agent registered for event {}; returning mock response.", eventId);
@@ -156,11 +161,12 @@ public class CashRegisterService {
 
     private record LineKey(String name, BigDecimal unitPrice, BigDecimal vat) {}
 
-    private ReceiptPayload buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId, UUID eventId, CashRegisterEntity device) {
+    private ReceiptPayload buildReceiptPayload(List<OrderEntity> orders, CashRegisterReceiptRequest request, String requestId, UUID eventId, CashRegisterEntity device, java.util.Set<UUID> itemScope) {
         java.util.LinkedHashMap<LineKey, Integer> grouped = new java.util.LinkedHashMap<>();
         for (OrderEntity order : orders) {
             for (OrderItemEntity item : order.getItems()) {
                 if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                if (itemScope != null && !itemScope.contains(item.getId())) continue;
                 BigDecimal vat = item.getVatRate() != null ? item.getVatRate() : BigDecimal.ZERO;
                 LineKey key = new LineKey(item.getName(), item.getPrice(), vat);
                 grouped.merge(key, item.getQuantity(), Integer::sum);
@@ -186,11 +192,12 @@ public class CashRegisterService {
         );
     }
 
-    private BigDecimal computeTotalAmount(List<OrderEntity> orders) {
+    private BigDecimal computeTotalAmount(List<OrderEntity> orders, java.util.Set<UUID> itemScope) {
         BigDecimal total = BigDecimal.ZERO;
         for (OrderEntity order : orders) {
             for (OrderItemEntity item : order.getItems()) {
                 if (item.getStatus() == OrderItemStatus.CANCELLED) continue;
+                if (itemScope != null && !itemScope.contains(item.getId())) continue;
                 total = total.add(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
             }
         }

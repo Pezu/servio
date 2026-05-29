@@ -2,8 +2,10 @@ package com.servio.event.mapper;
 
 import com.servio.event.dto.Order;
 import com.servio.event.dto.OrderItem;
+import com.servio.event.dto.Payment;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
+import com.servio.event.entity.OrderPaymentEntity;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 
@@ -23,6 +25,8 @@ public interface OrderMapper {
     List<Order> toDtoList(List<OrderEntity> entities);
 
     OrderItem toDto(OrderItemEntity entity);
+
+    Payment toDto(OrderPaymentEntity entity);
 
     @org.mapstruct.Mapping(target = "id", ignore = true)
     @org.mapstruct.Mapping(target = "order", ignore = true)

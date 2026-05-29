@@ -4,6 +4,7 @@ import com.servio.event.dto.BulkMarkPaidRequest;
 import com.servio.event.dto.CashRegisterReceiptRequest;
 import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.MarkPaidRequest;
+import com.servio.event.dto.PartialMarkPaidRequest;
 import com.servio.event.dto.ProtocolPaymentSummary;
 import com.servio.event.service.ProtocolPaymentService;
 import com.servio.event.dto.Order;
@@ -16,7 +17,10 @@ import com.servio.event.mapper.OrderMapper;
 import com.servio.event.service.CashRegisterService;
 import com.servio.event.service.OrderDtoEnricher;
 import com.servio.event.service.OrderService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -79,8 +83,25 @@ public class OrderController {
     }
 
     @GetMapping("/events/{eventId}")
-    public ResponseEntity<List<Order>> getOrdersByEvent(@PathVariable UUID eventId) {
-        List<OrderEntity> orders = orderService.getOrdersByEventId(eventId);
+    public ResponseEntity<List<Order>> getOrdersByEvent(
+            @PathVariable UUID eventId,
+            @RequestParam(value = "scope", required = false) String scope,
+            HttpServletRequest request) {
+        // Default: every order in the event (mobile waiter pages call this and
+        // run their own orderPointId filter client-side).
+        // ?scope=service: server-filtered to orders whose serviceOrderPointId
+        // is in the caller's assigned OPs — backoffice kanban opts in via this
+        // parameter. SUPER always sees everything.
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isSuper = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER"));
+        List<OrderEntity> orders;
+        if (isSuper || !"service".equalsIgnoreCase(scope)) {
+            orders = orderService.getOrdersByEventId(eventId);
+        } else {
+            String username = (String) request.getAttribute("username");
+            orders = orderService.getOrdersByEventIdForUser(eventId, username);
+        }
         List<Order> dtos = orderMapper.toDtoList(orders);
         return ResponseEntity.ok(orderDtoEnricher.enrichBatch(dtos, orders));
     }
@@ -223,6 +244,19 @@ public class OrderController {
                 request.getOrderIds() != null ? request.getOrderIds().size() : 0,
                 request.getPaymentMethod(),
                 request.getPaidBy());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Mobile Payments → Pay → Partial: settle a chosen subset (and quantity) of
+     * an order point's unpaid items. Items paid for less than their full
+     * quantity are split server-side; the receipt covers only the settled rows.
+     */
+    @PostMapping("/partial-paid")
+    public ResponseEntity<Void> partialMarkPaid(@RequestBody PartialMarkPaidRequest request) {
+        int marked = orderService.markItemsPaidPartial(request);
+        log.info("Partial-marked {} unit(s) as paid via {} by {}",
+                marked, request.getPaymentMethod(), request.getPaidBy());
         return ResponseEntity.noContent().build();
     }
 }

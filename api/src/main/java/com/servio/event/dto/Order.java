@@ -32,6 +32,10 @@ public class Order {
     private String paidBy;
     private LocalDateTime paidAt;
     private BigDecimal tip;
+    /** Distinct payment transactions that settled this order (> 1 = partial pay). */
+    private Integer paymentCount;
+    /** Per-payment breakdown (amount + method) backing the revenue report detail. */
+    private List<Payment> payments;
     private List<OrderItem> items;
     private BigDecimal totalAmount;
     private BigDecimal netAmount;

@@ -19,10 +19,23 @@ import java.util.UUID;
  *       first registered cash register.</li>
  *   <li>{@code operator} — who initiated the payment ({@code null} for
  *       gateway-driven callbacks; the listener falls back to "NETOPIA").</li>
+ *   <li>{@code orderItemIds} — when non-null, restricts the fiscal receipt to
+ *       exactly these (already split) order-item rows. Used by the partial-pay
+ *       flow so a receipt covers only the units settled in this transaction,
+ *       not every non-cancelled item on the orders. {@code null} for the
+ *       full-pay path (receipt covers all non-cancelled items).</li>
  * </ul>
  */
 public record PaymentCompletedEvent(
         List<UUID> orderIds,
         String paymentMethod,
         String cashRegisterDeviceId,
-        String operator) {}
+        String operator,
+        List<UUID> orderItemIds) {
+
+    /** Full-pay path: no item scoping — the receipt covers all non-cancelled items. */
+    public PaymentCompletedEvent(List<UUID> orderIds, String paymentMethod,
+                                 String cashRegisterDeviceId, String operator) {
+        this(orderIds, paymentMethod, cashRegisterDeviceId, operator, null);
+    }
+}

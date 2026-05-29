@@ -60,4 +60,12 @@ public class EventOrderPointEntity {
     /** Marks the order point as a protocol-paid table. Backoffice toggle. */
     @Column(nullable = false)
     private boolean protocol = false;
+
+    /**
+     * Pay-later OPs (e.g. restaurant tables) can be associated with a
+     * non-pay-later OP (e.g. a bar) — drinks for this table get routed
+     * to the linked OP. Always null for non-pay-later rows.
+     */
+    @Column(name = "linked_order_point_id")
+    private UUID linkedOrderPointId;
 }

@@ -93,6 +93,7 @@ public class PushNotificationService {
                         .setPriority(AndroidConfig.Priority.HIGH)
                         .setNotification(AndroidNotification.builder()
                                 .setChannelId("orders")
+                                .setIcon("ic_stat_notification")
                                 .setDefaultSound(true)
                                 .setDefaultVibrateTimings(true)
                                 .build())

@@ -48,7 +48,8 @@ public class CashRegisterPaymentListener {
                     event.orderIds(),
                     event.paymentMethod(),
                     operator,
-                    event.cashRegisterDeviceId()
+                    event.cashRegisterDeviceId(),
+                    event.orderItemIds()
             );
             cashRegisterService.printReceipt(request);
         } catch (Exception e) {
