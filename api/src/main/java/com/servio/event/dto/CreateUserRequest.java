@@ -21,8 +21,7 @@ public class CreateUserRequest {
     @Pattern(regexp = "^[a-zA-Z0-9._-]+$", message = "Username can only contain letters, numbers, dots, underscores and hyphens")
     private String username;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    // No password constraints — any value is accepted.
     private String password;
 
     @NotBlank(message = "Name is required")
