@@ -86,6 +86,17 @@ interface TableCard {
         </ion-segment>
       </div>
 
+      @if (activeTab === 'CLOSED' && closedOrderPoints.length > 0) {
+        <div class="filter-wrapper">
+          <select class="op-filter" [value]="closedFilterOrderPointId" (change)="onClosedFilterChange($event)">
+            <option value="ALL">ALL</option>
+            @for (op of closedOrderPoints; track op.id) {
+              <option [value]="op.id">{{ op.name }}</option>
+            }
+          </select>
+        </div>
+      }
+
       @if (loading) {
         <div class="state-container">
           <ion-spinner name="crescent"></ion-spinner>
@@ -160,6 +171,24 @@ interface TableCard {
   styles: [`
     ion-content {
       --background: #ffffff;
+    }
+
+    .filter-wrapper {
+      padding: 0 12px 12px;
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .op-filter {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 0;
+      background: #f8fafc;
+      color: #1e293b;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
     }
 
     .segment-wrapper {
@@ -398,6 +427,8 @@ export class OrdersPage implements OnInit, OnDestroy {
   closedOrders: Order[] = [];
   /** Closed orders are fetched lazily the first time the Closed tab is opened. */
   private closedLoaded = false;
+  /** Closed-tab order-point filter: 'ALL' or a specific orderPointId. */
+  closedFilterOrderPointId = 'ALL';
   myOrderPointIds: string[] = [];
   counts: Record<OrderTab, number> = { ACTIVE: 0, IN_PROGRESS: 0, READY: 0, CLOSED: 0 };
   cards: Record<OrderTab, TableCard[]> = { ACTIVE: [], IN_PROGRESS: [], READY: [], CLOSED: [] };
@@ -535,6 +566,11 @@ export class OrdersPage implements OnInit, OnDestroy {
     this.orderService.getClosedOrders(this.eventId).subscribe({
       next: (orders) => {
         this.closedOrders = orders.filter(o => this.myOrderPointIds.includes(o.orderPointId));
+        // Reset the filter if the selected order point is no longer present.
+        if (this.closedFilterOrderPointId !== 'ALL' &&
+            !this.closedOrders.some(o => o.orderPointId === this.closedFilterOrderPointId)) {
+          this.closedFilterOrderPointId = 'ALL';
+        }
         this.regroup();
         done?.();
       },
@@ -614,7 +650,26 @@ export class OrdersPage implements OnInit, OnDestroy {
   }
 
   get visibleCards(): TableCard[] {
-    return this.cards[this.activeTab];
+    const cards = this.cards[this.activeTab];
+    if (this.activeTab === 'CLOSED' && this.closedFilterOrderPointId !== 'ALL') {
+      return cards.filter(c => c.orderPointId === this.closedFilterOrderPointId);
+    }
+    return cards;
+  }
+
+  /** Distinct order points present in the closed orders, for the filter combobox. */
+  get closedOrderPoints(): { id: string; name: string }[] {
+    const byId = new Map<string, string>();
+    for (const o of this.closedOrders) {
+      if (o.orderPointId) byId.set(o.orderPointId, o.orderPointName);
+    }
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  onClosedFilterChange(ev: Event): void {
+    this.closedFilterOrderPointId = (ev.target as HTMLSelectElement).value;
   }
 
   onTabChange(ev: any): void {

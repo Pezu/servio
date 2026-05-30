@@ -245,9 +245,18 @@ interface CartItem {
               <span class="tip-summary-value">{{ totalWithTip() | currency:'RON':'symbol':'1.2-2' }}</span>
             </div>
             <div class="picker-methods">
-              <button class="picker-btn order" [disabled]="submitting" (click)="askOrderReceipt()">
-                Order
-              </button>
+              @if (eventCard) {
+                <button class="picker-btn order" [disabled]="submitting" (click)="askOrderReceipt('CARD')">
+                  Order
+                </button>
+              } @else {
+                <button class="picker-btn cash" [disabled]="submitting" (click)="askOrderReceipt('CASH')">
+                  Cash
+                </button>
+                <button class="picker-btn card" [disabled]="submitting" (click)="askOrderReceipt('CARD')">
+                  Card
+                </button>
+              }
             </div>
           } @else {
             <div class="receipt-confirm">
@@ -823,12 +832,14 @@ export class AddOrderModal implements OnInit {
   tipCustomAmount: number | null = null;
 
   /**
-   * Payment method recorded on the order when the waiter chooses Order
-   * + Yes on a non-pay-later OP. Defaulting to CARD per current ops
-   * policy; if this needs splitting later we can resurface the
-   * method selection.
+   * Event "card" flag. true → non-pay-later orders settle as CARD only (the
+   * single "Order" button); false → the waiter picks Cash or Card. Defaults
+   * true so behaviour is unchanged until the event resolves.
    */
-  private static readonly DEFAULT_NON_PAY_LATER_METHOD: 'CASH' | 'CARD' | 'PROTOCOL' = 'CARD';
+  eventCard = true;
+
+  /** Method chosen on the non-pay-later picker, carried into the receipt step. */
+  pendingMethod: 'CASH' | 'CARD' = 'CARD';
 
   /**
    * Drill-down path inside the menu tree. Empty array = at the menu root.
@@ -883,7 +894,11 @@ export class AddOrderModal implements OnInit {
         const defaultMenuId = orderPoint.menuId || null;
         this.eventService.getMyActiveEvents().subscribe({
           next: (events) => {
-            const locationId = events.find(e => e.id === this.eventId)?.locationId;
+            const ev = events.find(e => e.id === this.eventId);
+            // card=true → non-pay-later orders settle CARD only (current default);
+            // card=false → the waiter picks Cash or Card.
+            this.eventCard = ev?.card ?? true;
+            const locationId = ev?.locationId;
             if (!locationId) {
               this.selectedMenuId = defaultMenuId;
               this.loadMenuItems();
@@ -1094,9 +1109,11 @@ export class AddOrderModal implements OnInit {
     this.resetTip();
   }
 
-  /** Tip step → "Get receipt from cash register?" Yes/No step. */
-  askOrderReceipt() {
+  /** Tip step → "Get receipt from cash register?" Yes/No step.
+   *  Carries the chosen method (CARD when the event is card-only). */
+  askOrderReceipt(method: 'CASH' | 'CARD') {
     if (this.submitting) return;
+    this.pendingMethod = method;
     this.pendingReceipt = true;
   }
 
@@ -1142,7 +1159,7 @@ export class AddOrderModal implements OnInit {
   confirmOrderReceiptYes() {
     if (this.cart.length === 0 || !this.registrationId || this.submitting) return;
 
-    const method = AddOrderModal.DEFAULT_NON_PAY_LATER_METHOD;
+    const method = this.pendingMethod;
     const tip = this.computedTip();
     this.submitting = true;
     const orderItems: CreateOrderItem[] = this.cart.map(item => ({

@@ -14,6 +14,9 @@ export interface Event {
   clientName?: string;
   logoPath?: string;
   status?: string;
+  /** When true, non-pay-later orders settle as CARD only; when false, the
+   *  waiter picks Cash or Card. */
+  card?: boolean;
 }
 
 interface PageResponse<T> {
