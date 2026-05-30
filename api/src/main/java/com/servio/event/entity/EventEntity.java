@@ -48,6 +48,9 @@ public class EventEntity {
     @Column(name = "paused", nullable = false)
     private boolean paused = false;
 
+    @Column(name = "card", nullable = false)
+    private boolean card = false;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "event_users",

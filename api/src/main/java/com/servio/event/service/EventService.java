@@ -62,6 +62,7 @@ public class EventService {
         eventEntity.setLocation(location);
         eventEntity.setRequireValidation(request.isRequireValidation());
         eventEntity.setPaused(request.isPaused());
+        eventEntity.setCard(request.isCard());
 
         // Functional approach: batch load related entities
         Optional.ofNullable(request.getUserIds())
@@ -150,6 +151,7 @@ public class EventService {
         eventEntity.setLocation(location);
         eventEntity.setRequireValidation(request.isRequireValidation());
         eventEntity.setPaused(request.isPaused());
+        eventEntity.setCard(request.isCard());
 
         // Functional approach: update or clear collections
         updateCollection(request.getUserIds(), userRepository::findAllById, eventEntity::setUsers, eventEntity.getUsers());

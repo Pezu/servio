@@ -7,6 +7,7 @@ import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.entity.OrderGroupEntity;
 import com.servio.event.entity.OrderItemStatus;
 import com.servio.event.entity.OrderPaymentEntity;
+import com.servio.event.entity.OrderPointEntity;
 import com.servio.event.entity.OrderStatus;
 import com.servio.event.entity.RegistrationEntity;
 import com.servio.event.entity.RegistrationOrderPointEntity;
@@ -137,6 +138,19 @@ public class OrderService {
                     return entity;
                 })
                 .forEach(order::addItem);
+
+        // Orders placed by a waiter (registration has a user) at a non-pay-later
+        // order point are settled + delivered immediately with no kanban "take"
+        // step, so they'd otherwise have no assignee. Stamp the placing user as
+        // the assignee so the backoffice Orders view shows who put the order.
+        if (registration.getUser() != null) {
+            boolean payLaterOp = orderPointRepository.findById(order.getOrderPointId())
+                    .map(OrderPointEntity::isPayLater)
+                    .orElse(true); // unknown → treat as pay-later (leave for the kanban)
+            if (!payLaterOp) {
+                order.setAssignedUser(registration.getUser().getUsername());
+            }
+        }
 
         OrderEntity savedOrder = orderRepository.save(order);
 
@@ -323,6 +337,24 @@ public class OrderService {
         orderItem.setQuantity(next);
         orderItemRepository.save(orderItem);
         return orderItem.getOrder();
+    }
+
+    /**
+     * Hard-delete an entire order (backoffice Orders → detail → Delete). Refuses
+     * if anything on it has been paid. Returns the order's eventId so the caller
+     * can broadcast a refresh to connected dashboards.
+     */
+    @Transactional
+    public UUID deleteOrder(UUID orderId) {
+        OrderEntity order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+        boolean anyPaid = order.getItems().stream().anyMatch(OrderItemEntity::isPaid);
+        if (anyPaid) {
+            throw new BusinessException("Cannot delete an order with paid items");
+        }
+        UUID eventId = order.getEventId();
+        orderRepository.delete(order);
+        return eventId;
     }
 
     private void updateOrderStatusBasedOnItems(OrderEntity order) {

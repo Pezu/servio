@@ -159,6 +159,25 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Backoffice order detail: bump an item's quantity by delta (+1 / -1). */
+    @PatchMapping("/items/{itemId}/quantity")
+    public ResponseEntity<Order> adjustOrderItemQuantity(
+            @PathVariable UUID itemId,
+            @RequestParam int delta) {
+        OrderEntity order = orderService.adjustOrderItemQuantity(itemId, delta);
+        Order dto = orderDtoEnricher.enrich(orderMapper.toDto(order), order);
+        messagingTemplate.convertAndSend("/topic/event/" + order.getEventId() + "/orders", dto);
+        return ResponseEntity.ok(dto);
+    }
+
+    /** Backoffice order detail: hard-delete the whole order (unpaid only). */
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable UUID orderId) {
+        UUID eventId = orderService.deleteOrder(orderId);
+        messagingTemplate.convertAndSend("/topic/event/" + eventId + "/orders", "order-deleted");
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<Order> updateOrderStatus(
             @PathVariable UUID orderId,

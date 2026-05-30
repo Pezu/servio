@@ -274,7 +274,7 @@ public class EventOrderPointService {
     /**
      * Split a pay-later order point and seed the new sibling's per-event
      * configuration from the source row (users, client name/phone/email,
-     * credit, protocol, prepaid). Cash-register assignment is intentionally
+     * credit, protocol, prepaid, linked bar). Cash-register assignment is intentionally
      * not duplicated — for M{n} groups the canonical row holds the CR and
      * splits inherit through it.
      *
@@ -305,6 +305,8 @@ public class EventOrderPointService {
                     entity.setCredit(src.isCredit());
                     entity.setCreditValue(src.getCreditValue());
                     entity.setProtocol(src.isProtocol());
+                    // Copy the linked bar (drinks routing) onto the split too.
+                    entity.setLinkedOrderPointId(src.getLinkedOrderPointId());
                     if (src.getPrepaid() != null) {
                         entity.setPrepaid(src.getPrepaid());
                     }
