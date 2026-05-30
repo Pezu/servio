@@ -17,6 +17,7 @@ export interface Event {
   menuItemIds?: string[];
   requireValidation?: boolean;
   paused?: boolean;
+  card?: boolean;
 }
 
 export interface CashRegister {
@@ -78,11 +79,11 @@ export class EventService {
     return this.http.get<Event>(`${this.apiUrl}/${id}`);
   }
 
-  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean }): Observable<Event> {
+  createEvent(locationId: string, event: { name: string; startDate: string; endDate: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean; card?: boolean }): Observable<Event> {
     return this.http.post<Event>(`${this.apiUrl}/location/${locationId}`, event);
   }
 
-  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean }): Observable<Event> {
+  updateEvent(id: string, event: { name: string; startDate: string; endDate: string; locationId: string; userIds?: string[]; waiterUserIds?: string[]; paymentTypeIds?: string[]; menuItemIds?: string[]; requireValidation?: boolean; paused?: boolean; card?: boolean }): Observable<Event> {
     return this.http.put<Event>(`${this.apiUrl}/${id}`, event);
   }
 

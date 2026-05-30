@@ -222,6 +222,7 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                       <th>{{ 'EVENTS.END_DATE' | translate }}</th>
                       <th class="text-center">{{ 'EVENTS.REQUIRE_VALIDATION_SHORT' | translate }}</th>
                       <th class="text-center">{{ 'EVENTS.PAUSED_SHORT' | translate }}</th>
+                      <th class="text-center">{{ 'EVENTS.CARD_SHORT' | translate }}</th>
                       <th class="text-end">
                         @if (selectedLocation) {
                           <button class="btn-icon-action btn-icon-add" (click)="openEventModal(); $event.stopPropagation()" [title]="'EVENTS.ADD_EVENT' | translate">
@@ -235,9 +236,9 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                   </thead>
                   <tbody>
                     @if (loadingEvents) {
-                      <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                      <tr><td colspan="8" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
                     } @else if (events.length === 0) {
-                      <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
+                      <tr><td colspan="8" class="text-center py-4 text-muted">{{ 'EVENTS.NO_EVENTS' | translate }}</td></tr>
                     } @else {
                       @for (event of events; track event.id) {
                         <tr>
@@ -272,6 +273,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                                    [disabled]="savingPausedFor === event.id"
                                    (change)="togglePaused(event, $event)"
                                    [title]="'EVENTS.PAUSED' | translate">
+                          </td>
+                          <td class="text-center">
+                            <input type="checkbox" class="credit-checkbox"
+                                   [checked]="!!event.card"
+                                   [disabled]="savingCardFor === event.id"
+                                   (change)="toggleCard(event, $event)"
+                                   [title]="'EVENTS.CARD' | translate">
                           </td>
                           <td class="text-end">
                             <label class="btn-icon-action" [title]="'EVENTS.UPLOAD_LOGO' | translate">
@@ -473,6 +481,13 @@ import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
                 <label class="checkbox-label">
                   <input type="checkbox" [(ngModel)]="eventFormData.paused">
                   <span class="checkbox-label-text">{{ 'EVENTS.PAUSED' | translate }}</span>
+                </label>
+              </div>
+
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="eventFormData.card">
+                  <span class="checkbox-label-text">{{ 'EVENTS.CARD' | translate }}</span>
                 </label>
               </div>
 
@@ -1318,6 +1333,7 @@ export class EventsComponent implements OnInit {
   savingEvent = false;
   savingValidationFor: string | null = null;
   savingPausedFor: string | null = null;
+  savingCardFor: string | null = null;
   showEventModal = false;
   eventModalTab: 'details' | 'tables' | 'cashRegisters' = 'details';
   editingEvent: Event | null = null;
@@ -1326,8 +1342,8 @@ export class EventsComponent implements OnInit {
   eventPageSize = 10;
   eventSearchTerm = '';
   pageSizeOptions = [5, 10, 20, 50];
-  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; waiterUserIds: string[]; requireValidation: boolean; paused: boolean } = {
-    name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false
+  eventFormData: { name: string; startDate: string; endDate: string; userIds: string[]; waiterUserIds: string[]; requireValidation: boolean; paused: boolean; card: boolean } = {
+    name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false, card: false
   };
 
   // Users
@@ -1618,7 +1634,7 @@ export class EventsComponent implements OnInit {
   openEventModal(): void {
     this.editingEvent = null;
     this.eventModalTab = 'details';
-    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false };
+    this.eventFormData = { name: '', startDate: '', endDate: '', userIds: [], waiterUserIds: [], requireValidation: false, paused: false, card: false };
     this.startDate = null;
     this.endDate = null;
     if (this.users.length === 0 && this.selectedClient) {
@@ -1638,7 +1654,8 @@ export class EventsComponent implements OnInit {
       userIds: event.userIds || [],
       waiterUserIds: event.waiterUserIds || [],
       requireValidation: !!event.requireValidation,
-      paused: !!event.paused
+      paused: !!event.paused,
+      card: !!event.card
     };
     // Set Material datepicker Date values
     this.startDate = event.startDate ? new Date(event.startDate + 'T00:00:00') : null;
@@ -1677,7 +1694,8 @@ export class EventsComponent implements OnInit {
       waiterUserIds: this.eventFormData.waiterUserIds,
       menuItemIds,
       requireValidation: this.eventFormData.requireValidation,
-      paused: this.eventFormData.paused
+      paused: this.eventFormData.paused,
+      card: this.eventFormData.card
     };
     const operation = this.editingEvent
       ? this.eventService.updateEvent(this.editingEvent.id!, { ...eventData, locationId })
@@ -1705,7 +1723,8 @@ export class EventsComponent implements OnInit {
       paymentTypeIds: event.paymentTypeIds,
       menuItemIds: event.menuItemIds,
       requireValidation: newValue,
-      paused: !!event.paused
+      paused: !!event.paused,
+      card: !!event.card
     }).subscribe({
       next: () => { this.savingValidationFor = null; },
       error: (err) => {
@@ -1734,7 +1753,8 @@ export class EventsComponent implements OnInit {
       paymentTypeIds: event.paymentTypeIds,
       menuItemIds: event.menuItemIds,
       requireValidation: !!event.requireValidation,
-      paused: newValue
+      paused: newValue,
+      card: !!event.card
     }).subscribe({
       next: () => { this.savingPausedFor = null; },
       error: (err) => {
@@ -1742,6 +1762,36 @@ export class EventsComponent implements OnInit {
         event.paused = previous;
         if (target) target.checked = previous;
         this.savingPausedFor = null;
+      }
+    });
+  }
+
+  toggleCard(event: Event, change: any): void {
+    if (!event.id) return;
+    const target = change?.target as HTMLInputElement | undefined;
+    const newValue = target ? target.checked : !event.card;
+    const previous = !!event.card;
+    event.card = newValue;
+    this.savingCardFor = event.id;
+    this.eventService.updateEvent(event.id, {
+      name: event.name,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      locationId: event.locationId,
+      userIds: event.userIds,
+      waiterUserIds: event.waiterUserIds,
+      paymentTypeIds: event.paymentTypeIds,
+      menuItemIds: event.menuItemIds,
+      requireValidation: !!event.requireValidation,
+      paused: !!event.paused,
+      card: newValue
+    }).subscribe({
+      next: () => { this.savingCardFor = null; },
+      error: (err) => {
+        console.error('Error updating card:', err);
+        event.card = previous;
+        if (target) target.checked = previous;
+        this.savingCardFor = null;
       }
     });
   }

@@ -87,4 +87,14 @@ export class OrderService {
   getOrder(id: string): Observable<Order> {
     return this.http.get<Order>(`${this.apiUrl}/${id}`);
   }
+
+  /** Bump an order item's quantity by delta (+1 / -1). Returns the updated order. */
+  adjustItemQuantity(itemId: string, delta: number): Observable<Order> {
+    return this.http.patch<Order>(`${this.apiUrl}/items/${itemId}/quantity?delta=${delta}`, {});
+  }
+
+  /** Hard-delete the whole order (unpaid only). */
+  deleteOrder(orderId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${orderId}`);
+  }
 }

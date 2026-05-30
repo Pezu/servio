@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -19,8 +19,9 @@ interface OrderRow {
   date: string;
   payments: PayLine[];
   tip: number;
-  total: number;        // net + tip
-  totalWithVat: number; // net + VAT + tip (gross)
+  total: number;         // net (no VAT, no tip)
+  totalWithVat: number;  // net + VAT (no tip)
+  totalWithTips: number; // net + VAT + tip
 }
 
 /** All orders a single user collected, with that user's running totals. */
@@ -52,12 +53,30 @@ interface UserGroup {
       <div class="card-header">
         <div class="header-controls">
           <span class="filter-label">{{ 'REPORTS.EVENT.SELECT_EVENT' | translate }}</span>
-          <select class="event-select" [(ngModel)]="selectedEventId" (ngModelChange)="onEventChange()">
-            <option [ngValue]="null">—</option>
-            @for (ev of events; track ev.id) {
-              <option [ngValue]="ev.id">{{ ev.name }}</option>
+          <div class="custom-select event-select-custom" [class.open]="eventDropdownOpen" (click)="toggleEventDropdown(); $event.stopPropagation()">
+            <div class="custom-select-trigger">
+              <span class="selected-value" [class.placeholder]="!selectedEventName">
+                {{ selectedEventName || ('REPORTS.EVENT.SELECT_EVENT' | translate) }}
+              </span>
+              <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            @if (eventDropdownOpen) {
+              <div class="custom-select-options square">
+                @for (ev of events; track ev.id) {
+                  <div class="custom-select-option" [class.selected]="ev.id === selectedEventId" (click)="selectEvent(ev); $event.stopPropagation()">
+                    <span class="option-text">{{ ev.name }}</span>
+                    @if (ev.id === selectedEventId) {
+                      <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    }
+                  </div>
+                }
+              </div>
             }
-          </select>
+          </div>
         </div>
         <button class="export-btn" [disabled]="userGroups.length === 0" (click)="exportPdf()">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -89,6 +108,7 @@ interface UserGroup {
                       <th class="text-end">{{ 'REPORTS.EVENT.TIP' | translate }}</th>
                       <th class="text-end">{{ 'REPORTS.EVENT.TOTAL' | translate }}</th>
                       <th class="text-end">{{ 'REPORTS.EVENT.TOTAL_WITH_VAT' | translate }}</th>
+                      <th class="text-end">{{ 'REPORTS.EVENT.TOTAL_WITH_TIPS' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -96,19 +116,27 @@ interface UserGroup {
                       <tr>
                         <td class="fw-semibold">#{{ order.orderNo }}</td>
                         <td class="muted">{{ formatDate(order.date) }}</td>
-                        <td>
-                          @for (p of order.payments; track $index) {
-                            <span class="pay-chip" [class.cash]="p.method === 'CASH'" [class.card]="p.method === 'CARD'">
-                              {{ methodLabel(p.method) }} {{ money(p.amount) }}
-                              @if (p.receipt) {
-                                <span class="receipt-no" title="Fiscal receipt">· #{{ p.receipt }}</span>
+                        <td class="pay-cell">
+                          <table class="pay-table">
+                            <tbody>
+                              @for (p of order.payments; track $index) {
+                                <tr>
+                                  <td class="pay-type">
+                                    {{ methodLabel(p.method) }}
+                                    @if (p.receipt) {
+                                      <span class="receipt-no" title="Fiscal receipt">· #{{ p.receipt }}</span>
+                                    }
+                                  </td>
+                                  <td class="pay-amt">{{ money(p.amount) }}</td>
+                                </tr>
                               }
-                            </span>
-                          }
+                            </tbody>
+                          </table>
                         </td>
                         <td class="text-end">{{ order.tip ? money(order.tip) : '-' }}</td>
                         <td class="text-end">{{ money(order.total) }}</td>
-                        <td class="text-end fw-semibold">{{ money(order.totalWithVat) }}</td>
+                        <td class="text-end">{{ money(order.totalWithVat) }}</td>
+                        <td class="text-end fw-semibold">{{ money(order.totalWithTips) }}</td>
                       </tr>
                     }
                   </tbody>
@@ -120,7 +148,7 @@ interface UserGroup {
                         <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_CARD' | translate }}:</b> {{ money(group.totalCard) }}</span>
                         <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS' | translate }}:</b> {{ money(group.totalTips) }}</span>
                       </td>
-                      <td colspan="3"></td>
+                      <td colspan="4"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -131,7 +159,8 @@ interface UserGroup {
               <span class="grand-label">{{ 'REPORTS.EVENT.GRAND_TOTAL' | translate }}</span>
               <span class="grand"><b>{{ 'REPORTS.EVENT.TOTAL_CASH' | translate }}:</b> {{ money(grandCash) }}</span>
               <span class="grand"><b>{{ 'REPORTS.EVENT.TOTAL_CARD' | translate }}:</b> {{ money(grandCard) }}</span>
-              <span class="grand"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS' | translate }}:</b> {{ money(grandTips) }}</span>
+              <span class="grand"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS_CARD' | translate }}:</b> {{ money(grandTipsCard) }}</span>
+              <span class="grand"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS_CASH' | translate }}:</b> {{ money(grandTipsCash) }}</span>
             </div>
           </div>
         }
@@ -144,7 +173,22 @@ interface UserGroup {
     .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); gap: 16px; flex-wrap: wrap; }
     .header-controls { display: flex; align-items: center; gap: 10px; }
     .filter-label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
-    .event-select { padding: 7px 10px; border: 1px solid var(--border-color); border-radius: 0; font-size: 13px; background: white; color: var(--text-dark); min-width: 220px; }
+    /* Custom select popup (matches clients/locations/revenue) */
+    .custom-select { position: relative; cursor: pointer; }
+    .custom-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; background: white; border: 1px solid var(--border-color); border-radius: 0; font-size: 13px; color: var(--text-dark); transition: all 0.2s ease; }
+    .custom-select:hover .custom-select-trigger { border-color: #cbd5e1; }
+    .custom-select.open .custom-select-trigger { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .custom-select .selected-value { display: flex; align-items: center; gap: 8px; }
+    .custom-select .selected-value.placeholder { color: var(--text-muted); }
+    .custom-select .dropdown-arrow { width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+    .custom-select.open .dropdown-arrow { transform: rotate(180deg); }
+    .custom-select-options { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 0; box-shadow: 0 10px 40px rgba(0,0,0,0.12); z-index: 1100; overflow-y: auto; max-height: 320px; }
+    .custom-select-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; color: var(--text-dark); cursor: pointer; transition: background 0.15s ease; }
+    .custom-select-option:hover { background: var(--bg-light); }
+    .custom-select-option.selected { background: rgba(59, 130, 246, 0.08); color: var(--primary); font-weight: 500; }
+    .custom-select-option .option-text { flex: 1; }
+    .custom-select-option .check-icon { width: 16px; height: 16px; color: var(--primary); margin-left: auto; }
+    .custom-select.event-select-custom { min-width: 260px; }
     .export-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--primary); background: var(--primary); color: white; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 0; }
     .export-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .export-btn svg { width: 16px; height: 16px; }
@@ -156,16 +200,23 @@ interface UserGroup {
     .user-title { font-size: 15px; font-weight: 700; color: var(--text-dark); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--primary); }
 
     .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .report-table th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); background: #f8fafc; }
-    .report-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-color); vertical-align: top; color: var(--text-dark); }
+    .report-table th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border: 1px solid var(--border-color); background: #f8fafc; }
+    .report-table td { padding: 8px 12px; border: 1px solid var(--border-color); vertical-align: top; color: var(--text-dark); }
     .text-end { text-align: right; }
     .fw-semibold { font-weight: 600; }
     .muted { color: var(--text-muted); }
 
-    .pay-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #e2e8f0; color: #475569; font-variant-numeric: tabular-nums; }
-    .pay-chip.cash { background: rgba(76,175,80,0.15); color: #2E7D32; }
-    .pay-chip.card { background: rgba(33,150,243,0.15); color: #1565C0; }
-    .pay-chip .receipt-no { font-weight: 500; opacity: 0.75; margin-left: 2px; }
+    /* Payments split into rows of [type | amount] within the cell. */
+    .pay-cell { padding: 0; }
+    .pay-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .pay-table td { border: 1px solid var(--border-color); padding: 5px 8px; }
+    .pay-table tr:first-child td { border-top: none; }
+    .pay-table tr:last-child td { border-bottom: none; }
+    .pay-table td:first-child { border-left: none; }
+    .pay-table td:last-child { border-right: none; }
+    .pay-table .pay-type { font-weight: 600; color: #475569; }
+    .pay-table .pay-amt { text-align: right; white-space: nowrap; width: 1%; font-variant-numeric: tabular-nums; }
+    .pay-table .receipt-no { font-weight: 500; color: var(--text-muted); margin-left: 2px; }
 
     .user-totals td { background: #f8fafc; border-top: 2px solid var(--border-color); }
     .totals-cells { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -184,10 +235,13 @@ export class EventReportComponent implements OnInit {
   selectedEventName = '';
   loading = false;
 
+  eventDropdownOpen = false;
+
   userGroups: UserGroup[] = [];
   grandCash = 0;
   grandCard = 0;
-  grandTips = 0;
+  grandTipsCash = 0;
+  grandTipsCard = 0;
 
   constructor(
     private orderService: OrderService,
@@ -197,14 +251,38 @@ export class EventReportComponent implements OnInit {
 
   ngOnInit(): void {
     this.eventService.getMyEvents(0, 200).subscribe({
-      next: (res) => { this.events = res.content || []; },
+      next: (res) => {
+        this.events = res.content || [];
+        // Single event → pre-select it.
+        if (this.events.length === 1 && this.events[0].id) {
+          this.selectedEventId = this.events[0].id;
+          this.onEventChange();
+        }
+      },
       error: () => { this.events = []; }
     });
   }
 
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.eventDropdownOpen = false;
+  }
+
+  toggleEventDropdown(): void {
+    this.eventDropdownOpen = !this.eventDropdownOpen;
+  }
+
+  selectEvent(ev: Event): void {
+    this.eventDropdownOpen = false;
+    if (ev.id && ev.id !== this.selectedEventId) {
+      this.selectedEventId = ev.id;
+      this.onEventChange();
+    }
+  }
+
   onEventChange(): void {
     this.userGroups = [];
-    this.grandCash = this.grandCard = this.grandTips = 0;
+    this.grandCash = this.grandCard = this.grandTipsCash = this.grandTipsCard = 0;
     if (!this.selectedEventId) {
       this.selectedEventName = '';
       return;
@@ -246,32 +324,47 @@ export class EventReportComponent implements OnInit {
           receipt: p.receiptNumber || p.fiscalReceiptId || undefined
         })),
         tip,
-        total: net + tip,
-        totalWithVat: net + vat + tip
+        total: net,
+        totalWithVat: net + vat,
+        totalWithTips: net + vat + tip
       };
       const arr = byUser.get(user) || [];
       arr.push(row);
       byUser.set(user, arr);
     }
 
-    let gc = 0, gd = 0, gt = 0;
+    let gc = 0, gd = 0, gtCash = 0, gtCard = 0;
     this.userGroups = Array.from(byUser.entries()).map(([user, rows]) => {
       rows.sort((a, b) => a.orderNo - b.orderNo);
       let totalCash = 0, totalCard = 0, totalTips = 0;
       for (const ord of rows) {
+        let cashAmt = 0, cardAmt = 0;
         for (const p of ord.payments) {
-          if (p.method === 'CASH') totalCash += p.amount;
-          else if (p.method === 'CARD') totalCard += p.amount;
+          if (p.method === 'CASH') { totalCash += p.amount; cashAmt += p.amount; }
+          else if (p.method === 'CARD') { totalCard += p.amount; cardAmt += p.amount; }
         }
         totalTips += ord.tip;
+        // Attribute the order's tip to card/cash by its card/cash payment split;
+        // card gets its proportional share, cash absorbs the rounding remainder.
+        if (ord.tip > 0) {
+          const base = cashAmt + cardAmt;
+          if (base > 0) {
+            const tipCard = Math.round((ord.tip * cardAmt / base) * 100) / 100;
+            gtCard += tipCard;
+            gtCash += Math.round((ord.tip - tipCard) * 100) / 100;
+          } else {
+            gtCash += ord.tip; // no card/cash payment to attribute to → treat as cash
+          }
+        }
       }
-      gc += totalCash; gd += totalCard; gt += totalTips;
+      gc += totalCash; gd += totalCard;
       return { user, orders: rows, totalCash, totalCard, totalTips };
     }).sort((a, b) => a.user.localeCompare(b.user));
 
     this.grandCash = gc;
     this.grandCard = gd;
-    this.grandTips = gt;
+    this.grandTipsCash = Math.round(gtCash * 100) / 100;
+    this.grandTipsCard = Math.round(gtCard * 100) / 100;
   }
 
   /**
@@ -340,12 +433,15 @@ export class EventReportComponent implements OnInit {
       body += `<table><thead><tr>
         <th>${t('ORDERS.ORDER_NO')}</th><th>${t('REPORTS.EVENT.DATE')}</th>
         <th>${t('REPORTS.EVENT.PAYMENTS')}</th><th class="r">${t('REPORTS.EVENT.TIP')}</th>
-        <th class="r">${t('REPORTS.EVENT.TOTAL')}</th><th class="r">${t('REPORTS.EVENT.TOTAL_WITH_VAT')}</th></tr></thead><tbody>`;
+        <th class="r">${t('REPORTS.EVENT.TOTAL')}</th><th class="r">${t('REPORTS.EVENT.TOTAL_WITH_VAT')}</th>
+        <th class="r">${t('REPORTS.EVENT.TOTAL_WITH_TIPS')}</th></tr></thead><tbody>`;
       for (const o of g.orders) {
-        const pays = o.payments.map(p => `${this.methodLabel(p.method)} ${this.money(p.amount)}${p.receipt ? ` (#${p.receipt})` : ''}`).join(', ');
-        body += `<tr><td>#${o.orderNo}</td><td>${esc(this.formatDate(o.date))}</td><td>${esc(pays)}</td>
+        const pays = `<table class="pt"><tbody>` + o.payments.map(p =>
+          `<tr><td>${esc(this.methodLabel(p.method))}${p.receipt ? ` <span class="rc">· #${esc(p.receipt)}</span>` : ''}</td><td class="r">${this.money(p.amount)}</td></tr>`
+        ).join('') + `</tbody></table>`;
+        body += `<tr><td>#${o.orderNo}</td><td>${esc(this.formatDate(o.date))}</td><td class="pc">${pays}</td>
           <td class="r">${o.tip ? this.money(o.tip) : '-'}</td><td class="r">${this.money(o.total)}</td>
-          <td class="r">${this.money(o.totalWithVat)}</td></tr>`;
+          <td class="r">${this.money(o.totalWithVat)}</td><td class="r">${this.money(o.totalWithTips)}</td></tr>`;
       }
       body += `</tbody></table>`;
       body += `<p class="tot"><b>${t('REPORTS.EVENT.TOTAL_CASH')}:</b> ${this.money(g.totalCash)} &nbsp;
@@ -355,7 +451,8 @@ export class EventReportComponent implements OnInit {
     body += `<div class="grand"><b>${t('REPORTS.EVENT.GRAND_TOTAL')}</b> &nbsp;
       <b>${t('REPORTS.EVENT.TOTAL_CASH')}:</b> ${this.money(this.grandCash)} &nbsp;
       <b>${t('REPORTS.EVENT.TOTAL_CARD')}:</b> ${this.money(this.grandCard)} &nbsp;
-      <b>${t('REPORTS.EVENT.TOTAL_TIPS')}:</b> ${this.money(this.grandTips)}</div>`;
+      <b>${t('REPORTS.EVENT.TOTAL_TIPS_CARD')}:</b> ${this.money(this.grandTipsCard)} &nbsp;
+      <b>${t('REPORTS.EVENT.TOTAL_TIPS_CASH')}:</b> ${this.money(this.grandTipsCash)}</div>`;
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(this.selectedEventName)}</title>
       <style>
@@ -365,6 +462,14 @@ export class EventReportComponent implements OnInit {
         table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 4px; }
         th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
         th { background: #f1f5f9; font-size: 10px; text-transform: uppercase; }
+        td.pc { padding: 0; }
+        .pt { width: 100%; border-collapse: collapse; }
+        .pt td { border: 1px solid #cbd5e1; padding: 3px 6px; }
+        .pt tr:first-child td { border-top: none; }
+        .pt tr:last-child td { border-bottom: none; }
+        .pt td:first-child { border-left: none; }
+        .pt td:last-child { border-right: none; white-space: nowrap; }
+        .pt .rc { color: #64748b; }
         .r { text-align: right; }
         .tot { font-size: 12px; margin: 2px 0 8px; }
         .grand { margin-top: 16px; padding: 10px 12px; background: #f1f5f9; border: 1px solid #cbd5e1; font-size: 13px; }

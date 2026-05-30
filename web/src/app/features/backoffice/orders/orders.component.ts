@@ -1,12 +1,13 @@
 import { Component, OnInit, ViewEncapsulation, HostListener, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { DateAdapter, MAT_DATE_FORMATS, NativeDateAdapter } from '@angular/material/core';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { OrderService, Order, PageResponse } from './order.service';
+import { OrderService, Order, OrderItem, PageResponse } from './order.service';
 import { EventService, Event } from '../clients/event.service';
 
 // Custom date adapter for dd-MM-yyyy format
@@ -134,13 +135,14 @@ const CUSTOM_DATE_FORMATS = {
                 <th>{{ 'ORDERS.ASSIGNED_TO' | translate }}</th>
                 <th>{{ 'ORDERS.ORDER_DATE' | translate }}</th>
                 <th>{{ 'ORDERS.TOTAL' | translate }}</th>
+                <th class="text-end"></th>
               </tr>
             </thead>
             <tbody>
               @if (loading) {
-                <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
+                <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'COMMON.LOADING' | translate }}</td></tr>
               } @else if (orders.length === 0) {
-                <tr><td colspan="6" class="text-center py-4 text-muted">{{ 'ORDERS.NO_ORDERS' | translate }}</td></tr>
+                <tr><td colspan="7" class="text-center py-4 text-muted">{{ 'ORDERS.NO_ORDERS' | translate }}</td></tr>
               } @else {
                 @for (order of orders; track order.id) {
                   <tr (click)="openOrderDetails(order)">
@@ -156,6 +158,11 @@ const CUSTOM_DATE_FORMATS = {
                     <td class="text-muted">{{ order.assignedUser || '-' }}</td>
                     <td class="text-muted">{{ formatDate(order.createdAt) }}</td>
                     <td class="text-muted">{{ calculateTotal(order) | number:'1.2-2' }}</td>
+                    <td class="text-end">
+                      <button class="btn-detail" (click)="openOrderDetails(order); $event.stopPropagation()">
+                        {{ 'ORDERS.DETAIL' | translate }}
+                      </button>
+                    </td>
                   </tr>
                 }
               }
@@ -259,12 +266,22 @@ const CUSTOM_DATE_FORMATS = {
                   @for (item of selectedOrder.items; track item.id) {
                     <tr>
                       <td>
-                        <span class="fw-semibold">{{ item.name }}</span>
+                        <span class="fw-semibold item-name" [innerHTML]="safeHtml(item.name)"></span>
                         @if (item.note) {
                           <div class="item-note">{{ item.note }}</div>
                         }
                       </td>
-                      <td>{{ item.quantity }}</td>
+                      <td>
+                        @if (canEdit(selectedOrder) && item.status !== 'CANCELLED' && !item.paid) {
+                          <div class="qty-stepper">
+                            <button class="qty-btn" [disabled]="savingItem" (click)="changeQty(item, -1)">−</button>
+                            <span class="qty-val">{{ item.quantity }}</span>
+                            <button class="qty-btn" [disabled]="savingItem" (click)="changeQty(item, 1)">+</button>
+                          </div>
+                        } @else {
+                          {{ item.quantity }}
+                        }
+                      </td>
                       <td>{{ item.price | number:'1.2-2' }}</td>
                       <td>
                         <span class="item-status-badge" [class]="getItemStatusClass(item.status)">
@@ -278,6 +295,11 @@ const CUSTOM_DATE_FORMATS = {
             </div>
           </div>
           <div class="modal-footer">
+            @if (canEdit(selectedOrder)) {
+              <button class="btn btn-danger" [disabled]="savingItem || deletingOrder" (click)="deleteSelectedOrder()">
+                {{ deletingOrder ? ('COMMON.LOADING' | translate) : ('ORDERS.DELETE_ORDER' | translate) }}
+              </button>
+            }
             <button class="btn btn-secondary" (click)="closeModal()">{{ 'COMMON.CLOSE' | translate }}</button>
           </div>
         </div>
@@ -419,8 +441,20 @@ const CUSTOM_DATE_FORMATS = {
     .item-status-badge.status-cancelled { background: rgba(244, 67, 54, 0.1); color: #D32F2F; }
 
     .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-secondary { background: var(--bg-light); color: var(--text-dark); }
     .btn-secondary:hover { background: var(--border-color); }
+    .btn-danger { background: #ef4444; color: #fff; margin-right: auto; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; }
+
+    .btn-detail { padding: 5px 12px; border: 1px solid var(--primary); background: transparent; color: var(--primary); font-size: 12px; font-weight: 600; border-radius: 0; cursor: pointer; white-space: nowrap; }
+    .btn-detail:hover { background: rgba(59, 130, 246, 0.08); }
+
+    .qty-stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-color); }
+    .qty-btn { width: 26px; height: 26px; border: none; background: var(--bg-light); color: var(--text-dark); font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer; }
+    .qty-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .qty-val { min-width: 30px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .item-name font[size="1"] { font-size: 11px; font-weight: 500; opacity: 0.7; margin-left: 4px; }
 
     /* Filter Styles */
     .filter-section { display: flex; align-items: center; gap: 16px; }
@@ -478,8 +512,24 @@ export class OrdersComponent implements OnInit {
 
   showModal = false;
   selectedOrder: Order | null = null;
+  savingItem = false;
+  deletingOrder = false;
 
-  constructor(private orderService: OrderService, private eventService: EventService, private elementRef: ElementRef) {
+  private readonly safeHtmlCache = new Map<string, SafeHtml>();
+
+  /** Item names may carry menu-admin HTML (e.g. <font size="1">0.5L</font>);
+   *  render it as-is (cached so change detection doesn't re-bypass each tick). */
+  safeHtml(value: string | null | undefined): SafeHtml {
+    const text = value ?? '';
+    let cached = this.safeHtmlCache.get(text);
+    if (!cached) {
+      cached = this.sanitizer.bypassSecurityTrustHtml(text);
+      this.safeHtmlCache.set(text, cached);
+    }
+    return cached;
+  }
+
+  constructor(private orderService: OrderService, private eventService: EventService, private elementRef: ElementRef, private translate: TranslateService, private sanitizer: DomSanitizer) {
     this.initDateFilters();
   }
 
@@ -599,6 +649,51 @@ export class OrdersComponent implements OnInit {
   closeModal(): void {
     this.showModal = false;
     this.selectedOrder = null;
+    this.savingItem = false;
+    this.deletingOrder = false;
+  }
+
+  /** Quantities and delete are only editable while the order is still "Ordered" (ACTIVE). */
+  canEdit(order: Order | null): boolean {
+    return !!order && order.status === 'ACTIVE';
+  }
+
+  /** Bump an item's quantity by delta. Reaching 0 removes the item server-side. */
+  changeQty(item: OrderItem, delta: number): void {
+    if (this.savingItem || !this.selectedOrder) return;
+    this.savingItem = true;
+    this.orderService.adjustItemQuantity(item.id, delta).subscribe({
+      next: (updated) => {
+        this.selectedOrder = updated;
+        // Reflect the change in the underlying list row too.
+        const idx = this.orders.findIndex(o => o.id === updated.id);
+        if (idx >= 0) this.orders[idx] = updated;
+        this.savingItem = false;
+      },
+      error: (err) => {
+        console.error('Failed to update quantity:', err);
+        this.savingItem = false;
+      }
+    });
+  }
+
+  /** Hard-delete the whole order after confirmation. */
+  deleteSelectedOrder(): void {
+    const order = this.selectedOrder;
+    if (!order || this.deletingOrder) return;
+    if (!confirm(this.translate.instant('ORDERS.DELETE_ORDER_CONFIRM'))) return;
+    this.deletingOrder = true;
+    this.orderService.deleteOrder(order.id).subscribe({
+      next: () => {
+        this.deletingOrder = false;
+        this.closeModal();
+        this.loadOrders();
+      },
+      error: (err) => {
+        console.error('Failed to delete order:', err);
+        this.deletingOrder = false;
+      }
+    });
   }
 
   getStatusLabelKey(status: string): string {

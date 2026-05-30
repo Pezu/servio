@@ -149,7 +149,9 @@
     "REQUIRE_VALIDATION": "Necesită validare pentru înregistrările cu plată ulterioară",
     "REQUIRE_VALIDATION_SHORT": "Validare",
     "PAUSED": "Pauză eveniment (afișează mesaj de mentenanță clienților)",
-    "PAUSED_SHORT": "Pauza"
+    "PAUSED_SHORT": "Pauza",
+    "CARD": "Card",
+    "CARD_SHORT": "Card"
   },
   "MY_EVENTS": {
     "TITLE": "Evenimentele Mele",
@@ -224,7 +226,10 @@
     "ITEM_STATUS_CANCELLED": "Anulat",
     "PAID": "Plătit",
     "PAID_STATUS": "Plătit",
-    "UNPAID": "Neplătit"
+    "UNPAID": "Neplătit",
+    "DETAIL": "Detalii",
+    "DELETE_ORDER": "Șterge comanda",
+    "DELETE_ORDER_CONFIRM": "Ștergeți complet această comandă? Acțiunea nu poate fi anulată."
   },
   "ROLES": {
     "TITLE": "Roluri",
@@ -303,7 +308,10 @@
       "TOTAL_TIPS": "Total bacșiș",
       "GRAND_TOTAL": "Total general",
       "EXPORT_PDF": "Export PDF",
-      "TOTAL_WITH_VAT": "Total cu TVA"
+      "TOTAL_WITH_VAT": "Total cu TVA",
+      "TOTAL_WITH_TIPS": "Total cu bacșiș",
+      "TOTAL_TIPS_CARD": "Total bacșiș card",
+      "TOTAL_TIPS_CASH": "Total bacșiș numerar"
     }
   }
 }

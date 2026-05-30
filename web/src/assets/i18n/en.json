@@ -149,7 +149,9 @@
     "REQUIRE_VALIDATION": "Require validation for pay-later registrations",
     "REQUIRE_VALIDATION_SHORT": "Validation",
     "PAUSED": "Break event (show maintenance message to customers)",
-    "PAUSED_SHORT": "Break"
+    "PAUSED_SHORT": "Break",
+    "CARD": "Card",
+    "CARD_SHORT": "Card"
   },
   "MY_EVENTS": {
     "TITLE": "My Events",
@@ -224,7 +226,10 @@
     "ITEM_STATUS_CANCELLED": "Cancelled",
     "PAID": "Paid",
     "PAID_STATUS": "Paid",
-    "UNPAID": "Unpaid"
+    "UNPAID": "Unpaid",
+    "DETAIL": "Detail",
+    "DELETE_ORDER": "Delete order",
+    "DELETE_ORDER_CONFIRM": "Delete this entire order? This cannot be undone."
   },
   "ROLES": {
     "TITLE": "Roles",
@@ -303,7 +308,10 @@
       "TOTAL_TIPS": "Total tips",
       "GRAND_TOTAL": "Grand total",
       "EXPORT_PDF": "Export PDF",
-      "TOTAL_WITH_VAT": "Total with VAT"
+      "TOTAL_WITH_VAT": "Total with VAT",
+      "TOTAL_WITH_TIPS": "Total with tips",
+      "TOTAL_TIPS_CARD": "Total tips card",
+      "TOTAL_TIPS_CASH": "Total tips cash"
     }
   }
 }
