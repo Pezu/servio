@@ -31,13 +31,20 @@ export interface Order {
   items: OrderItem[];
   paymentMethod?: string;
   paidAt?: string | null;
-  /** Fiscal-receipt lifecycle, independent of payment.
-   *  null = no receipt attempted (PROTOCOL, or no ECR device). */
-  fiscalReceiptStatus?: 'PENDING' | 'ISSUED' | 'FAILED' | null;
+}
+
+/** A FAILED fiscal-receipt dispatch the app can retry (one per partial installment). */
+export interface FiscalReceipt {
+  requestId: string;
+  eventId: string;
+  status: 'PENDING' | 'ISSUED' | 'FAILED';
+  paymentMethod?: string;
   fiscalReceiptId?: string | null;
-  /** Reason shown when fiscalReceiptStatus === 'FAILED'. */
-  fiscalError?: string | null;
-  fiscalAttemptedAt?: string | null;
+  error?: string | null;
+  totalAmount?: number;
+  attemptedAt?: string | null;
+  orderIds: string[];
+  orderItemIds: string[];
 }
 
 export interface EventOrderPoint {
@@ -68,6 +75,12 @@ export interface MenuItem {
   children?: MenuItem[];
   allergenIds?: string[];
   vatTypeId?: string;
+}
+
+export interface Menu {
+  id: string;
+  name: string;
+  locationId?: string;
 }
 
 export interface OrderPoint {
@@ -208,9 +221,18 @@ export class OrderService {
     );
   }
 
-  /** Re-print a FAILED fiscal receipt. Does NOT re-charge — the order stays paid. */
+  /** Active (non-superseded) FAILED fiscal receipts for the event. */
+  getFailedFiscalReceipts(eventId: string): Observable<FiscalReceipt[]> {
+    return this.http.get<FiscalReceipt[]>(
+      `${environment.apiUrl}/orders/events/${eventId}/fiscal-receipts/failed`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Re-print a FAILED fiscal receipt by its requestId. Does NOT re-charge —
+   *  reprints exactly the receipt's original scope (partial-safe). */
   retryReceipt(payload: {
-    orderIds: string[];
+    requestId: string;
     cashRegisterDeviceId?: string | null;
   }): Observable<CashRegisterReceiptResponse> {
     return this.http.post<CashRegisterReceiptResponse>(
@@ -237,6 +259,14 @@ export class OrderService {
   getMenuItems(menuId: string): Observable<MenuItem[]> {
     return this.http.get<MenuItem[]>(
       `${environment.apiUrl}/menu/menus/${menuId}/tree`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** All menus defined for a location (an event's menus live at its location). */
+  getMenusByLocation(locationId: string): Observable<Menu[]> {
+    return this.http.get<Menu[]>(
+      `${environment.apiUrl}/menu/menus/location/${locationId}`,
       { headers: this.headers() }
     );
   }

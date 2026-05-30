@@ -17,9 +17,10 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { closeOutline, addOutline, removeOutline, cartOutline, cashOutline, cardOutline, documentTextOutline, arrowBackOutline, folderOutline } from 'ionicons/icons';
-import { OrderService, MenuItem, EventOrderPoint, CreateOrderItem } from '../../../services/order.service';
+import { OrderService, MenuItem, Menu, EventOrderPoint, CreateOrderItem } from '../../../services/order.service';
 import { RegistrationService } from '../../../services/registration.service';
 import { AuthService } from '../../../services/auth.service';
+import { EventService } from '../../../services/event.service';
 
 interface CartItem {
   menuItemId: string;
@@ -53,13 +54,23 @@ interface CartItem {
             <ion-button (click)="goBack()">
               <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
             </ion-button>
+          } @else {
+            <span class="header-table" [innerHTML]="safeHtml(table.orderPointName)"></span>
           }
         </ion-buttons>
         <ion-title>
           @if (summaryOpen) {
             <span>Order Summary</span>
-          } @else {
+          } @else if (categoryStack.length > 0) {
             <span [innerHTML]="currentTitle()"></span>
+          } @else if (menus.length > 1) {
+            <select class="menu-select" [(ngModel)]="selectedMenuId" (ngModelChange)="onMenuChange()">
+              @for (m of menus; track m.id) {
+                <option [ngValue]="m.id">{{ m.name }}</option>
+              }
+            </select>
+          } @else if (selectedMenu) {
+            <span class="header-menu">{{ selectedMenu.name }}</span>
           }
         </ion-title>
         <ion-buttons slot="end">
@@ -258,6 +269,44 @@ interface CartItem {
     }
   `,
   styles: [`
+    /* Header: table name (left) · menu switcher (center) · close (right) */
+    .header-table {
+      display: inline-block;
+      max-width: 36vw;
+      padding-left: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .header-menu {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .menu-select {
+      max-width: 70vw;
+      background: transparent;
+      color: inherit;
+      border: none;
+      border-bottom: 1px solid currentColor;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      padding: 1px 20px 1px 6px;
+      text-align: center;
+      text-align-last: center;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 2px center;
+    }
+    .menu-select option {
+      color: #1e293b;
+      font-weight: 600;
+    }
+
     .loading-container, .empty-state {
       display: flex;
       justify-content: center;
@@ -752,6 +801,10 @@ export class AddOrderModal implements OnInit {
   @Input() eventId!: string;
 
   menuItems: MenuItem[] = [];
+  /** All menus defined for the event (its location), for the header switcher. */
+  menus: Menu[] = [];
+  /** Currently displayed menu. Defaults to the order point's own menu. */
+  selectedMenuId: string | null = null;
   cart: CartItem[] = [];
   loading = true;
   submitting = false;
@@ -797,7 +850,8 @@ export class AddOrderModal implements OnInit {
     private orderService: OrderService,
     private registrationService: RegistrationService,
     private authService: AuthService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private eventService: EventService
   ) {
     addIcons({
       closeOutline,
@@ -813,8 +867,73 @@ export class AddOrderModal implements OnInit {
   }
 
   ngOnInit() {
-    this.loadMenu();
+    this.initMenus();
     this.loadWaiterRegistration();
+  }
+
+  /**
+   * Resolve the order point's default menu and the full list of menus for the
+   * event (its location), then load the default menu's items. The header
+   * dropdown lets the waiter switch between any of the event's menus.
+   */
+  private initMenus() {
+    this.loading = true;
+    this.orderService.getOrderPoint(this.table.orderPointId).subscribe({
+      next: (orderPoint) => {
+        const defaultMenuId = orderPoint.menuId || null;
+        this.eventService.getMyActiveEvents().subscribe({
+          next: (events) => {
+            const locationId = events.find(e => e.id === this.eventId)?.locationId;
+            if (!locationId) {
+              this.selectedMenuId = defaultMenuId;
+              this.loadMenuItems();
+              return;
+            }
+            this.orderService.getMenusByLocation(locationId).subscribe({
+              next: (menus) => {
+                this.menus = menus || [];
+                this.selectedMenuId = defaultMenuId && this.menus.some(m => m.id === defaultMenuId)
+                  ? defaultMenuId
+                  : (this.menus[0]?.id ?? defaultMenuId);
+                this.loadMenuItems();
+              },
+              error: () => { this.selectedMenuId = defaultMenuId; this.loadMenuItems(); }
+            });
+          },
+          error: () => { this.selectedMenuId = defaultMenuId; this.loadMenuItems(); }
+        });
+      },
+      error: () => { this.loading = false; }
+    });
+  }
+
+  /** Load the items of the currently selected menu. */
+  loadMenuItems() {
+    if (!this.selectedMenuId) {
+      this.menuItems = [];
+      this.loading = false;
+      return;
+    }
+    this.loading = true;
+    this.orderService.getMenuItems(this.selectedMenuId).subscribe({
+      next: (items) => {
+        this.menuItems = items;
+        this.loading = false;
+      },
+      error: () => { this.loading = false; }
+    });
+  }
+
+  /** Header dropdown changed — reset navigation and load the picked menu.
+   *  The cart is kept so items from multiple menus can be ordered together. */
+  onMenuChange() {
+    this.categoryStack = [];
+    this.loadMenuItems();
+  }
+
+  /** The currently selected menu object (for the header label). */
+  get selectedMenu(): Menu | null {
+    return this.menus.find(m => m.id === this.selectedMenuId) ?? null;
   }
 
   private loadWaiterRegistration() {
@@ -829,29 +948,6 @@ export class AddOrderModal implements OnInit {
     });
   }
 
-  loadMenu() {
-    this.loading = true;
-    this.orderService.getOrderPoint(this.table.orderPointId).subscribe({
-      next: (orderPoint) => {
-        if (orderPoint.menuId) {
-          this.orderService.getMenuItems(orderPoint.menuId).subscribe({
-            next: (items) => {
-              this.menuItems = items;
-              this.loading = false;
-            },
-            error: () => {
-              this.loading = false;
-            }
-          });
-        } else {
-          this.loading = false;
-        }
-      },
-      error: () => {
-        this.loading = false;
-      }
-    });
-  }
 
   /** Items shown in the current grid view (root or the deepest open category). */
   currentItems(): MenuItem[] {

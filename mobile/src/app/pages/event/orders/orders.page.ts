@@ -18,7 +18,7 @@ import {
 import { addIcons } from 'ionicons';
 import { receiptOutline, checkmarkOutline, timeOutline, checkmarkCircleOutline, archiveOutline, warningOutline, refreshOutline } from 'ionicons/icons';
 import { Subscription } from 'rxjs';
-import { OrderService, Order, OrderItem } from '../../../services/order.service';
+import { OrderService, Order, OrderItem, FiscalReceipt } from '../../../services/order.service';
 import { AuthService } from '../../../services/auth.service';
 import { WebSocketService } from '../../../services/websocket.service';
 
@@ -41,8 +41,8 @@ interface TableCard {
   items: AggregatedItem[];
   total: number;
   assignedUser: string | null;
-  /** Ids of orders in this card whose fiscal receipt FAILED (paid, no receipt). */
-  failedFiscalOrderIds: string[];
+  /** FAILED fiscal receipts touching this card (one per partial installment). */
+  failedReceipts: FiscalReceipt[];
 }
 
 @Component({
@@ -128,17 +128,17 @@ interface TableCard {
                 }
               </div>
 
-              @if (card.failedFiscalOrderIds.length > 0) {
+              @if (card.failedReceipts.length > 0) {
                 <div class="fiscal-failed">
                   <div class="fiscal-failed-msg">
                     <ion-icon name="warning-outline"></ion-icon>
-                    <span>Bon fiscal neemis — comanda e platita, dar casa nu a tiparit bonul.</span>
+                    <span>Fiscal receipt not issued — the order is paid, but the printer did not print the receipt.</span>
                   </div>
                   <button class="btn warn" [disabled]="isRetrying(card)" (click)="retryFiscal(card)">
                     @if (isRetrying(card)) {
-                      <ion-spinner name="crescent"></ion-spinner> Se retrimite...
+                      <ion-spinner name="crescent"></ion-spinner> Retrying...
                     } @else {
-                      Reincearca bon <ion-icon name="refresh-outline"></ion-icon>
+                      Retry receipt <ion-icon name="refresh-outline"></ion-icon>
                     }
                   </button>
                 </div>
@@ -357,8 +357,10 @@ interface TableCard {
 
     .fiscal-failed {
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       padding: 10px 12px;
       border-top: 1px solid #fde68a;
       background: #fffdf5;
@@ -370,6 +372,13 @@ interface TableCard {
       gap: 6px;
       font-size: 12px;
       color: #92400e;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .fiscal-failed .btn.warn {
+      flex-shrink: 0;
+      white-space: nowrap;
     }
 
     .fiscal-failed-msg ion-icon {
@@ -395,9 +404,9 @@ export class OrdersPage implements OnInit, OnDestroy {
 
   private subs: Subscription[] = [];
   private readonly safeHtmlCache = new Map<string, SafeHtml>();
-  // OP id → assigned cash register id (Edit Event → Order Points). Used so a
-  // retry re-prints on the same device the order was originally settled on.
-  private cashRegisterByOrderPointId = new Map<string, string>();
+  // orderId → FAILED fiscal receipts touching it. Loaded separately from orders
+  // (a receipt can span several orders / be one of several partial installments).
+  private failedReceiptsByOrderId = new Map<string, FiscalReceipt[]>();
   /** Card groupIds currently being re-fiscalized — drives the button spinner. */
   retryingGroupIds = new Set<string>();
 
@@ -435,6 +444,7 @@ export class OrdersPage implements OnInit, OnDestroy {
     this.subs.push(
       this.ws.subscribeToEventOrders(this.eventId).subscribe(() => {
         this.loadOrders();
+        this.loadFailedReceipts();
         // Keep the Closed tab fresh once it's been opened (e.g. an order just
         // got delivered elsewhere).
         if (this.closedLoaded) this.loadClosedOrders();
@@ -447,6 +457,7 @@ export class OrdersPage implements OnInit, OnDestroy {
   }
 
   refresh(ev: RefresherCustomEvent): void {
+    this.loadFailedReceipts();
     if (this.activeTab === 'CLOSED') {
       this.loadClosedOrders(() => ev.target.complete());
     } else {
@@ -461,12 +472,7 @@ export class OrdersPage implements OnInit, OnDestroy {
         this.myOrderPointIds = eops
           .filter(e => (e.userLogins || []).includes(this.currentUser))
           .map(e => e.orderPointId);
-        this.cashRegisterByOrderPointId.clear();
-        for (const eop of eops) {
-          if (eop.cashRegisterId) {
-            this.cashRegisterByOrderPointId.set(eop.orderPointId, eop.cashRegisterId);
-          }
-        }
+        this.loadFailedReceipts();
         this.loadOrders();
       },
       error: () => {
@@ -495,6 +501,26 @@ export class OrdersPage implements OnInit, OnDestroy {
         this.loading = false;
         done?.();
       }
+    });
+  }
+
+  /** Loads FAILED fiscal receipts for the event and re-groups so cards show the banner. */
+  loadFailedReceipts(done?: () => void): void {
+    this.orderService.getFailedFiscalReceipts(this.eventId).subscribe({
+      next: (receipts) => {
+        const map = new Map<string, FiscalReceipt[]>();
+        for (const r of receipts) {
+          for (const orderId of r.orderIds) {
+            const list = map.get(orderId) ?? [];
+            list.push(r);
+            map.set(orderId, list);
+          }
+        }
+        this.failedReceiptsByOrderId = map;
+        this.regroup();
+        done?.();
+      },
+      error: () => done?.()
     });
   }
 
@@ -564,6 +590,14 @@ export class OrdersPage implements OnInit, OnDestroy {
       }
       const items = Array.from(aggregated.values());
       const total = items.reduce((sum, i) => sum + i.totalPrice, 0);
+      // Collect FAILED receipts touching this card's orders, deduped by requestId
+      // (one receipt can span several orders in the group).
+      const failedMap = new Map<string, FiscalReceipt>();
+      for (const o of group) {
+        for (const r of (this.failedReceiptsByOrderId.get(o.id) ?? [])) {
+          failedMap.set(r.requestId, r);
+        }
+      }
       return {
         groupId,
         orderPointId: group[0]?.orderPointId || '',
@@ -574,9 +608,7 @@ export class OrdersPage implements OnInit, OnDestroy {
         items,
         total,
         assignedUser: group[0]?.assignedUser ?? null,
-        failedFiscalOrderIds: group
-          .filter(o => o.fiscalReceiptStatus === 'FAILED')
-          .map(o => o.id)
+        failedReceipts: Array.from(failedMap.values())
       };
     });
   }
@@ -613,37 +645,39 @@ export class OrdersPage implements OnInit, OnDestroy {
 
   /**
    * Re-print the FAILED fiscal receipt(s) for this card. Does NOT re-charge —
-   * the orders stay paid; only the fiscal status is reset and re-attempted.
-   * The device reply lands async, so we reload shortly after to reflect the
-   * new PENDING/ISSUED/FAILED state.
+   * the orders stay paid. Each failed receipt is retried by its requestId, so a
+   * partial receipt re-fiscalizes only its own items. Replies land async, so we
+   * refresh the failed-receipts list shortly after.
    */
   retryFiscal(card: TableCard): void {
-    if (card.failedFiscalOrderIds.length === 0 || this.isRetrying(card)) return;
+    if (card.failedReceipts.length === 0 || this.isRetrying(card)) return;
     this.retryingGroupIds.add(card.groupId);
-    const deviceId = this.cashRegisterByOrderPointId.get(card.orderPointId) ?? null;
-    this.orderService.retryReceipt({
-      orderIds: card.failedFiscalOrderIds,
-      cashRegisterDeviceId: deviceId
-    }).subscribe({
-      next: () => {
-        this.showToast('Bon retrimis la casa de marcat.', 'medium');
-        // Reply is async; give the device a moment, then refresh status.
+    const calls = card.failedReceipts.map(r =>
+      this.orderService.retryReceipt({ requestId: r.requestId }));
+    forkJoin(calls).subscribe({
+      next: (responses) => {
+        const firstError = responses.find(res => res.status === 'ERROR');
+        if (firstError) {
+          this.retryingGroupIds.delete(card.groupId);
+          this.showToast(firstError.errorMessage || 'Retry failed.', 'danger');
+          this.loadFailedReceipts();
+          return;
+        }
+        this.showToast(
+          responses.length > 1 ? 'Receipts re-sent to the cash register.'
+                               : 'Receipt re-sent to the cash register.', 'medium');
+        // Device replies land async; give them a moment, then refresh status.
         setTimeout(() => {
           this.retryingGroupIds.delete(card.groupId);
-          this.reloadCurrent();
+          this.loadFailedReceipts();
         }, 2500);
       },
       error: (err) => {
         this.retryingGroupIds.delete(card.groupId);
-        this.showToast('Reincercarea a esuat. Verificati casa de marcat.', 'danger');
+        this.showToast('Retry failed. Check the cash register.', 'danger');
         console.error('Retry fiscal receipt failed:', err);
       }
     });
-  }
-
-  private reloadCurrent(): void {
-    if (this.activeTab === 'CLOSED') this.loadClosedOrders();
-    else this.loadOrders();
   }
 
   private async showToast(message: string, color: 'medium' | 'danger'): Promise<void> {
