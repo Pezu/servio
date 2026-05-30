@@ -443,7 +443,7 @@ public class OrderService {
      */
     @Transactional
     public int handlePaymentComplete(UUID orderId, String paymentMethod, String paidBy) {
-        return handlePaymentComplete(orderId, paymentMethod, paidBy, null);
+        return handlePaymentComplete(orderId, paymentMethod, paidBy, null, null);
     }
 
     /**
@@ -451,9 +451,12 @@ public class OrderService {
      *        actually marked paid are appended — so the fiscal receipt can be
      *        scoped to exactly what was settled now (not the whole order, which
      *        would re-print items already fiscalized by an earlier installment).
+     * @param paymentRef stable per-transaction id stamped on the payment row so it
+     *        can be matched to its fiscal receipt; null for standalone marks.
      */
     @Transactional
-    public int handlePaymentComplete(UUID orderId, String paymentMethod, String paidBy, List<UUID> settledItemIdsOut) {
+    public int handlePaymentComplete(UUID orderId, String paymentMethod, String paidBy,
+                                     List<UUID> settledItemIdsOut, UUID paymentRef) {
         var orderOpt = orderRepository.findByIdWithItems(orderId);
         if (orderOpt.isEmpty()) {
             log.warn("Order not found for payment completion: {}", orderId);
@@ -494,7 +497,7 @@ public class OrderService {
         // actually settled something — re-confirming an already-paid order doesn't count).
         if (itemsMarkedPaid > 0) {
             order.setPaymentCount(order.getPaymentCount() + 1);
-            recordPayment(order, amountPaid, paymentMethod, paidBy);
+            recordPayment(order, amountPaid, paymentMethod, paidBy, paymentRef);
         }
         orderRepository.save(order);
 
@@ -531,15 +534,18 @@ public class OrderService {
         // these so a Pay-All after an earlier partial doesn't reprint (and double-
         // fiscalize) items already covered by the partial's receipt.
         List<UUID> settledItemIds = new ArrayList<>();
+        // One stable id for this whole payment transaction, stamped on every
+        // settled order's payment row and its fiscal receipt.
+        UUID paymentRef = UUID.randomUUID();
         for (UUID orderId : orderIds) {
-            int marked = handlePaymentComplete(orderId, paymentMethod, paidBy, settledItemIds);
+            int marked = handlePaymentComplete(orderId, paymentMethod, paidBy, settledItemIds, paymentRef);
             totalItemsMarked += marked;
             processed.add(orderId);
         }
         applyTipToOrders(processed, tip);
         if (paymentMethod != null) {
             eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy,
-                    settledItemIds.isEmpty() ? null : settledItemIds));
+                    settledItemIds.isEmpty() ? null : settledItemIds, tip, paymentRef));
         }
         return totalItemsMarked;
     }
@@ -628,6 +634,8 @@ public class OrderService {
         // Finalize each affected order: clear needsPayment + stamp metadata only
         // once everything on the order is paid; otherwise leave it pending.
         List<UUID> processed = new ArrayList<>(affectedOrderIds);
+        // One stable id for this partial transaction → its payment rows + receipt.
+        UUID paymentRef = UUID.randomUUID();
         for (UUID orderId : processed) {
             OrderEntity order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
@@ -637,7 +645,7 @@ public class OrderService {
             // Each partial transaction that touched this order is one payment.
             order.setPaymentCount(order.getPaymentCount() + 1);
             recordPayment(order, paidAmountByOrder.getOrDefault(orderId, BigDecimal.ZERO),
-                    request.getPaymentMethod(), request.getPaidBy());
+                    request.getPaymentMethod(), request.getPaidBy(), paymentRef);
             if (fullyPaid) {
                 order.setNeedsPayment(false);
                 if (request.getPaymentMethod() != null) {
@@ -657,7 +665,7 @@ public class OrderService {
         if (request.getPaymentMethod() != null) {
             eventPublisher.publishEvent(new PaymentCompletedEvent(
                     processed, request.getPaymentMethod(), request.getCashRegisterDeviceId(),
-                    request.getPaidBy(), paidItemIds));
+                    request.getPaidBy(), paidItemIds, request.getTip(), paymentRef));
         }
 
         log.info("Partial-paid {} unit(s) across {} order(s) via {} by {}",
@@ -666,13 +674,14 @@ public class OrderService {
     }
 
     /** Persist one payment-transaction row against the order (revenue-report breakdown). */
-    private void recordPayment(OrderEntity order, BigDecimal amount, String paymentMethod, String paidBy) {
+    private void recordPayment(OrderEntity order, BigDecimal amount, String paymentMethod, String paidBy, UUID paymentRef) {
         OrderPaymentEntity payment = new OrderPaymentEntity();
         payment.setOrder(order);
         payment.setAmount(amount != null ? amount : BigDecimal.ZERO);
         payment.setPaymentMethod(paymentMethod);
         payment.setPaidBy(paidBy);
         payment.setPaidAt(LocalDateTime.now());
+        payment.setPaymentRef(paymentRef);
         orderPaymentRepository.save(payment);
     }
 

@@ -40,9 +40,10 @@ public class FiscalReceiptStatusService {
     /** Records a receipt awaiting the device reply (dispatched to the bridge). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createPending(String requestId, UUID eventId, List<UUID> orderIds, List<UUID> orderItemIds,
-                              String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount) {
+                              String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount, BigDecimal tip,
+                              UUID paymentRef) {
         FiscalReceiptEntity r = newReceipt(requestId, eventId, orderIds, orderItemIds,
-                paymentMethod, cashRegisterDeviceId, totalAmount);
+                paymentMethod, cashRegisterDeviceId, totalAmount, tip, paymentRef);
         r.setStatus(FiscalReceiptStatus.PENDING);
         fiscalReceiptRepository.save(r);
     }
@@ -50,22 +51,26 @@ public class FiscalReceiptStatusService {
     /** Records a receipt that could not be dispatched at all (bridge offline, no device). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createFailed(String requestId, UUID eventId, List<UUID> orderIds, List<UUID> orderItemIds,
-                             String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount, String error) {
+                             String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount, BigDecimal tip,
+                             UUID paymentRef, String error) {
         FiscalReceiptEntity r = newReceipt(requestId, eventId, orderIds, orderItemIds,
-                paymentMethod, cashRegisterDeviceId, totalAmount);
+                paymentMethod, cashRegisterDeviceId, totalAmount, tip, paymentRef);
         r.setStatus(FiscalReceiptStatus.FAILED);
         r.setError(truncate(error));
         fiscalReceiptRepository.save(r);
     }
 
     private FiscalReceiptEntity newReceipt(String requestId, UUID eventId, List<UUID> orderIds, List<UUID> orderItemIds,
-                                           String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount) {
+                                           String paymentMethod, String cashRegisterDeviceId, BigDecimal totalAmount, BigDecimal tip,
+                                           UUID paymentRef) {
         FiscalReceiptEntity r = new FiscalReceiptEntity();
         r.setRequestId(requestId);
         r.setEventId(eventId);
         r.setPaymentMethod(paymentMethod);
         r.setCashRegisterDeviceId(cashRegisterDeviceId);
         r.setTotalAmount(totalAmount);
+        r.setTip(tip);
+        r.setPaymentRef(paymentRef);
         r.setAttemptedAt(LocalDateTime.now());
         r.setOrderIds(orderIds != null ? new ArrayList<>(orderIds) : new ArrayList<>());
         r.setOrderItemIds(orderItemIds != null ? new ArrayList<>(orderItemIds) : new ArrayList<>());
@@ -79,7 +84,7 @@ public class FiscalReceiptStatusService {
      *         duplicate reply whose receipt no longer exists.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean applyAgentResult(String requestId, boolean ok, String fiscalReceiptId, String errorMessage) {
+    public boolean applyAgentResult(String requestId, boolean ok, String fiscalReceiptId, String receiptNumber, String errorMessage) {
         if (requestId == null || requestId.isBlank()) return false;
         Optional<FiscalReceiptEntity> opt = fiscalReceiptRepository.findByRequestId(requestId);
         if (opt.isEmpty()) {
@@ -90,6 +95,7 @@ public class FiscalReceiptStatusService {
         if (ok) {
             r.setStatus(FiscalReceiptStatus.ISSUED);
             r.setFiscalReceiptId(fiscalReceiptId);
+            r.setReceiptNumber(receiptNumber);
             r.setError(null);
         } else {
             r.setStatus(FiscalReceiptStatus.FAILED);

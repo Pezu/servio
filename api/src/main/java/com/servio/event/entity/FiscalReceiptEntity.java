@@ -53,11 +53,23 @@ public class FiscalReceiptEntity {
     @Column(name = "fiscal_receipt_id", length = 64)
     private String fiscalReceiptId;
 
+    /** Sequential receipt number printed on the bon (device's receiptNumber). */
+    @Column(name = "receipt_number", length = 64)
+    private String receiptNumber;
+
+    /** Stable per-transaction id linking this receipt to its payment row(s). */
+    @Column(name = "payment_ref")
+    private UUID paymentRef;
+
     @Column(name = "error", length = 500)
     private String error;
 
     @Column(name = "total_amount", precision = 19, scale = 2)
     private BigDecimal totalAmount;
+
+    /** Tip settled in this transaction; printed as a "Tips" line (VAT 0%). */
+    @Column(name = "tip", precision = 19, scale = 2)
+    private BigDecimal tip;
 
     /** A retry supersedes the old receipt so it drops out of the FAILED list. */
     @Column(name = "superseded", nullable = false)

@@ -150,7 +150,7 @@ public class PaymentService {
             if (itemsMarked > 0) {
                 orderNotificationService.notifyPaymentComplete(order.getEventId(), order.getOrderPointId(), itemsMarked);
                 eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD, null, null,
-                        settledItemIds.isEmpty() ? null : settledItemIds));
+                        settledItemIds.isEmpty() ? null : settledItemIds, null, java.util.UUID.randomUUID()));
             }
             return itemsMarked;
         }
@@ -188,7 +188,7 @@ public class PaymentService {
         if (totalItemsMarked > 0 && orderPointId != null) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
             eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null,
-                    settledItemIds.isEmpty() ? null : settledItemIds));
+                    settledItemIds.isEmpty() ? null : settledItemIds, null, java.util.UUID.randomUUID()));
         }
         return totalItemsMarked;
     }
@@ -218,7 +218,7 @@ public class PaymentService {
         if (totalItemsMarked > 0) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
             eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null,
-                    settledItemIds.isEmpty() ? null : settledItemIds));
+                    settledItemIds.isEmpty() ? null : settledItemIds, null, java.util.UUID.randomUUID()));
         }
         return totalItemsMarked;
     }

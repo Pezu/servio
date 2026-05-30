@@ -99,7 +99,12 @@ public class CashRegisterService {
         ReceiptPayload receiptPayload = buildReceiptPayload(orders, request, requestId, eventId, deviceOpt.orElse(null), itemScope);
         log.info("[CashRegister] Receipt payload (requestId={}):\n{}", requestId, pretty(receiptPayload));
 
+        // Tip settled in this transaction — printed as a "Tips" line (VAT 0%) and
+        // added to the receipt total. null/<=0 means no tip line.
+        BigDecimal tip = (request.getTip() != null && request.getTip().compareTo(BigDecimal.ZERO) > 0)
+                ? request.getTip() : null;
         BigDecimal totalAmount = computeTotalAmount(orders, itemScope);
+        if (tip != null) totalAmount = totalAmount.add(tip);
 
         if (deviceOpt.isEmpty()) {
             log.warn("[CashRegister] No ECR device configured for event {}; marking receipt FAILED (requestId={})",
@@ -107,7 +112,7 @@ public class CashRegisterService {
             String msg = "Nicio casa de marcat nu este configurata pentru acest eveniment.";
             fiscalReceiptStatusService.createFailed(requestId, eventId, request.getOrderIds(),
                     request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
-                    totalAmount, msg);
+                    totalAmount, tip, request.getPaymentRef(), msg);
             return CashRegisterReceiptResponse.builder()
                     .status("ERROR")
                     .errorCode("NO_ECR_DEVICE")
@@ -127,7 +132,7 @@ public class CashRegisterService {
             String msg = "Agentul casei de marcat (bridge) nu este conectat. Bonul nu a fost trimis.";
             fiscalReceiptStatusService.createFailed(requestId, eventId, request.getOrderIds(),
                     request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
-                    totalAmount, msg);
+                    totalAmount, tip, request.getPaymentRef(), msg);
             return CashRegisterReceiptResponse.builder()
                     .status("ERROR")
                     .errorCode("BRIDGE_OFFLINE")
@@ -144,7 +149,7 @@ public class CashRegisterService {
         // fiscal lifecycle PENDING -> ISSUED/FAILED per dispatch.
         fiscalReceiptStatusService.createPending(requestId, eventId, request.getOrderIds(),
                 request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
-                totalAmount);
+                totalAmount, tip, request.getPaymentRef());
 
         // Fire-and-forget. Every print job goes to the single bridge principal —
         // the bridge picks the physical printer from the IP in the payload.
@@ -181,9 +186,10 @@ public class CashRegisterService {
         // the result as a transient broadcast nobody may be listening to.
         boolean ok = response != null && "OK".equalsIgnoreCase(response.getStatus());
         String fiscalReceiptId = response != null ? response.getFiscalReceiptId() : null;
+        String receiptNumber = response != null ? response.getReceiptNumber() : null;
         String errorMessage = response != null ? response.getErrorMessage() : null;
         try {
-            fiscalReceiptStatusService.applyAgentResult(requestId, ok, fiscalReceiptId, errorMessage);
+            fiscalReceiptStatusService.applyAgentResult(requestId, ok, fiscalReceiptId, receiptNumber, errorMessage);
         } catch (Exception ex) {
             log.error("[CashRegister] Failed to persist fiscal status (requestId={}): {}",
                     requestId, ex.getMessage(), ex);
@@ -224,7 +230,8 @@ public class CashRegisterService {
         fiscalReceiptStatusService.supersede(requestId);
 
         CashRegisterReceiptRequest req = new CashRegisterReceiptRequest(
-                new ArrayList<>(old.getOrderIds()), old.getPaymentMethod(), null, deviceId, itemScope);
+                new ArrayList<>(old.getOrderIds()), old.getPaymentMethod(), null, deviceId, itemScope,
+                old.getTip(), old.getPaymentRef());
         return printReceipt(req);
     }
 
@@ -244,7 +251,7 @@ public class CashRegisterService {
                 .stream()
                 .map(r -> new com.servio.event.dto.FiscalReceiptDto(
                         r.getRequestId(), r.getEventId(), r.getStatus().name(), r.getPaymentMethod(),
-                        r.getFiscalReceiptId(), r.getError(), r.getTotalAmount(), r.getAttemptedAt(),
+                        r.getFiscalReceiptId(), r.getReceiptNumber(), r.getError(), r.getTotalAmount(), r.getTip(), r.getAttemptedAt(),
                         new ArrayList<>(r.getOrderIds()), new ArrayList<>(r.getOrderItemIds())))
                 .toList();
     }
@@ -273,6 +280,11 @@ public class CashRegisterService {
                     e.getKey().unitPrice(),
                     e.getKey().vat()
             ));
+        }
+
+        // Tip as a separate "Tips" line at VAT 0%, only when > 0.
+        if (request.getTip() != null && request.getTip().compareTo(BigDecimal.ZERO) > 0) {
+            lines.add(new ReceiptLine("Tips", 1, request.getTip(), BigDecimal.ZERO));
         }
 
         return new ReceiptPayload(

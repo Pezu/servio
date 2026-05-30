@@ -31,11 +31,19 @@ public record PaymentCompletedEvent(
         String paymentMethod,
         String cashRegisterDeviceId,
         String operator,
-        List<UUID> orderItemIds) {
+        List<UUID> orderItemIds,
+        java.math.BigDecimal tip,
+        UUID paymentRef) {
 
     /** Full-pay path: no item scoping — the receipt covers all non-cancelled items. */
     public PaymentCompletedEvent(List<UUID> orderIds, String paymentMethod,
                                  String cashRegisterDeviceId, String operator) {
-        this(orderIds, paymentMethod, cashRegisterDeviceId, operator, null);
+        this(orderIds, paymentMethod, cashRegisterDeviceId, operator, null, null, null);
+    }
+
+    /** Scoped, no tip / no ref. */
+    public PaymentCompletedEvent(List<UUID> orderIds, String paymentMethod,
+                                 String cashRegisterDeviceId, String operator, List<UUID> orderItemIds) {
+        this(orderIds, paymentMethod, cashRegisterDeviceId, operator, orderItemIds, null, null);
     }
 }

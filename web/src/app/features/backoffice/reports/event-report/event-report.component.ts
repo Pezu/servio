@@ -10,6 +10,7 @@ interface PayLine {
   method: string;
   amount: number;
   paidAt?: string;
+  receipt?: string;
 }
 
 /** One order row inside a user's table. */
@@ -99,6 +100,9 @@ interface UserGroup {
                           @for (p of order.payments; track $index) {
                             <span class="pay-chip" [class.cash]="p.method === 'CASH'" [class.card]="p.method === 'CARD'">
                               {{ methodLabel(p.method) }} {{ money(p.amount) }}
+                              @if (p.receipt) {
+                                <span class="receipt-no" title="Fiscal receipt">· #{{ p.receipt }}</span>
+                              }
                             </span>
                           }
                         </td>
@@ -161,6 +165,7 @@ interface UserGroup {
     .pay-chip { display: inline-block; margin: 1px 4px 1px 0; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #e2e8f0; color: #475569; font-variant-numeric: tabular-nums; }
     .pay-chip.cash { background: rgba(76,175,80,0.15); color: #2E7D32; }
     .pay-chip.card { background: rgba(33,150,243,0.15); color: #1565C0; }
+    .pay-chip .receipt-no { font-weight: 500; opacity: 0.75; margin-left: 2px; }
 
     .user-totals td { background: #f8fafc; border-top: 2px solid var(--border-color); }
     .totals-cells { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -234,7 +239,12 @@ export class EventReportComponent implements OnInit {
       const row: OrderRow = {
         orderNo: o.orderNo,
         date: o.paidAt || o.createdAt,
-        payments: payments.map(p => ({ method: (p.paymentMethod || '—').toUpperCase(), amount: p.amount || 0, paidAt: p.paidAt })),
+        payments: payments.map(p => ({
+          method: (p.paymentMethod || '—').toUpperCase(),
+          amount: p.amount || 0,
+          paidAt: p.paidAt,
+          receipt: p.receiptNumber || p.fiscalReceiptId || undefined
+        })),
         tip,
         total: net + tip,
         totalWithVat: net + vat + tip
@@ -270,9 +280,19 @@ export class EventReportComponent implements OnInit {
    * predate payment-record tracking.
    */
   private resolvePayments(o: Order): OrderPayment[] {
-    if (o.payments && o.payments.length > 0) return o.payments;
+    if (o.payments && o.payments.length > 0) {
+      // A payment with no per-row receipt (e.g. card) falls back to the order-level one.
+      return o.payments.map(p => ({
+        ...p,
+        receiptNumber: p.receiptNumber ?? o.receiptNumber,
+        fiscalReceiptId: p.fiscalReceiptId ?? o.fiscalReceiptId
+      }));
+    }
     if (o.paidBy || o.paymentMethod) {
-      return [{ amount: o.netAmount ?? o.totalAmount ?? 0, paymentMethod: o.paymentMethod, paidBy: o.paidBy, paidAt: o.paidAt }];
+      return [{
+        amount: o.netAmount ?? o.totalAmount ?? 0, paymentMethod: o.paymentMethod, paidBy: o.paidBy, paidAt: o.paidAt,
+        receiptNumber: o.receiptNumber, fiscalReceiptId: o.fiscalReceiptId
+      }];
     }
     return [];
   }
@@ -322,7 +342,7 @@ export class EventReportComponent implements OnInit {
         <th>${t('REPORTS.EVENT.PAYMENTS')}</th><th class="r">${t('REPORTS.EVENT.TIP')}</th>
         <th class="r">${t('REPORTS.EVENT.TOTAL')}</th><th class="r">${t('REPORTS.EVENT.TOTAL_WITH_VAT')}</th></tr></thead><tbody>`;
       for (const o of g.orders) {
-        const pays = o.payments.map(p => `${this.methodLabel(p.method)} ${this.money(p.amount)}`).join(', ');
+        const pays = o.payments.map(p => `${this.methodLabel(p.method)} ${this.money(p.amount)}${p.receipt ? ` (#${p.receipt})` : ''}`).join(', ');
         body += `<tr><td>#${o.orderNo}</td><td>${esc(this.formatDate(o.date))}</td><td>${esc(pays)}</td>
           <td class="r">${o.tip ? this.money(o.tip) : '-'}</td><td class="r">${this.money(o.total)}</td>
           <td class="r">${this.money(o.totalWithVat)}</td></tr>`;

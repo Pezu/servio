@@ -40,8 +40,11 @@ export interface FiscalReceipt {
   status: 'PENDING' | 'ISSUED' | 'FAILED';
   paymentMethod?: string;
   fiscalReceiptId?: string | null;
+  receiptNumber?: string | null;
   error?: string | null;
   totalAmount?: number;
+  /** Tip included in this receipt (printed as a "Tips" line, VAT 0%). */
+  tip?: number | null;
   attemptedAt?: string | null;
   orderIds: string[];
   orderItemIds: string[];

@@ -19,4 +19,7 @@ public class Payment {
     private String paymentMethod;
     private String paidBy;
     private LocalDateTime paidAt;
+    /** Fiscal receipt issued for this payment (filled by the revenue report). */
+    private String fiscalReceiptId;
+    private String receiptNumber;
 }

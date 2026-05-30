@@ -30,6 +30,62 @@ public class OrderDtoEnricher {
     private final OrderPointRepository orderPointRepository;
     private final EventRepository eventRepository;
     private final RegistrationRepository registrationRepository;
+    private final com.servio.event.repository.FiscalReceiptRepository fiscalReceiptRepository;
+
+    /**
+     * Fills fiscal-receipt numbers on a list of already-mapped orders + their
+     * payments, using two batch queries (no N+1):
+     *  - per payment row → its receipt, matched by payment_ref;
+     *  - per order → its latest issued receipt (for card/synthetic payments that
+     *    have no payment row).
+     * {@code dtos} and {@code entities} must be index-aligned (same order).
+     */
+    public void enrichFiscal(List<Order> dtos, List<OrderEntity> entities) {
+        if (dtos.isEmpty()) return;
+
+        Set<UUID> refs = entities.stream()
+                .flatMap(e -> e.getPayments().stream())
+                .map(com.servio.event.entity.OrderPaymentEntity::getPaymentRef)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<UUID> orderIds = entities.stream().map(OrderEntity::getId).collect(Collectors.toSet());
+
+        Map<UUID, com.servio.event.entity.FiscalReceiptEntity> byRef = refs.isEmpty() ? Map.of()
+                : fiscalReceiptRepository.findIssuedByPaymentRefs(refs).stream()
+                    .collect(Collectors.toMap(com.servio.event.entity.FiscalReceiptEntity::getPaymentRef, r -> r, (a, b) -> a));
+
+        Map<UUID, com.servio.event.entity.FiscalReceiptEntity> byOrder = new java.util.HashMap<>();
+        if (!orderIds.isEmpty()) {
+            for (var r : fiscalReceiptRepository.findIssuedByOrderIds(orderIds)) {
+                for (UUID oid : r.getOrderIds()) {
+                    byOrder.merge(oid, r, (a, b) ->
+                            a.getAttemptedAt() != null && b.getAttemptedAt() != null && a.getAttemptedAt().isAfter(b.getAttemptedAt()) ? a : b);
+                }
+            }
+        }
+
+        for (int i = 0; i < dtos.size(); i++) {
+            Order dto = dtos.get(i);
+            OrderEntity entity = entities.get(i);
+            var orderR = byOrder.get(entity.getId());
+            if (orderR != null) {
+                dto.setFiscalReceiptId(orderR.getFiscalReceiptId());
+                dto.setReceiptNumber(orderR.getReceiptNumber());
+            }
+            var pdtos = dto.getPayments();
+            var pents = entity.getPayments();
+            if (pdtos != null && pents != null) {
+                for (int j = 0; j < pdtos.size() && j < pents.size(); j++) {
+                    UUID ref = pents.get(j).getPaymentRef();
+                    var r = ref != null ? byRef.get(ref) : null;
+                    if (r != null) {
+                        pdtos.get(j).setFiscalReceiptId(r.getFiscalReceiptId());
+                        pdtos.get(j).setReceiptNumber(r.getReceiptNumber());
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Enriches a single Order DTO with order point name, event name, nickname, and total amount.

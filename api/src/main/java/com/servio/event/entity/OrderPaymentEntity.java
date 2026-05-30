@@ -46,4 +46,8 @@ public class OrderPaymentEntity {
 
     @Column(name = "paid_at", nullable = false)
     private LocalDateTime paidAt;
+
+    /** Per-transaction id linking this payment to its fiscal receipt (fiscal_receipts.payment_ref). */
+    @Column(name = "payment_ref")
+    private UUID paymentRef;
 }

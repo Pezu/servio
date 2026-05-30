@@ -27,8 +27,24 @@ public class CashRegisterReceiptRequest {
      *  orders is printed (full-pay flow). */
     private List<UUID> orderItemIds;
 
+    /** Tip settled in this transaction; printed as a "Tips" line (VAT 0%) when > 0. */
+    private java.math.BigDecimal tip;
+
+    /** Stable per-transaction id linking the receipt back to its payment row(s). */
+    private UUID paymentRef;
+
     public CashRegisterReceiptRequest(List<UUID> orderIds, String paymentMethod,
                                       String operator, String cashRegisterDeviceId) {
-        this(orderIds, paymentMethod, operator, cashRegisterDeviceId, null);
+        this(orderIds, paymentMethod, operator, cashRegisterDeviceId, null, null, null);
+    }
+
+    public CashRegisterReceiptRequest(List<UUID> orderIds, String paymentMethod, String operator,
+                                      String cashRegisterDeviceId, List<UUID> orderItemIds) {
+        this(orderIds, paymentMethod, operator, cashRegisterDeviceId, orderItemIds, null, null);
+    }
+
+    public CashRegisterReceiptRequest(List<UUID> orderIds, String paymentMethod, String operator,
+                                      String cashRegisterDeviceId, List<UUID> orderItemIds, java.math.BigDecimal tip) {
+        this(orderIds, paymentMethod, operator, cashRegisterDeviceId, orderItemIds, tip, null);
     }
 }

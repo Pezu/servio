@@ -74,7 +74,9 @@ public class OrderController {
         } else {
             orders = orderService.getAllOrders(pageable);
         }
-        return ResponseEntity.ok(orders.map(entity -> orderDtoEnricher.enrich(orderMapper.toDto(entity), entity)));
+        Page<Order> dtoPage = orders.map(entity -> orderDtoEnricher.enrich(orderMapper.toDto(entity), entity));
+        orderDtoEnricher.enrichFiscal(dtoPage.getContent(), orders.getContent());
+        return ResponseEntity.ok(dtoPage);
     }
 
     @GetMapping("/{orderId}")

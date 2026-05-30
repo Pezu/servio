@@ -16,8 +16,10 @@ public record FiscalReceiptDto(
         String status,
         String paymentMethod,
         String fiscalReceiptId,
+        String receiptNumber,
         String error,
         BigDecimal totalAmount,
+        BigDecimal tip,
         LocalDateTime attemptedAt,
         List<UUID> orderIds,
         List<UUID> orderItemIds) {

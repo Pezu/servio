@@ -40,4 +40,8 @@ public class Order {
     private BigDecimal totalAmount;
     private BigDecimal netAmount;
     private BigDecimal vatAmount;
+    /** Order-level fiscal receipt (latest ISSUED covering the order) — for card/
+     *  synthetic payments that have no per-installment payment row. */
+    private String fiscalReceiptId;
+    private String receiptNumber;
 }

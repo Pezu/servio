@@ -18,6 +18,8 @@ export interface OrderPayment {
   paymentMethod?: string;
   paidBy?: string;
   paidAt?: string;
+  fiscalReceiptId?: string | null;
+  receiptNumber?: string | null;
 }
 
 export interface Order {
@@ -41,6 +43,9 @@ export interface Order {
   paymentCount?: number;
   /** Per-payment breakdown (amount + method) — drives the revenue report detail. */
   payments?: OrderPayment[];
+  /** Order-level fiscal receipt (fallback for card/synthetic payments). */
+  fiscalReceiptId?: string | null;
+  receiptNumber?: string | null;
   items: OrderItem[];
   totalAmount: number;
   netAmount?: number;
