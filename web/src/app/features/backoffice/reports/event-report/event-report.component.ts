@@ -30,7 +30,8 @@ interface UserGroup {
   orders: OrderRow[];
   totalCash: number;
   totalCard: number;
-  totalTips: number;
+  totalTipsCash: number;
+  totalTipsCard: number;
 }
 
 @Component({
@@ -146,7 +147,8 @@ interface UserGroup {
                       <td class="totals-cells">
                         <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_CASH' | translate }}:</b> {{ money(group.totalCash) }}</span>
                         <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_CARD' | translate }}:</b> {{ money(group.totalCard) }}</span>
-                        <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS' | translate }}:</b> {{ money(group.totalTips) }}</span>
+                        <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS_CARD' | translate }}:</b> {{ money(group.totalTipsCard) }}</span>
+                        <span class="tot"><b>{{ 'REPORTS.EVENT.TOTAL_TIPS_CASH' | translate }}:</b> {{ money(group.totalTipsCash) }}</span>
                       </td>
                       <td colspan="4"></td>
                     </tr>
@@ -168,9 +170,10 @@ interface UserGroup {
     </div>
   `,
   styles: [`
-    :host { display: block; }
+    :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
     .card { background: var(--white); box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-radius: 0; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); gap: 16px; flex-wrap: wrap; }
+    .card.stretch { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-color); gap: 16px; flex-wrap: wrap; flex-shrink: 0; }
     .header-controls { display: flex; align-items: center; gap: 10px; }
     .filter-label { font-size: 13px; font-weight: 500; color: var(--text-muted); }
     /* Custom select popup (matches clients/locations/revenue) */
@@ -192,7 +195,7 @@ interface UserGroup {
     .export-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--primary); background: var(--primary); color: white; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 0; }
     .export-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .export-btn svg { width: 16px; height: 16px; }
-    .card-body { padding: 16px 20px; }
+    .card-body { padding: 16px 20px; flex: 1; min-height: 0; overflow-y: auto; }
 
     .state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
@@ -336,29 +339,30 @@ export class EventReportComponent implements OnInit {
     let gc = 0, gd = 0, gtCash = 0, gtCard = 0;
     this.userGroups = Array.from(byUser.entries()).map(([user, rows]) => {
       rows.sort((a, b) => a.orderNo - b.orderNo);
-      let totalCash = 0, totalCard = 0, totalTips = 0;
+      let totalCash = 0, totalCard = 0, totalTipsCash = 0, totalTipsCard = 0;
       for (const ord of rows) {
         let cashAmt = 0, cardAmt = 0;
         for (const p of ord.payments) {
           if (p.method === 'CASH') { totalCash += p.amount; cashAmt += p.amount; }
           else if (p.method === 'CARD') { totalCard += p.amount; cardAmt += p.amount; }
         }
-        totalTips += ord.tip;
         // Attribute the order's tip to card/cash by its card/cash payment split;
         // card gets its proportional share, cash absorbs the rounding remainder.
         if (ord.tip > 0) {
           const base = cashAmt + cardAmt;
           if (base > 0) {
             const tipCard = Math.round((ord.tip * cardAmt / base) * 100) / 100;
-            gtCard += tipCard;
-            gtCash += Math.round((ord.tip - tipCard) * 100) / 100;
+            totalTipsCard += tipCard;
+            totalTipsCash += Math.round((ord.tip - tipCard) * 100) / 100;
           } else {
-            gtCash += ord.tip; // no card/cash payment to attribute to → treat as cash
+            totalTipsCash += ord.tip; // no card/cash payment to attribute to → treat as cash
           }
         }
       }
-      gc += totalCash; gd += totalCard;
-      return { user, orders: rows, totalCash, totalCard, totalTips };
+      totalTipsCash = Math.round(totalTipsCash * 100) / 100;
+      totalTipsCard = Math.round(totalTipsCard * 100) / 100;
+      gc += totalCash; gd += totalCard; gtCash += totalTipsCash; gtCard += totalTipsCard;
+      return { user, orders: rows, totalCash, totalCard, totalTipsCash, totalTipsCard };
     }).sort((a, b) => a.user.localeCompare(b.user));
 
     this.grandCash = gc;
@@ -446,7 +450,8 @@ export class EventReportComponent implements OnInit {
       body += `</tbody></table>`;
       body += `<p class="tot"><b>${t('REPORTS.EVENT.TOTAL_CASH')}:</b> ${this.money(g.totalCash)} &nbsp;
         <b>${t('REPORTS.EVENT.TOTAL_CARD')}:</b> ${this.money(g.totalCard)} &nbsp;
-        <b>${t('REPORTS.EVENT.TOTAL_TIPS')}:</b> ${this.money(g.totalTips)}</p>`;
+        <b>${t('REPORTS.EVENT.TOTAL_TIPS_CARD')}:</b> ${this.money(g.totalTipsCard)} &nbsp;
+        <b>${t('REPORTS.EVENT.TOTAL_TIPS_CASH')}:</b> ${this.money(g.totalTipsCash)}</p>`;
     }
     body += `<div class="grand"><b>${t('REPORTS.EVENT.GRAND_TOTAL')}</b> &nbsp;
       <b>${t('REPORTS.EVENT.TOTAL_CASH')}:</b> ${this.money(this.grandCash)} &nbsp;
