@@ -349,6 +349,7 @@ import { Subscription, filter } from 'rxjs';
               </a>
               <ul class="nxl-submenu">
                 <li class="nxl-item"><a routerLink="/backoffice/reports/revenue" routerLinkActive="active" class="nxl-link">{{ 'NAV.REVENUE' | translate }}</a></li>
+                <li class="nxl-item"><a routerLink="/backoffice/reports/event" routerLinkActive="active" class="nxl-link">{{ 'NAV.EVENT' | translate }}</a></li>
               </ul>
             </li>
           }

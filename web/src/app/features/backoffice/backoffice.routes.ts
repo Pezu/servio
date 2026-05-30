@@ -57,6 +57,11 @@ export const BACKOFFICE_ROUTES: Routes = [
               .then(m => m.RevenueComponent)
           },
           {
+            path: 'event',
+            loadComponent: () => import('./reports/event-report/event-report.component')
+              .then(m => m.EventReportComponent)
+          },
+          {
             path: '',
             redirectTo: 'revenue',
             pathMatch: 'full'

@@ -15,7 +15,8 @@
     "EVENTS": "Evenimente",
     "REPORTS": "Rapoarte",
     "REVENUE": "Încasări",
-    "LOGOUT": "Deconectare"
+    "LOGOUT": "Deconectare",
+    "EVENT": "Eveniment"
   },
   "COMMON": {
     "SEARCH": "Caută...",
@@ -287,6 +288,22 @@
       "NO_RECORDS": "Nu s-au găsit înregistrări de plată",
       "PAYMENTS": "Plăți",
       "MULTIPLE_PAYMENTS_ONLY": "Doar plăți multiple"
+    },
+    "EVENT": {
+      "TITLE": "Eveniment",
+      "SELECT_EVENT": "Eveniment",
+      "NO_EVENT": "Selectează un eveniment pentru a vedea raportul.",
+      "NO_DATA": "Nicio plată înregistrată pentru acest eveniment.",
+      "DATE": "Data",
+      "PAYMENTS": "Plăți",
+      "TIP": "Bacșiș",
+      "TOTAL": "Total",
+      "TOTAL_CASH": "Total numerar",
+      "TOTAL_CARD": "Total card",
+      "TOTAL_TIPS": "Total bacșiș",
+      "GRAND_TOTAL": "Total general",
+      "EXPORT_PDF": "Export PDF",
+      "TOTAL_WITH_VAT": "Total cu TVA"
     }
   }
 }

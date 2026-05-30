@@ -15,7 +15,8 @@
     "EVENTS": "Events",
     "REPORTS": "Reports",
     "REVENUE": "Revenue",
-    "LOGOUT": "Logout"
+    "LOGOUT": "Logout",
+    "EVENT": "Event"
   },
   "COMMON": {
     "SEARCH": "Search...",
@@ -287,6 +288,22 @@
       "NO_RECORDS": "No payment records found",
       "PAYMENTS": "Payments",
       "MULTIPLE_PAYMENTS_ONLY": "Multiple payments only"
+    },
+    "EVENT": {
+      "TITLE": "Event",
+      "SELECT_EVENT": "Event",
+      "NO_EVENT": "Select an event to view the report.",
+      "NO_DATA": "No payments recorded for this event.",
+      "DATE": "Date",
+      "PAYMENTS": "Payments",
+      "TIP": "Tip",
+      "TOTAL": "Total",
+      "TOTAL_CASH": "Total cash",
+      "TOTAL_CARD": "Total card",
+      "TOTAL_TIPS": "Total tips",
+      "GRAND_TOTAL": "Grand total",
+      "EXPORT_PDF": "Export PDF",
+      "TOTAL_WITH_VAT": "Total with VAT"
     }
   }
 }
