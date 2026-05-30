@@ -40,8 +40,15 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
     @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.eventId = :eventId AND o.status NOT IN :excludedStatuses ORDER BY o.orderNo ASC")
     List<OrderEntity> findByEventIdAndStatusNotIn(UUID eventId, List<OrderStatus> excludedStatuses);
 
+    @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.eventId = :eventId AND o.status = :status ORDER BY o.orderNo DESC")
+    List<OrderEntity> findByEventIdAndStatus(@Param("eventId") UUID eventId, @Param("status") OrderStatus status);
+
     @Query("SELECT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.id = :id")
     Optional<OrderEntity> findByIdWithItems(UUID id);
+
+    /** Orders whose last dispatched fiscal receipt carries this requestId —
+     *  used to correlate the async agent reply back to the order(s). */
+    List<OrderEntity> findByFiscalRequestId(String fiscalRequestId);
 
     @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.registrationId = :registrationId ORDER BY o.orderNo DESC")
     List<OrderEntity> findByRegistrationIdOrderByOrderNoDesc(UUID registrationId);

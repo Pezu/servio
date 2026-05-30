@@ -23,6 +23,10 @@ public class LoginService {
     @Value("${jwt.secret:default-secret-key-that-should-be-changed-in-production}")
     private String jwtSecret;
 
+    /** Token time-to-live in milliseconds. Defaults to 24h. */
+    @Value("${jwt.expiration-ms:86400000}")
+    private long jwtExpirationMs;
+
     public String login(String username, String password) {
         UserEntity user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Invalid username or password"));
@@ -37,7 +41,7 @@ public class LoginService {
     private String generateToken(UserEntity user) {
         SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
         Date now = new Date();
-        Date expiration = new Date(now.getTime() + 3600000); // 1 hour
+        Date expiration = new Date(now.getTime() + jwtExpirationMs);
 
         var builder = Jwts.builder()
                 .subject(user.getUsername())

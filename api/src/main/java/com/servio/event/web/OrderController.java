@@ -6,6 +6,7 @@ import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.MarkPaidRequest;
 import com.servio.event.dto.PartialMarkPaidRequest;
 import com.servio.event.dto.ProtocolPaymentSummary;
+import com.servio.event.dto.RetryReceiptRequest;
 import com.servio.event.service.ProtocolPaymentService;
 import com.servio.event.dto.Order;
 import com.servio.event.dto.OrderItem;
@@ -102,6 +103,15 @@ public class OrderController {
             String username = (String) request.getAttribute("username");
             orders = orderService.getOrdersByEventIdForUser(eventId, username);
         }
+        List<Order> dtos = orderMapper.toDtoList(orders);
+        return ResponseEntity.ok(orderDtoEnricher.enrichBatch(dtos, orders));
+    }
+
+    @GetMapping("/events/{eventId}/closed")
+    public ResponseEntity<List<Order>> getClosedOrdersByEvent(@PathVariable UUID eventId) {
+        // Delivered/completed orders — feeds the mobile Orders → Closed tab.
+        // Mobile filters to the caller's order points client-side.
+        List<OrderEntity> orders = orderService.getClosedOrdersByEventId(eventId);
         List<Order> dtos = orderMapper.toDtoList(orders);
         return ResponseEntity.ok(orderDtoEnricher.enrichBatch(dtos, orders));
     }
@@ -214,6 +224,19 @@ public class OrderController {
     public ResponseEntity<CashRegisterReceiptResponse> printCashRegisterReceipt(
             @RequestBody CashRegisterReceiptRequest request) {
         return ResponseEntity.ok(cashRegisterService.printReceipt(request));
+    }
+
+    /**
+     * Re-print the fiscal receipt for orders whose previous attempt FAILED
+     * (printer unreachable, out of paper, ...). Does NOT re-charge — the orders
+     * stay paid; only the fiscal status moves back to PENDING and then to
+     * ISSUED/FAILED once the device replies.
+     */
+    @PostMapping("/cash-register/retry")
+    public ResponseEntity<CashRegisterReceiptResponse> retryCashRegisterReceipt(
+            @RequestBody RetryReceiptRequest request) {
+        return ResponseEntity.ok(
+                cashRegisterService.retryReceipt(request.getOrderIds(), request.getCashRegisterDeviceId()));
     }
 
     /**

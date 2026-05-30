@@ -54,6 +54,8 @@ application:
 # JWT configuration - use profiles (local/prod) or set JWT_SECRET env var
 jwt:
   secret: ${JWT_SECRET:}
+  # Token time-to-live in milliseconds (default 24h). Override via JWT_EXPIRATION_MS.
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
 # CORS configuration
 cors:

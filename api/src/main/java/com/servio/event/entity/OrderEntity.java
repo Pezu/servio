@@ -86,6 +86,31 @@ public class OrderEntity {
     @Column(name = "payment_count", nullable = false)
     private int paymentCount = 0;
 
+    /**
+     * Fiscal-receipt lifecycle, independent of payment. NULL = no receipt was
+     * attempted (PROTOCOL payments, or no ECR device). See {@link FiscalReceiptStatus}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fiscal_receipt_status", length = 20)
+    private FiscalReceiptStatus fiscalReceiptStatus;
+
+    /** Fiscal-memory id of the issued receipt (set when status = ISSUED). */
+    @Column(name = "fiscal_receipt_id", length = 64)
+    private String fiscalReceiptId;
+
+    /** requestId of the last receipt dispatched to the bridge — correlates the
+     *  async agent reply back to this order. */
+    @Column(name = "fiscal_request_id", length = 64)
+    private String fiscalRequestId;
+
+    /** Human-readable reason of the last fiscal failure (set when status = FAILED). */
+    @Column(name = "fiscal_error", length = 500)
+    private String fiscalError;
+
+    /** When the last fiscal receipt was dispatched/attempted. */
+    @Column(name = "fiscal_attempted_at")
+    private LocalDateTime fiscalAttemptedAt;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItemEntity> items = new ArrayList<>();
 

@@ -37,6 +37,7 @@ public class CashRegisterService {
     private final OrderRepository orderRepository;
     private final CashRegisterRepository cashRegisterRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final FiscalReceiptStatusService fiscalReceiptStatusService;
 
     @org.springframework.beans.factory.annotation.Value("${bridge.principal:bridge}")
     private String bridgePrincipal;
@@ -106,8 +107,16 @@ public class CashRegisterService {
 
         if (deviceOpt.isEmpty()) {
             log.warn("[CashRegister] No ECR agent registered for event {}; returning mock response.", eventId);
-            return mockResponse(request, totalAmount);
+            CashRegisterReceiptResponse mock = mockResponse(request, totalAmount);
+            // Keep the fiscal lifecycle consistent in dev: no device = treat as issued.
+            fiscalReceiptStatusService.markIssued(request.getOrderIds(), requestId, mock.getFiscalReceiptId());
+            return mock;
         }
+
+        // Mark the orders as awaiting a fiscal receipt BEFORE dispatch, stamping
+        // the requestId so the async agent reply can be correlated back. The
+        // order stays paid; only the fiscal status moves PENDING -> ISSUED/FAILED.
+        fiscalReceiptStatusService.markPending(request.getOrderIds(), requestId);
 
         // Fire-and-forget. Every print job goes to the single bridge principal —
         // the bridge picks the physical printer from the IP in the payload.
@@ -137,9 +146,56 @@ public class CashRegisterService {
             log.warn("[CashRegister] Agent reply missing eventId (requestId={}); dropping.", requestId);
             return;
         }
+
+        // Persist the fiscal outcome on the matching order(s): ISSUED on success,
+        // FAILED (with the decoded device error) otherwise. This is what makes a
+        // paid-but-not-fiscalized order visible and retryable instead of leaving
+        // the result as a transient broadcast nobody may be listening to.
+        boolean ok = response != null && "OK".equalsIgnoreCase(response.getStatus());
+        String fiscalReceiptId = response != null ? response.getFiscalReceiptId() : null;
+        String errorMessage = response != null ? response.getErrorMessage() : null;
+        try {
+            fiscalReceiptStatusService.applyAgentResult(requestId, ok, fiscalReceiptId, errorMessage);
+        } catch (Exception ex) {
+            log.error("[CashRegister] Failed to persist fiscal status (requestId={}): {}",
+                    requestId, ex.getMessage(), ex);
+        }
+
         log.info("[CashRegister] Broadcasting agent reply (requestId={}, eventId={}): {}",
                 requestId, eventId, response);
         messagingTemplate.convertAndSend("/topic/event/" + eventId + "/cash-register-reply", response);
+    }
+
+    /**
+     * Re-print the fiscal receipt for orders whose previous attempt FAILED.
+     *
+     * <p>This does <b>not</b> re-charge anything — the orders stay paid. It
+     * rebuilds the receipt from the orders' current (paid, non-cancelled) items,
+     * reusing the original payment method/operator, and dispatches a fresh
+     * receipt with a new requestId (status goes back to PENDING).
+     *
+     * @param orderIds  orders to re-fiscalize (must be non-empty)
+     * @param deviceId  ECR device to print on; null falls back to the event's first device
+     */
+    public CashRegisterReceiptResponse retryReceipt(List<UUID> orderIds, String deviceId) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return CashRegisterReceiptResponse.builder()
+                    .status("ERROR")
+                    .errorCode("NO_ORDERS")
+                    .errorMessage("No orderIds supplied for retry")
+                    .issuedAt(LocalDateTime.now())
+                    .build();
+        }
+        OrderEntity first = orderRepository.findByIdWithItems(orderIds.get(0))
+                .orElseThrow(() -> new ResourceNotFoundException("Order", orderIds.get(0)));
+        // Reuse how it was originally paid so the reprinted receipt matches.
+        String paymentMethod = first.getPaymentMethod();
+        String operator = first.getPaidBy();
+        log.info("[CashRegister] Retry fiscal receipt for {} order(s) (method={}, deviceId={})",
+                orderIds.size(), paymentMethod, deviceId);
+        CashRegisterReceiptRequest req =
+                new CashRegisterReceiptRequest(orderIds, paymentMethod, operator, deviceId);
+        return printReceipt(req);
     }
 
     private CashRegisterReceiptResponse mockResponse(CashRegisterReceiptRequest request, BigDecimal totalAmount) {

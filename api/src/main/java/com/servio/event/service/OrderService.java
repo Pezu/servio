@@ -153,6 +153,11 @@ public class OrderService {
         return orderRepository.findByEventIdAndStatusNotIn(eventId, List.of(OrderStatus.DRAFT, OrderStatus.DELIVERED, OrderStatus.CANCELLED));
     }
 
+    /** Closed orders for the event — i.e. delivered/completed (terminal) ones. */
+    public List<OrderEntity> getClosedOrdersByEventId(UUID eventId) {
+        return orderRepository.findByEventIdAndStatus(eventId, OrderStatus.DELIVERED);
+    }
+
     /**
      * Kanban scope: orders for the event where {@code serviceOrderPointId}
      * matches an OP the username is assigned to via Edit Event → Order Points.
