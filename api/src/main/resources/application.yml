@@ -90,5 +90,7 @@ firebase:
 # The bridge connects with X-Bridge-Key and the API publishes every print job to
 # /user/{bridge-principal}/queue/ecr/print — the bridge picks the printer by IP.
 bridge:
-  api-key: ${BRIDGE_API_KEY:dev-bridge-key-change-me}
+  # Default is the shared dev/bridge key (matches the cash app's default) so the
+  # local bridge connects with no extra env. Prod overrides via BRIDGE_API_KEY.
+  api-key: ${BRIDGE_API_KEY:GOj3gcAgBiOnJQ2lAEzNeaLJqDg03ZdeD7LyiTt5J3uCl1xi}
   principal: bridge

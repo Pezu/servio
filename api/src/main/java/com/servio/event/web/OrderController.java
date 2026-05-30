@@ -216,9 +216,10 @@ public class OrderController {
     }
 
     /**
-     * Forwards the selected orders to the (mock) fiscal cash register and returns
-     * the device's response — receipt number, fiscal id, status. Real integration
-     * will replace the mock inside CashRegisterService.printReceipt.
+     * Dispatches the selected orders to the fiscal cash register via the bridge
+     * and returns the initial outcome: PENDING when dispatched, or ERROR when it
+     * can't be sent (bridge offline, no device configured). The device's final
+     * result arrives async and updates the order's fiscal status.
      */
     @PostMapping("/cash-register/receipt")
     public ResponseEntity<CashRegisterReceiptResponse> printCashRegisterReceipt(
@@ -236,7 +237,17 @@ public class OrderController {
     public ResponseEntity<CashRegisterReceiptResponse> retryCashRegisterReceipt(
             @RequestBody RetryReceiptRequest request) {
         return ResponseEntity.ok(
-                cashRegisterService.retryReceipt(request.getOrderIds(), request.getCashRegisterDeviceId()));
+                cashRegisterService.retryReceipt(request.getRequestId(), request.getCashRegisterDeviceId()));
+    }
+
+    /**
+     * Active (non-superseded) FAILED fiscal receipts for the event — the mobile
+     * app lists these and offers a per-receipt retry.
+     */
+    @GetMapping("/events/{eventId}/fiscal-receipts/failed")
+    public ResponseEntity<List<com.servio.event.dto.FiscalReceiptDto>> listFailedFiscalReceipts(
+            @PathVariable UUID eventId) {
+        return ResponseEntity.ok(cashRegisterService.listFailedReceipts(eventId));
     }
 
     /**

@@ -145,10 +145,12 @@ public class PaymentService {
         var orderOpt = orderRepository.findByIdWithItems(orderId);
         if (orderOpt.isPresent()) {
             OrderEntity order = orderOpt.get();
-            int itemsMarked = markOrderAsPaid(order);
+            List<UUID> settledItemIds = new ArrayList<>();
+            int itemsMarked = markOrderAsPaid(order, settledItemIds);
             if (itemsMarked > 0) {
                 orderNotificationService.notifyPaymentComplete(order.getEventId(), order.getOrderPointId(), itemsMarked);
-                eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD, null, null));
+                eventPublisher.publishEvent(new PaymentCompletedEvent(List.of(order.getId()), PAYMENT_METHOD_CARD, null, null,
+                        settledItemIds.isEmpty() ? null : settledItemIds));
             }
             return itemsMarked;
         }
@@ -166,8 +168,9 @@ public class PaymentService {
         UUID orderPointId = null;
         UUID eventId = null;
         List<UUID> paidOrderIds = new ArrayList<>();
+        List<UUID> settledItemIds = new ArrayList<>();
         for (OrderEntity order : orders) {
-            int itemsMarked = markOrderAsPaid(order);
+            int itemsMarked = markOrderAsPaid(order, settledItemIds);
             totalItemsMarked += itemsMarked;
             if (itemsMarked > 0) {
                 paidOrderIds.add(order.getId());
@@ -184,7 +187,8 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0 && orderPointId != null) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
-            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null));
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null,
+                    settledItemIds.isEmpty() ? null : settledItemIds));
         }
         return totalItemsMarked;
     }
@@ -198,8 +202,9 @@ public class PaymentService {
         int totalItemsMarked = 0;
         UUID eventId = null;
         List<UUID> paidOrderIds = new ArrayList<>();
+        List<UUID> settledItemIds = new ArrayList<>();
         for (OrderEntity order : orders) {
-            int itemsMarked = markOrderAsPaid(order);
+            int itemsMarked = markOrderAsPaid(order, settledItemIds);
             totalItemsMarked += itemsMarked;
             if (itemsMarked > 0) {
                 paidOrderIds.add(order.getId());
@@ -212,7 +217,8 @@ public class PaymentService {
         // Send payment notification
         if (totalItemsMarked > 0) {
             orderNotificationService.notifyPaymentComplete(eventId, orderPointId, totalItemsMarked);
-            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null));
+            eventPublisher.publishEvent(new PaymentCompletedEvent(paidOrderIds, PAYMENT_METHOD_CARD, null, null,
+                    settledItemIds.isEmpty() ? null : settledItemIds));
         }
         return totalItemsMarked;
     }
@@ -223,6 +229,16 @@ public class PaymentService {
      * Returns the number of items marked as paid.
      */
     private int markOrderAsPaid(OrderEntity order) {
+        return markOrderAsPaid(order, null);
+    }
+
+    /**
+     * @param settledItemIdsOut when non-null, ids of the items this call marked
+     *        paid are appended — so the fiscal receipt can be scoped to exactly
+     *        what was settled now, not the whole order (which would re-print
+     *        items already fiscalized by an earlier installment).
+     */
+    private int markOrderAsPaid(OrderEntity order, List<UUID> settledItemIdsOut) {
         int itemsMarkedPaid = 0;
         boolean wasDraft = order.getStatus() == OrderStatus.DRAFT;
         log.info("Processing order {} with {} items, status={}", order.getId(), order.getItems().size(), order.getStatus());
@@ -236,6 +252,7 @@ public class PaymentService {
             if (!item.isPaid()) {
                 item.setPaid(true);
                 itemsMarkedPaid++;
+                if (settledItemIdsOut != null) settledItemIdsOut.add(item.getId());
                 log.info("  -> Marked as paid");
             }
         }

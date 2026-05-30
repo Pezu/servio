@@ -9,12 +9,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Mirrors what an ECR (electronic cash register / fiscal printer) would echo
- * back after printing a receipt: a sequential receipt number, the device's
- * fiscal-memory id, its serial, a status, and an issuedAt timestamp.
- *
- * Currently mocked — the real ECR integration will populate this from the
- * device response and return any error code/message in `errorMessage`.
+ * Mirrors what an ECR (electronic cash register / fiscal printer) echoes back
+ * after printing a receipt: a receipt number, the device's fiscal-memory id,
+ * its serial, a status, and an issuedAt timestamp. Populated from the bridge
+ * agent's reply; errors carry an errorCode/errorMessage.
  */
 @Data
 @NoArgsConstructor

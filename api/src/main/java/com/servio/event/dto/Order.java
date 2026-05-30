@@ -1,6 +1,5 @@
 package com.servio.event.dto;
 
-import com.servio.event.entity.FiscalReceiptStatus;
 import com.servio.event.entity.OrderStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -41,11 +40,4 @@ public class Order {
     private BigDecimal totalAmount;
     private BigDecimal netAmount;
     private BigDecimal vatAmount;
-    /** Fiscal-receipt lifecycle (independent of payment): PENDING | ISSUED | FAILED.
-     *  null = no receipt attempted (PROTOCOL, or no ECR device). */
-    private FiscalReceiptStatus fiscalReceiptStatus;
-    private String fiscalReceiptId;
-    /** Human-readable reason when fiscalReceiptStatus == FAILED. */
-    private String fiscalError;
-    private LocalDateTime fiscalAttemptedAt;
 }

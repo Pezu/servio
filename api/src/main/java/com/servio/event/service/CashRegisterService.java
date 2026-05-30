@@ -8,6 +8,7 @@ import com.servio.event.dto.CashRegisterReceiptResponse;
 import com.servio.event.dto.ReceiptLine;
 import com.servio.event.dto.ReceiptPayload;
 import com.servio.event.entity.CashRegisterEntity;
+import com.servio.event.entity.FiscalReceiptEntity;
 import com.servio.event.entity.OrderEntity;
 import com.servio.event.entity.OrderItemEntity;
 import com.servio.event.entity.OrderItemStatus;
@@ -26,8 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
@@ -38,6 +37,8 @@ public class CashRegisterService {
     private final CashRegisterRepository cashRegisterRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final FiscalReceiptStatusService fiscalReceiptStatusService;
+    private final com.servio.event.repository.FiscalReceiptRepository fiscalReceiptRepository;
+    private final org.springframework.messaging.simp.user.SimpUserRegistry simpUserRegistry;
 
     @org.springframework.beans.factory.annotation.Value("${bridge.principal:bridge}")
     private String bridgePrincipal;
@@ -54,11 +55,6 @@ public class CashRegisterService {
             return String.valueOf(o);
         }
     }
-
-    // In-memory monotonic counter used to fake a sequential receipt number when
-    // no agent is connected yet (dev fallback). Resets on app restart — fine for now.
-    private static final AtomicLong RECEIPT_SEQ = new AtomicLong(System.currentTimeMillis() % 100000);
-    private static final String MOCK_DEVICE_SERIAL = "ECR-MOCK-0001";
 
     public CashRegisterReceiptResponse printReceipt(CashRegisterReceiptRequest request) {
         if (request.getOrderIds() == null || request.getOrderIds().isEmpty()) {
@@ -106,17 +102,49 @@ public class CashRegisterService {
         BigDecimal totalAmount = computeTotalAmount(orders, itemScope);
 
         if (deviceOpt.isEmpty()) {
-            log.warn("[CashRegister] No ECR agent registered for event {}; returning mock response.", eventId);
-            CashRegisterReceiptResponse mock = mockResponse(request, totalAmount);
-            // Keep the fiscal lifecycle consistent in dev: no device = treat as issued.
-            fiscalReceiptStatusService.markIssued(request.getOrderIds(), requestId, mock.getFiscalReceiptId());
-            return mock;
+            log.warn("[CashRegister] No ECR device configured for event {}; marking receipt FAILED (requestId={})",
+                    eventId, requestId);
+            String msg = "Nicio casa de marcat nu este configurata pentru acest eveniment.";
+            fiscalReceiptStatusService.createFailed(requestId, eventId, request.getOrderIds(),
+                    request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
+                    totalAmount, msg);
+            return CashRegisterReceiptResponse.builder()
+                    .status("ERROR")
+                    .errorCode("NO_ECR_DEVICE")
+                    .errorMessage(msg)
+                    .issuedAt(LocalDateTime.now())
+                    .totalAmount(totalAmount)
+                    .paymentMethod(request.getPaymentMethod())
+                    .build();
         }
 
-        // Mark the orders as awaiting a fiscal receipt BEFORE dispatch, stamping
-        // the requestId so the async agent reply can be correlated back. The
-        // order stays paid; only the fiscal status moves PENDING -> ISSUED/FAILED.
-        fiscalReceiptStatusService.markPending(request.getOrderIds(), requestId);
+        // The bridge agent must have a live STOMP session, otherwise the dispatch
+        // below is silently dropped and no reply ever comes — leaving the order
+        // stuck PENDING. Detect it up front and fail fast so the retry button shows.
+        if (simpUserRegistry.getUser(bridgePrincipal) == null) {
+            log.warn("[CashRegister] Bridge agent '{}' is offline; marking receipt FAILED (requestId={})",
+                    bridgePrincipal, requestId);
+            String msg = "Agentul casei de marcat (bridge) nu este conectat. Bonul nu a fost trimis.";
+            fiscalReceiptStatusService.createFailed(requestId, eventId, request.getOrderIds(),
+                    request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
+                    totalAmount, msg);
+            return CashRegisterReceiptResponse.builder()
+                    .status("ERROR")
+                    .errorCode("BRIDGE_OFFLINE")
+                    .errorMessage(msg)
+                    .issuedAt(LocalDateTime.now())
+                    .totalAmount(totalAmount)
+                    .paymentMethod(request.getPaymentMethod())
+                    .build();
+        }
+
+        // Record the receipt as awaiting the device reply BEFORE dispatch, keyed
+        // by requestId (with its order + item scope) so the async reply correlates
+        // back to exactly this receipt. The order stays paid; this only tracks the
+        // fiscal lifecycle PENDING -> ISSUED/FAILED per dispatch.
+        fiscalReceiptStatusService.createPending(requestId, eventId, request.getOrderIds(),
+                request.getOrderItemIds(), request.getPaymentMethod(), request.getCashRegisterDeviceId(),
+                totalAmount);
 
         // Fire-and-forget. Every print job goes to the single bridge principal —
         // the bridge picks the physical printer from the IP in the payload.
@@ -167,52 +195,58 @@ public class CashRegisterService {
     }
 
     /**
-     * Re-print the fiscal receipt for orders whose previous attempt FAILED.
+     * Re-print a FAILED fiscal receipt, identified by its requestId.
      *
-     * <p>This does <b>not</b> re-charge anything — the orders stay paid. It
-     * rebuilds the receipt from the orders' current (paid, non-cancelled) items,
-     * reusing the original payment method/operator, and dispatches a fresh
-     * receipt with a new requestId (status goes back to PENDING).
+     * <p>Does <b>not</b> re-charge — the orders stay paid. It reprints exactly
+     * the same scope (orders + item rows) as the failed receipt, so a partial
+     * receipt re-fiscalizes only its own items, never the whole order. The old
+     * receipt is superseded and a fresh one is dispatched with a new requestId.
      *
-     * @param orderIds  orders to re-fiscalize (must be non-empty)
-     * @param deviceId  ECR device to print on; null falls back to the event's first device
+     * @param requestId the failed receipt to retry
+     * @param deviceIdOverride optional ECR device; null reuses the original
      */
-    public CashRegisterReceiptResponse retryReceipt(List<UUID> orderIds, String deviceId) {
-        if (orderIds == null || orderIds.isEmpty()) {
-            return CashRegisterReceiptResponse.builder()
-                    .status("ERROR")
-                    .errorCode("NO_ORDERS")
-                    .errorMessage("No orderIds supplied for retry")
-                    .issuedAt(LocalDateTime.now())
-                    .build();
+    public CashRegisterReceiptResponse retryReceipt(String requestId, String deviceIdOverride) {
+        if (requestId == null || requestId.isBlank()) {
+            return errorResponse("NO_REQUEST_ID", "No requestId supplied for retry");
         }
-        OrderEntity first = orderRepository.findByIdWithItems(orderIds.get(0))
-                .orElseThrow(() -> new ResourceNotFoundException("Order", orderIds.get(0)));
-        // Reuse how it was originally paid so the reprinted receipt matches.
-        String paymentMethod = first.getPaymentMethod();
-        String operator = first.getPaidBy();
-        log.info("[CashRegister] Retry fiscal receipt for {} order(s) (method={}, deviceId={})",
-                orderIds.size(), paymentMethod, deviceId);
-        CashRegisterReceiptRequest req =
-                new CashRegisterReceiptRequest(orderIds, paymentMethod, operator, deviceId);
+        FiscalReceiptEntity old = fiscalReceiptRepository.findByRequestId(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("FiscalReceipt", requestId));
+        if (old.getOrderIds().isEmpty()) {
+            return errorResponse("NO_ORDERS", "Receipt " + requestId + " has no orders to reprint");
+        }
+        String deviceId = deviceIdOverride != null ? deviceIdOverride : old.getCashRegisterDeviceId();
+        // Empty item scope = full-pay receipt → pass null so printReceipt prints all items.
+        List<UUID> itemScope = old.getOrderItemIds().isEmpty() ? null : new ArrayList<>(old.getOrderItemIds());
+        log.info("[CashRegister] Retry receipt requestId={} ({} order(s), {} item(s), deviceId={})",
+                requestId, old.getOrderIds().size(), old.getOrderItemIds().size(), deviceId);
+
+        // Supersede the old failed receipt so it drops out of the FAILED list.
+        fiscalReceiptStatusService.supersede(requestId);
+
+        CashRegisterReceiptRequest req = new CashRegisterReceiptRequest(
+                new ArrayList<>(old.getOrderIds()), old.getPaymentMethod(), null, deviceId, itemScope);
         return printReceipt(req);
     }
 
-    private CashRegisterReceiptResponse mockResponse(CashRegisterReceiptRequest request, BigDecimal totalAmount) {
-        long seq = RECEIPT_SEQ.incrementAndGet();
-        String receiptNumber = String.format("%08d", seq);
-        String fiscalReceiptId = "FIS-" + System.currentTimeMillis() + "-" + ThreadLocalRandom.current().nextInt(1000, 9999);
-        CashRegisterReceiptResponse mock = CashRegisterReceiptResponse.builder()
-                .status("OK")
-                .receiptNumber(receiptNumber)
-                .fiscalReceiptId(fiscalReceiptId)
-                .cashRegisterSerial(MOCK_DEVICE_SERIAL)
+    private CashRegisterReceiptResponse errorResponse(String code, String message) {
+        return CashRegisterReceiptResponse.builder()
+                .status("ERROR")
+                .errorCode(code)
+                .errorMessage(message)
                 .issuedAt(LocalDateTime.now())
-                .totalAmount(totalAmount)
-                .paymentMethod(request.getPaymentMethod())
                 .build();
-        log.info("[CashRegister] Mock ECR response: {}", mock);
-        return mock;
+    }
+
+    /** Active (non-superseded) FAILED receipts for an event — feeds the mobile retry UI. */
+    public List<com.servio.event.dto.FiscalReceiptDto> listFailedReceipts(UUID eventId) {
+        return fiscalReceiptRepository
+                .findByEventIdAndStatusAndSupersededFalse(eventId, com.servio.event.entity.FiscalReceiptStatus.FAILED)
+                .stream()
+                .map(r -> new com.servio.event.dto.FiscalReceiptDto(
+                        r.getRequestId(), r.getEventId(), r.getStatus().name(), r.getPaymentMethod(),
+                        r.getFiscalReceiptId(), r.getError(), r.getTotalAmount(), r.getAttemptedAt(),
+                        new ArrayList<>(r.getOrderIds()), new ArrayList<>(r.getOrderItemIds())))
+                .toList();
     }
 
     private record LineKey(String name, BigDecimal unitPrice, BigDecimal vat) {}

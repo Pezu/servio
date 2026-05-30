@@ -46,10 +46,6 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
     @Query("SELECT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.id = :id")
     Optional<OrderEntity> findByIdWithItems(UUID id);
 
-    /** Orders whose last dispatched fiscal receipt carries this requestId —
-     *  used to correlate the async agent reply back to the order(s). */
-    List<OrderEntity> findByFiscalRequestId(String fiscalRequestId);
-
     @Query("SELECT DISTINCT o FROM OrderEntity o LEFT JOIN FETCH o.items WHERE o.registrationId = :registrationId ORDER BY o.orderNo DESC")
     List<OrderEntity> findByRegistrationIdOrderByOrderNoDesc(UUID registrationId);
 

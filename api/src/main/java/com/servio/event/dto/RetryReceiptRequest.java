@@ -4,19 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-import java.util.UUID;
-
 /**
- * Request from the app to re-print a FAILED fiscal receipt. Carries only the
- * orders to re-fiscalize (and optionally the target device) — the payment
- * method/operator are read back from the orders, since this never re-charges.
+ * Request from the app to re-print a FAILED fiscal receipt, identified by its
+ * requestId. The orders, item scope and payment method are read back from the
+ * stored receipt, so this never re-charges and reprints exactly the same scope.
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class RetryReceiptRequest {
-    private List<UUID> orderIds;
-    /** ECR device uuid; when omitted, falls back to the event's first device. */
+    private String requestId;
+    /** Optional ECR device override; null reuses the receipt's original device. */
     private String cashRegisterDeviceId;
 }

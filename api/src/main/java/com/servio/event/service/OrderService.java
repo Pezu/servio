@@ -443,6 +443,17 @@ public class OrderService {
      */
     @Transactional
     public int handlePaymentComplete(UUID orderId, String paymentMethod, String paidBy) {
+        return handlePaymentComplete(orderId, paymentMethod, paidBy, null);
+    }
+
+    /**
+     * @param settledItemIdsOut when non-null, the ids of the items this call
+     *        actually marked paid are appended — so the fiscal receipt can be
+     *        scoped to exactly what was settled now (not the whole order, which
+     *        would re-print items already fiscalized by an earlier installment).
+     */
+    @Transactional
+    public int handlePaymentComplete(UUID orderId, String paymentMethod, String paidBy, List<UUID> settledItemIdsOut) {
         var orderOpt = orderRepository.findByIdWithItems(orderId);
         if (orderOpt.isEmpty()) {
             log.warn("Order not found for payment completion: {}", orderId);
@@ -462,6 +473,7 @@ public class OrderService {
             if (!item.isPaid()) {
                 item.setPaid(true);
                 itemsMarkedPaid++;
+                if (settledItemIdsOut != null) settledItemIdsOut.add(item.getId());
                 amountPaid = amountPaid.add(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
                 log.info("Marked item {} as paid", item.getId());
             }
@@ -515,14 +527,19 @@ public class OrderService {
         }
         int totalItemsMarked = 0;
         List<UUID> processed = new ArrayList<>(orderIds.size());
+        // Items actually settled in THIS transaction — the receipt is scoped to
+        // these so a Pay-All after an earlier partial doesn't reprint (and double-
+        // fiscalize) items already covered by the partial's receipt.
+        List<UUID> settledItemIds = new ArrayList<>();
         for (UUID orderId : orderIds) {
-            int marked = handlePaymentComplete(orderId, paymentMethod, paidBy);
+            int marked = handlePaymentComplete(orderId, paymentMethod, paidBy, settledItemIds);
             totalItemsMarked += marked;
             processed.add(orderId);
         }
         applyTipToOrders(processed, tip);
         if (paymentMethod != null) {
-            eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy));
+            eventPublisher.publishEvent(new PaymentCompletedEvent(processed, paymentMethod, cashRegisterDeviceId, paidBy,
+                    settledItemIds.isEmpty() ? null : settledItemIds));
         }
         return totalItemsMarked;
     }
