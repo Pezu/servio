@@ -29,6 +29,15 @@ export interface Order {
   needsPayment: boolean;
   nickname?: string;
   items: OrderItem[];
+  paymentMethod?: string;
+  paidAt?: string | null;
+  /** Fiscal-receipt lifecycle, independent of payment.
+   *  null = no receipt attempted (PROTOCOL, or no ECR device). */
+  fiscalReceiptStatus?: 'PENDING' | 'ISSUED' | 'FAILED' | null;
+  fiscalReceiptId?: string | null;
+  /** Reason shown when fiscalReceiptStatus === 'FAILED'. */
+  fiscalError?: string | null;
+  fiscalAttemptedAt?: string | null;
 }
 
 export interface EventOrderPoint {
@@ -94,6 +103,18 @@ export interface ProtocolPaymentSummary {
   clientName: string | null;
 }
 
+export interface CashRegisterReceiptResponse {
+  status: string;            // "OK" | "ERROR" | "PENDING"
+  receiptNumber?: string;
+  fiscalReceiptId?: string;
+  cashRegisterSerial?: string;
+  issuedAt?: string;
+  totalAmount?: number;
+  paymentMethod?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OrderService {
   constructor(private http: HttpClient, private authService: AuthService) {}
@@ -131,6 +152,14 @@ export class OrderService {
   getOrdersNeedingPayment(eventId: string): Observable<Order[]> {
     return this.http.get<Order[]>(
       `${environment.apiUrl}/orders/events/${eventId}/needs-payment`,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Closed (delivered/completed) orders for the event — Orders → Closed tab. */
+  getClosedOrders(eventId: string): Observable<Order[]> {
+    return this.http.get<Order[]>(
+      `${environment.apiUrl}/orders/events/${eventId}/closed`,
       { headers: this.headers() }
     );
   }
@@ -174,6 +203,18 @@ export class OrderService {
   }): Observable<void> {
     return this.http.post<void>(
       `${environment.apiUrl}/orders/partial-paid`,
+      payload,
+      { headers: this.headers() }
+    );
+  }
+
+  /** Re-print a FAILED fiscal receipt. Does NOT re-charge — the order stays paid. */
+  retryReceipt(payload: {
+    orderIds: string[];
+    cashRegisterDeviceId?: string | null;
+  }): Observable<CashRegisterReceiptResponse> {
+    return this.http.post<CashRegisterReceiptResponse>(
+      `${environment.apiUrl}/orders/cash-register/retry`,
       payload,
       { headers: this.headers() }
     );

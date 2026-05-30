@@ -12,16 +12,17 @@ import {
   IonLabel,
   IonRefresher,
   IonRefresherContent,
-  RefresherCustomEvent
+  RefresherCustomEvent,
+  ToastController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { receiptOutline, checkmarkOutline } from 'ionicons/icons';
+import { receiptOutline, checkmarkOutline, timeOutline, checkmarkCircleOutline, archiveOutline, warningOutline, refreshOutline } from 'ionicons/icons';
 import { Subscription } from 'rxjs';
 import { OrderService, Order, OrderItem } from '../../../services/order.service';
 import { AuthService } from '../../../services/auth.service';
 import { WebSocketService } from '../../../services/websocket.service';
 
-type OrderStatus = 'ACTIVE' | 'IN_PROGRESS' | 'READY';
+type OrderTab = 'ACTIVE' | 'IN_PROGRESS' | 'READY' | 'CLOSED';
 
 interface AggregatedItem {
   key: string;
@@ -32,6 +33,7 @@ interface AggregatedItem {
 
 interface TableCard {
   groupId: string;
+  orderPointId: string;
   orderPointName: string;
   status: string;
   orders: Order[];
@@ -39,6 +41,8 @@ interface TableCard {
   items: AggregatedItem[];
   total: number;
   assignedUser: string | null;
+  /** Ids of orders in this card whose fiscal receipt FAILED (paid, no receipt). */
+  failedFiscalOrderIds: string[];
 }
 
 @Component({
@@ -63,14 +67,21 @@ interface TableCard {
 
       <div class="segment-wrapper">
         <ion-segment [value]="activeTab" (ionChange)="onTabChange($event)">
-          <ion-segment-button value="ACTIVE">
-            <ion-label>Ordered ({{ counts.ACTIVE }})</ion-label>
+          <ion-segment-button value="ACTIVE" title="Ordered">
+            <ion-icon name="receipt-outline"></ion-icon>
+            <ion-label>{{ counts.ACTIVE }}</ion-label>
           </ion-segment-button>
-          <ion-segment-button value="IN_PROGRESS">
-            <ion-label>In Progress ({{ counts.IN_PROGRESS }})</ion-label>
+          <ion-segment-button value="IN_PROGRESS" title="In Progress">
+            <ion-icon name="time-outline"></ion-icon>
+            <ion-label>{{ counts.IN_PROGRESS }}</ion-label>
           </ion-segment-button>
-          <ion-segment-button value="READY">
-            <ion-label>Ready ({{ counts.READY }})</ion-label>
+          <ion-segment-button value="READY" title="Ready">
+            <ion-icon name="checkmark-circle-outline"></ion-icon>
+            <ion-label>{{ counts.READY }}</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="CLOSED" title="Closed">
+            <ion-icon name="archive-outline"></ion-icon>
+            <ion-label>{{ counts.CLOSED }}</ion-label>
           </ion-segment-button>
         </ion-segment>
       </div>
@@ -117,6 +128,22 @@ interface TableCard {
                 }
               </div>
 
+              @if (card.failedFiscalOrderIds.length > 0) {
+                <div class="fiscal-failed">
+                  <div class="fiscal-failed-msg">
+                    <ion-icon name="warning-outline"></ion-icon>
+                    <span>Bon fiscal neemis — comanda e platita, dar casa nu a tiparit bonul.</span>
+                  </div>
+                  <button class="btn warn" [disabled]="isRetrying(card)" (click)="retryFiscal(card)">
+                    @if (isRetrying(card)) {
+                      <ion-spinner name="crescent"></ion-spinner> Se retrimite...
+                    } @else {
+                      Reincearca bon <ion-icon name="refresh-outline"></ion-icon>
+                    }
+                  </button>
+                </div>
+              }
+
               @if (card.status === 'READY') {
                 <div class="card-actions">
                   <button class="btn primary" (click)="deliverCard(card)">
@@ -152,8 +179,19 @@ interface TableCard {
       --color: #64748b;
       --color-checked: var(--ion-color-primary);
       --border-radius: 0;
-      min-height: 36px;
-      font-size: 13px;
+      min-height: 44px;
+      font-size: 12px;
+    }
+
+    ion-segment-button ion-icon {
+      font-size: 20px;
+      margin-bottom: 2px;
+    }
+
+    ion-segment-button ion-label {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 0;
     }
 
     .state-container {
@@ -300,30 +338,78 @@ interface TableCard {
       color: var(--ion-color-primary);
       border-color: var(--ion-color-primary);
     }
+
+    .btn.warn {
+      color: #b45309;
+      border-color: #f59e0b;
+      background: #fffbeb;
+    }
+
+    .btn.warn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .btn.warn ion-spinner {
+      width: 16px;
+      height: 16px;
+    }
+
+    .fiscal-failed {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid #fde68a;
+      background: #fffdf5;
+    }
+
+    .fiscal-failed-msg {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #92400e;
+    }
+
+    .fiscal-failed-msg ion-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      color: #f59e0b;
+    }
   `]
 })
 export class OrdersPage implements OnInit, OnDestroy {
   eventId = '';
   currentUser = '';
   loading = true;
-  activeTab: OrderStatus = 'ACTIVE';
+  activeTab: OrderTab = 'ACTIVE';
 
   orders: Order[] = [];
+  closedOrders: Order[] = [];
+  /** Closed orders are fetched lazily the first time the Closed tab is opened. */
+  private closedLoaded = false;
   myOrderPointIds: string[] = [];
-  counts: Record<OrderStatus, number> = { ACTIVE: 0, IN_PROGRESS: 0, READY: 0 };
-  cards: Record<OrderStatus, TableCard[]> = { ACTIVE: [], IN_PROGRESS: [], READY: [] };
+  counts: Record<OrderTab, number> = { ACTIVE: 0, IN_PROGRESS: 0, READY: 0, CLOSED: 0 };
+  cards: Record<OrderTab, TableCard[]> = { ACTIVE: [], IN_PROGRESS: [], READY: [], CLOSED: [] };
 
   private subs: Subscription[] = [];
   private readonly safeHtmlCache = new Map<string, SafeHtml>();
+  // OP id → assigned cash register id (Edit Event → Order Points). Used so a
+  // retry re-prints on the same device the order was originally settled on.
+  private cashRegisterByOrderPointId = new Map<string, string>();
+  /** Card groupIds currently being re-fiscalized — drives the button spinner. */
+  retryingGroupIds = new Set<string>();
 
   constructor(
     private route: ActivatedRoute,
     private orderService: OrderService,
     private authService: AuthService,
     private ws: WebSocketService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private toastController: ToastController
   ) {
-    addIcons({ receiptOutline, checkmarkOutline });
+    addIcons({ receiptOutline, checkmarkOutline, timeOutline, checkmarkCircleOutline, archiveOutline, warningOutline, refreshOutline });
   }
 
   /**
@@ -347,7 +433,12 @@ export class OrdersPage implements OnInit, OnDestroy {
     this.load();
     this.ws.connect();
     this.subs.push(
-      this.ws.subscribeToEventOrders(this.eventId).subscribe(() => this.loadOrders())
+      this.ws.subscribeToEventOrders(this.eventId).subscribe(() => {
+        this.loadOrders();
+        // Keep the Closed tab fresh once it's been opened (e.g. an order just
+        // got delivered elsewhere).
+        if (this.closedLoaded) this.loadClosedOrders();
+      })
     );
   }
 
@@ -356,7 +447,11 @@ export class OrdersPage implements OnInit, OnDestroy {
   }
 
   refresh(ev: RefresherCustomEvent): void {
-    this.loadOrders(() => ev.target.complete());
+    if (this.activeTab === 'CLOSED') {
+      this.loadClosedOrders(() => ev.target.complete());
+    } else {
+      this.loadOrders(() => ev.target.complete());
+    }
   }
 
   load(): void {
@@ -366,6 +461,12 @@ export class OrdersPage implements OnInit, OnDestroy {
         this.myOrderPointIds = eops
           .filter(e => (e.userLogins || []).includes(this.currentUser))
           .map(e => e.orderPointId);
+        this.cashRegisterByOrderPointId.clear();
+        for (const eop of eops) {
+          if (eop.cashRegisterId) {
+            this.cashRegisterByOrderPointId.set(eop.orderPointId, eop.cashRegisterId);
+          }
+        }
         this.loadOrders();
       },
       error: () => {
@@ -397,16 +498,38 @@ export class OrdersPage implements OnInit, OnDestroy {
     });
   }
 
+  loadClosedOrders(done?: () => void): void {
+    this.closedLoaded = true;
+    if (this.myOrderPointIds.length === 0) {
+      this.closedOrders = [];
+      this.regroup();
+      done?.();
+      return;
+    }
+    this.orderService.getClosedOrders(this.eventId).subscribe({
+      next: (orders) => {
+        this.closedOrders = orders.filter(o => this.myOrderPointIds.includes(o.orderPointId));
+        this.regroup();
+        done?.();
+      },
+      error: () => done?.()
+    });
+  }
+
   private regroup(): void {
     this.cards = {
       ACTIVE: this.groupByTable(this.orders.filter(o => o.status === 'ACTIVE')),
       IN_PROGRESS: this.groupByTable(this.orders.filter(o => o.status === 'IN_PROGRESS')),
-      READY: this.groupByTable(this.orders.filter(o => o.status === 'READY'))
+      READY: this.groupByTable(this.orders.filter(o => o.status === 'READY')),
+      // Closed = delivered/completed orders, fetched separately (the active
+      // orders endpoint excludes DELIVERED).
+      CLOSED: this.groupByTable(this.closedOrders)
     };
     this.counts = {
       ACTIVE: this.cards.ACTIVE.length,
       IN_PROGRESS: this.cards.IN_PROGRESS.length,
-      READY: this.cards.READY.length
+      READY: this.cards.READY.length,
+      CLOSED: this.cards.CLOSED.length
     };
   }
 
@@ -443,13 +566,17 @@ export class OrdersPage implements OnInit, OnDestroy {
       const total = items.reduce((sum, i) => sum + i.totalPrice, 0);
       return {
         groupId,
+        orderPointId: group[0]?.orderPointId || '',
         orderPointName: group[0]?.orderPointName || 'Unknown',
         status: group[0]?.status || '',
         orders: group,
         orderNos: group.map(o => o.orderNo),
         items,
         total,
-        assignedUser: group[0]?.assignedUser ?? null
+        assignedUser: group[0]?.assignedUser ?? null,
+        failedFiscalOrderIds: group
+          .filter(o => o.fiscalReceiptStatus === 'FAILED')
+          .map(o => o.id)
       };
     });
   }
@@ -459,7 +586,10 @@ export class OrdersPage implements OnInit, OnDestroy {
   }
 
   onTabChange(ev: any): void {
-    this.activeTab = ev.detail.value as OrderStatus;
+    this.activeTab = ev.detail.value as OrderTab;
+    if (this.activeTab === 'CLOSED' && !this.closedLoaded) {
+      this.loadClosedOrders();
+    }
   }
 
   formatPrice(value: number): string {
@@ -471,6 +601,53 @@ export class OrdersPage implements OnInit, OnDestroy {
 
   deliverCard(card: TableCard): void {
     forkJoin(card.orders.map(o => this.orderService.setOrderStatus(o.id, 'DELIVERED')))
-      .subscribe(() => this.loadOrders());
+      .subscribe(() => {
+        this.loadOrders();
+        if (this.closedLoaded) this.loadClosedOrders();
+      });
+  }
+
+  isRetrying(card: TableCard): boolean {
+    return this.retryingGroupIds.has(card.groupId);
+  }
+
+  /**
+   * Re-print the FAILED fiscal receipt(s) for this card. Does NOT re-charge —
+   * the orders stay paid; only the fiscal status is reset and re-attempted.
+   * The device reply lands async, so we reload shortly after to reflect the
+   * new PENDING/ISSUED/FAILED state.
+   */
+  retryFiscal(card: TableCard): void {
+    if (card.failedFiscalOrderIds.length === 0 || this.isRetrying(card)) return;
+    this.retryingGroupIds.add(card.groupId);
+    const deviceId = this.cashRegisterByOrderPointId.get(card.orderPointId) ?? null;
+    this.orderService.retryReceipt({
+      orderIds: card.failedFiscalOrderIds,
+      cashRegisterDeviceId: deviceId
+    }).subscribe({
+      next: () => {
+        this.showToast('Bon retrimis la casa de marcat.', 'medium');
+        // Reply is async; give the device a moment, then refresh status.
+        setTimeout(() => {
+          this.retryingGroupIds.delete(card.groupId);
+          this.reloadCurrent();
+        }, 2500);
+      },
+      error: (err) => {
+        this.retryingGroupIds.delete(card.groupId);
+        this.showToast('Reincercarea a esuat. Verificati casa de marcat.', 'danger');
+        console.error('Retry fiscal receipt failed:', err);
+      }
+    });
+  }
+
+  private reloadCurrent(): void {
+    if (this.activeTab === 'CLOSED') this.loadClosedOrders();
+    else this.loadOrders();
+  }
+
+  private async showToast(message: string, color: 'medium' | 'danger'): Promise<void> {
+    const toast = await this.toastController.create({ message, duration: 2500, color, position: 'bottom' });
+    await toast.present();
   }
 }

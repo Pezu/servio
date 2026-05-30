@@ -87,7 +87,11 @@ interface CartItem {
             <ul class="summary-list">
               @for (line of cart; track line.menuItemId) {
                 <li class="summary-line">
-                  <span class="summary-qty">{{ line.quantity }}×</span>
+                  <div class="summary-stepper">
+                    <button type="button" class="step-btn" aria-label="Decrease" (click)="decrementLine(line)">−</button>
+                    <span class="step-qty">{{ line.quantity }}</span>
+                    <button type="button" class="step-btn" aria-label="Increase" (click)="incrementLine(line)">+</button>
+                  </div>
                   <span class="summary-name" [innerHTML]="safeHtml(line.name)"></span>
                   <span class="summary-each">{{ line.price | currency:'RON':'symbol':'1.2-2' }}</span>
                   <span class="summary-line-total">{{ (line.price * line.quantity) | currency:'RON':'symbol':'1.2-2' }}</span>
@@ -286,9 +290,9 @@ interface CartItem {
 
     .summary-line {
       display: grid;
-      grid-template-columns: 36px 1fr auto auto;
+      grid-template-columns: auto 1fr auto auto;
       column-gap: 10px;
-      align-items: baseline;
+      align-items: center;
       padding: 10px 0;
       border-bottom: 1px solid #e2e8f0;
       font-size: 14px;
@@ -299,9 +303,35 @@ interface CartItem {
       border-bottom: none;
     }
 
-    .summary-qty {
+    .summary-stepper {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--ion-color-primary);
+    }
+
+    .summary-stepper .step-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: var(--ion-color-primary);
+      font-size: 18px;
       font-weight: 700;
-      color: #475569;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .summary-stepper .step-qty {
+      min-width: 26px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e293b;
+      font-variant-numeric: tabular-nums;
     }
 
     .summary-name {
@@ -417,8 +447,9 @@ interface CartItem {
       height: 22px;
       padding: 0 6px;
       border-radius: 999px;
-      background: var(--ion-color-primary);
-      color: #ffffff;
+      background: transparent;
+      border: 1px solid var(--ion-color-primary);
+      color: var(--ion-color-primary);
       font-size: 12px;
       font-weight: 700;
       display: inline-flex;
@@ -428,14 +459,15 @@ interface CartItem {
 
     .qty-decrement {
       position: absolute;
-      top: 4px;
-      left: 4px;
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      background: #ef4444;
-      color: #ffffff;
-      font-size: 16px;
+      top: 0;
+      left: 0;
+      width: 30%;
+      aspect-ratio: 1 / 1;
+      border-radius: 0;
+      background: transparent;
+      border: 1px solid #ef4444;
+      color: #ef4444;
+      font-size: 18px;
       font-weight: 700;
       line-height: 1;
       display: inline-flex;
@@ -916,6 +948,19 @@ export class AddOrderModal implements OnInit {
       if (existing.quantity <= 0) {
         this.cart = this.cart.filter(c => c.menuItemId !== item.id);
       }
+    }
+  }
+
+  /** Order-summary stepper: bump a cart line up by one. */
+  incrementLine(line: CartItem): void {
+    line.quantity++;
+  }
+
+  /** Order-summary stepper: drop a cart line by one, removing it at zero. */
+  decrementLine(line: CartItem): void {
+    line.quantity--;
+    if (line.quantity <= 0) {
+      this.cart = this.cart.filter(c => c.menuItemId !== line.menuItemId);
     }
   }
 
