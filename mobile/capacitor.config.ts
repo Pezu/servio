@@ -5,11 +5,11 @@ const config: CapacitorConfig = {
   appName: 'Servio',
   webDir: 'dist/servio-mobile/browser',
   server: {
-    // LOCAL-DEV ONLY. http so the WebView page URL is http://localhost/
-    // and fetch() to the http:// LAN backend is same-scheme (no mixed
-    // content). Flip back to androidScheme: 'https' before any prod
-    // build — prod CORS only trusts https://localhost / capacitor://localhost.
-    androidScheme: 'http'
+    // PROD (servioapp.ro). https so the WebView origin is https://localhost/ —
+    // matches prod CORS (https://localhost / capacitor://localhost) and is
+    // same-scheme with the https backend. For LOCAL http LAN dev, flip to
+    // androidScheme: 'http'.
+    androidScheme: 'https'
   },
   plugins: {
     StatusBar: {
