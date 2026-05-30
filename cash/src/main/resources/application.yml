@@ -1,16 +1,50 @@
+spring:
+  application:
+    name: servio-bridge
+
 server:
+  # Embedded HTTP port (actuator only — no business endpoints).
   port: 8085
 
+# ============================================================
+# Cash register (DATECS DP-25MX) — defaults per device.
+# Each ReceiptPayload from the backend carries the target cash-register IP
+# in `cashRegister`, which overrides printer.tcp.host at runtime.
+# ============================================================
+printer:
+  tcp:
+    host: ${PRINTER_HOST:192.168.0.188}
+    port: ${PRINTER_PORT:3999}
+  operator:
+    code: ${PRINTER_OPERATOR_CODE:1}
+    pass: ${PRINTER_OPERATOR_PASS:0001}
+  till-number: ${PRINTER_TILL_NUMBER:1}
+  serial-number: ${PRINTER_SERIAL_NUMBER:}
+
+# ============================================================
+# Backend WebSocket connection.
+# bridge.api-key MUST match the BRIDGE_API_KEY env var on the backend.
+# ============================================================
 bridge:
-  # Servio API STOMP endpoint. SockJS exposes a raw WebSocket subpath at /ws/websocket.
-  server-url: wss://servioapp.ro/ws/websocket
-  # Must match bridge.api-key on the API side (api/application.yml).
-  # Real value lives in the gitignored application-local-secrets.yml profile —
-  # start with: mvn spring-boot:run -Dspring-boot.run.profiles=local-secrets
-  api-key: ${BRIDGE_API_KEY:dev-bridge-key-change-me}
-  # Delay before the mock replies OK to a print request.
-  reply-delay-seconds: 5
+  server-url: ${BRIDGE_SERVER_URL:wss://servioapp.ro/ws}
+  api-key: ${BRIDGE_API_KEY:GOj3gcAgBiOnJQ2lAEzNeaLJqDg03ZdeD7LyiTt5J3uCl1xi}
+  reconnect-delay-seconds: ${BRIDGE_RECONNECT_DELAY_SECONDS:10}
+
+fpgate:
+  print:
+    # Per-receipt timeout for the print queue (queue wait + actual print).
+    # On expiry the request gets ERROR QUEUE_TIMEOUT.
+    queue-timeout-seconds: ${PRINT_QUEUE_TIMEOUT_SECONDS:30}
 
 logging:
   level:
-    com.servio.cash: DEBUG
+    root: INFO
+    com.datecs.printerfpgate: INFO
+    org.springframework.messaging: INFO
+    org.springframework.web.socket: INFO
+  file:
+    name: servio-bridge.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 3
